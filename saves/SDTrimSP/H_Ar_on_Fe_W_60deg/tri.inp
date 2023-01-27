@@ -1,0 +1,43 @@
+H_Ar_on_Fe_W_60deg
+&TRI_INP
+text = "--- elements ---"
+    ncp = 4
+    symbol = "H", "Ar", "Fe", "W"
+    !globaldensity = False, 0.0
+    inel0 = 3, 3, 3, 3
+
+text = "--- general ---"
+    idrel = 1
+    flc = 1.0
+    nh = 500
+    idout = 10
+    nr_pproj = 100
+    ipot = 1
+    iintegral = 2
+    isbv = 1
+
+text = "--- beam ---"
+    qubeam = 0.5, 0.5, 0.0, 0.0
+    case_e0 = 0
+    e0 = 500.0, 500.0, 0.0, 0.0
+    case_alpha = 0
+    alpha0 = 60.0, 60.0, 0.0, 0.0
+
+text = "--- target ---"
+    qu = 0.0, 0.0, 0.5, 0.5
+    qumax = 1.0, 1.0, 0.5, 1.0
+    ttarget = 2000.0
+    nqx = 200
+    iq0 = -1
+
+text = "--- output options ---"
+    lparticle_p = .true.
+    ioutput_part(2) = 50000
+    lparticle_r = .true.
+    ioutput_part(5) = 5000000
+    lmatrices = .false.
+
+text = "--- extra ---"
+    tableinp = "C:/Users/Alex/Uni/TU/Diplomarbeit/bca-sims/Simulation Programs/SDTrimSP/SDTrimSP_6.01_Windows/tables"
+    
+/

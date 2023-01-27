@@ -1,0 +1,18 @@
+Ar_on_W___ Argon on Wolfram
+# obligatory control parameters
+cdat 0 1.0 0
+geom 2000.0 200 0.0
+atda Ar W
+comp 0.0 1.0
+irra 1 500.0 0.0 1.0
+# optional control parameters
+thrd 1
+pspr 100000
+coll 1 0
+damg 0.0
+elst 3
+exst 1 0.9999 3 0
+fout 100 100 100
+outp
+edep
+outl rang incd scat sput

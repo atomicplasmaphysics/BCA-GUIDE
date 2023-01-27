@@ -1,0 +1,15 @@
+ Argon on Wolfram                                                               
+  
+time for proj     :       3.12  s       9.6  %
+time for recoil   :      26.62  s      81.6  %
+time for gsum/hist:       0.00  s       0.0  %
+time for part/hist:       2.69  s       8.2  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.02  s       0.1  %
+time for out/hist :       0.00  s       0.0  %
+  time for history:       0.16  s       0.5  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :      32.64  s
+time for SDTrimSP :       0.54 min
+time for SDTrimSP :       0.01  h
+number of PEs:    1 NH=      1000 NR= 100 NH*NR=         100000

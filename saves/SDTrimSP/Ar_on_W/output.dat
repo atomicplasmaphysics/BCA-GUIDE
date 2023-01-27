@@ -1,0 +1,207 @@
+ SDTrimSP: VERSION 6.01    28.09.2022
+ Static and dynamic simulation of ion-solid interaction
+ based on TRIM.SP and TRIDYN  
+ W.Eckstein and R.Dohmen, 2002, version 4.01, target one dimensional
+ last edition   A.Mutzke, 2019, version 6.01, target one dimensional
+
+ Argon on Wolfram                                                                
+
+ ------------------------------
+  INPUT DATA:  STATIC CASE
+
+ CPT  SYMBOL A-Z  A-MASS        DNS0         RHO
+  1   Ar     18  39.9480     0.02080     1.38000
+  2   W      74 183.8400     0.06306    19.25000
+
+ CPT         Q-0      Q-BEAM       Q-MAX      CHARGE
+  1       0.0000      1.0000      1.0000      0.0000
+  2       1.0000      0.0000      1.0000      0.0000
+
+ CPT          E0      AlPHA0       INEL0
+  1     500.0000      0.0000         3
+  2       0.0000      0.0000         3
+
+ CPT    E_CUTOFF     E_DISPL     E_BULKB     E_SURFB          X0    deltaH_d
+  1       0.1000      5.0000      0.0000      0.0000      0.0000
+  2       3.0000     38.0000      0.0000      8.7900      0.0000
+
+          FLUENZ          TT       TTDYN         DSF       TTEMP
+      1.0000E+00  2.0000E+03  2.0000E+02  5.0000E+00  3.0000E+02
+
+        NH  NR-PPROJ       NCP     IDREL      SFIN      IPOT      ISBV
+    1000       100         2         1         0         1         1
+
+       IQ0      IRC0     IRAND    IPIVOT       IWC      IWCR  INTEGRAL
+       0        -1         1         8         2         2         2
+
+     IDOUT       NQX   L_THICK
+      10       200         0
+LPART_R_ED LTERM_DIF
+       T         F
+ 
+ random: option RAND2 is used
+
+
+ INTERACTION POTENTIAL (ipot): KR-C POTENTIAL    
+
+ INELASTIC LOSS MODEL FOR COMPONENT= 1: 50% LS 50% OR (default:inel=3)
+ INELASTIC LOSS MODEL FOR COMPONENT= 2: 50% LS 50% OR (default:inel=3)
+
+
+
+  I   A(I,J)  KL(I,J)   KOR(I,J) MTRF(I,J) SBV(I,J)  CA      CK    eps/E(I,J)
+
+  1   0.1126   1.9756   1.9298   1.0000   0.0000   1.0000   1.0000 0.1207E-04
+      0.0854   3.4109   5.7915   0.5866   0.0000   1.0000   1.0000 0.3659E-05
+  2   0.0854   2.0125   3.4170   0.5866   0.0000   1.0000   1.0000 0.7950E-06
+      0.0703   4.7919  12.0127   1.0000   8.7900   1.0000   1.0000 0.4458E-06
+
+ENERGY INPUT:
+     constant energy e0 (1)=      500.00000 eV
+
+ ------------------------------
+ OUTPUT DATA:
+
+ INTEGRAL QUANTITIES (NOT FLUENCE DEPENDENT)
+ KNOCK-ON ATOMS
+  prim. KA =   1126583  sec.KA =   8180988  tot. KA =   9307571
+
+  KNOCK-ON ATOMS:  generation number
+                      1       1126583
+                      2       1579979
+                      3       1768530
+                      4       1639244
+                      5       1292615
+                      6        880828
+                      7        524870
+                      8        276294
+                      9        130388
+                     10         55258
+                     11         21479
+                     12          7773
+                     13          2603
+                     14           804
+                     15           235
+                     16            64
+                     17            17
+                     18             7
+                 2 - 18       8180988
+                 1 - 18       9307571
+  
+ KNOCK-ON ATOMS (>ED)
+  prim. KA(>ED) =    283903  sec.KA(>ED) =    274773  tot. KA(>ED) =    558676
+
+  KNOCK-ON ATOMS(>ED):generation   number
+                      1        283903
+                      2        176846
+                      3         70954
+                      4         20848
+                      5          4909
+                      6          1006
+                      7           180
+                      8            27
+                      9             3
+                 2 -  9        274773
+                 1 -  9        558676
+
+ AREAL DENSITIES AND FLUENCES ( A**(-2) ) 
+    fluence:  1.0000E+00 chamax:0.0000
+ cpt    incident   reflected   reemitted   sputtered   deposited
+  1   1.0000E+00  3.6911E-01  0.0000E+00  0.0000E+00  0.0000E+00
+  2   0.0000E+00  0.0000E+00  0.0000E+00  6.6362E-01  1.2612E+02
+
+ ENERGY LOSSES (PROJECTILES: implanted + backscattered + transmitted)
+
+  cpt. nuclear loss     electr.loss  nuc.loss(>e_d)  nuc.loss(<e_d)
+   1     3.85856E+07    5.59620E+06    2.66709E+07    1.08731E+07
+
+ ENERGY LOSSES (RECOILS: stopped + back_sputtered + transm_sputtered)
+
+  cpt. nuclear loss     electr.loss  nuc.loss(>e_d)  nuc.loss(<e_d)
+   1     0.00000E+00    0.00000E+00    0.00000E+00    0.00000E+00
+   2     1.06749E+08    7.28551E+06    1.78616E+07    7.06652E+07
+
+
+ STATISITICS ABOUT IMPL., BACKSC., TRANSM, AND SPUTTERED ATOMS
+
+
+                 PROJECTILES(1)=      100000     ENERGY=5.0000E+07 EV
+
+       IMPLANTED PROJECTILES(1)=       63089     ENERGY=8.0020E+02 EV
+      REEMISSION PROJECTILES(1)=         0
+   BACKSCATTERED PROJECTILES(1)=       36911     ENERGY=5.8174E+06 EV
+     TRANSMITTED PROJECTILES(1)=           0     ENERGY=0.0000E+00 EV
+
+
+              GENERATED RECOILS=   9307571     GEN. REC.(>ED)=    558676
+
+   STOPPED GENERATED RECOILS(1)=           0     ENERGY=0.0000E+00 EV
+   STOPPED GENERATED RECOILS(2)=     9241209     ENERGY=2.8653E+06 EV
+  ALL STOPP. GENERATED RECOILS =     9241209     ENERGY=2.8653E+06 EV
+
+        REEMISSION PARTICLES(2)=         0
+
+   BACKW. SPUTTER.  RECOILS(1) =           0     ENERGY=0.0000E+00 EV
+   BACKW. SPUTTER.  RECOILS(2) =       66362     ENERGY=1.4260E+06 EV
+  ALL BACKW. SPUTTER.  RECOILS =       66362     ENERGY=1.4260E+06 EV
+   BACKW. SPUTTER.REC.(>ED)(1) =         0
+   BACKW. SPUTTER.REC.(>ED)(2) =     40600
+  ALL BACKW. SPUTTER.REC.(>ED) =     40600
+
+   TRANSM. SPUTTER.  RECOILS(1)=           0     ENERGY=0.0000E+00 EV
+   TRANSM. SPUTTER.  RECOILS(2)=           0     ENERGY=0.0000E+00 EV
+  ALL TRANSM. SPUTTER.  RECOILS=           0     ENERGY=0.0000E+00 EV
+
+ BACK.SPUTTERED PARTIC.(2 BY 1)=       25225     ENERGY=8.0799E+05 EV
+ BACK.SPUTTERED PARTIC.(2 BY 2)=       41137     ENERGY=6.1804E+05 EV
+
+         ION IN , PRIMARY KO(1)=           0     ENERGY=0.0000E+00 EV
+         ION IN , SECOND. KO(1)=           0     ENERGY=0.0000E+00 EV
+         ION OUT, PRIMARY KO(1)=           0     ENERGY=0.0000E+00 EV
+         ION OUT, SECOND. KO(1)=           0     ENERGY=0.0000E+00 EV
+
+         ION IN , PRIMARY KO(2)=        5157     ENERGY=1.4158E+05 EV
+         ION IN , SECOND. KO(2)=       21710     ENERGY=2.8306E+05 EV
+         ION OUT, PRIMARY KO(2)=       20068     ENERGY=6.6641E+05 EV
+         ION OUT, SECOND. KO(2)=       19427     ENERGY=3.3498E+05 EV
+
+       ION IN , PRIMARY KO(ALL)=        5157     ENERGY=1.4158E+05 EV
+       ION IN , SECOND. KO(ALL)=       21710     ENERGY=2.8306E+05 EV
+      ION OUT , PRIMARY KO(ALL)=       20068     ENERGY=6.6641E+05 EV
+      ION OUT , SECOND. KO(ALL)=       19427     ENERGY=3.3498E+05 EV
+
+
+ IMPLANTATION DATA (Projectiles):
+      (normalized to partial doses: istop_p)
+
+  CPT.  AVERAGE DEPTH    STAND.DEV.       SKEWNESS      KURTOSIS      SPREAD
+   1     1.12738E+01    6.32619E+00    9.03177E-01    3.86866E+00    0.00000E+00
+
+ PATH LENGTH AND NUMBER OF COLLISIONS (STOPPING)
+
+  CPT.   PATH LENGTH      STAND.DEV.   AVERAGE-NR.COLL.  AVERAGE-NR.COLL.(>ED)
+   1     3.73955E+01    8.09183E+00    1.82705E+01    3.24691E+00
+
+
+ REFLECTION DATA (BACKSCATTERING):
+      (normalized to partial doses: nproj)
+
+  cpt.   refl.coeff.  energy refl.coeff.  mean energy of part.
+   1     3.69110E-01    1.16347E-01    1.57605E+02
+
+
+ TRANSMISSION DATA:
+ no transmission
+
+
+ SPUTTERING DATA (BACKWARD SPUTTERING):
+      (normalized to partial doses: nh)
+
+  cpt.   sputt.coef. ener.sputt.coef.  mean energy   escape depth   spread(r)
+   1    no backward sputtering
+   2     6.63620E-01    2.85207E-02    2.14887E+01    1.39248E+00    1.05492E+01
+ all     6.63620E-01    2.85207E-02    2.14887E+01
+
+
+ TRANSMISSION SPUTTERING DATA:
+ no transmission sputtering

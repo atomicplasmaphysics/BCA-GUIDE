@@ -1,0 +1,135 @@
+ start:
+ default_init_0
+ init_parallel_environment
+ title:
+ H_Ar_on_Fe_W_60deg                                                             
+  
+ ===read all table===
+    read:
+ C:/Users/Alex/Uni/TU/Diplomarbeit/bca-sims/Simulation Programs/SDTrimSP/SDTrimS
+ P_6.01_Windows/tables/table1
+ start-seed:
+  pid          seed
+   0                        1                        1
+ INFO:      allocate(part  ) memory:    0.07 MByt
+ INFO:  allocate(task_queue) memory:   14.84 MByt
+ start history ihist=           0
+ history: start time:15:31:22
+ INFO: Fluence step:  2.000000000000000E-003 [ions/A**2]
+ INFO: time    step:  2.000000000000000E-003 [s]
+           1 ihist:           0 %, time:15:31:22         100
+           2 ihist:           0 %, time:15:31:22         100
+           3 ihist:           0 %, time:15:31:22         100
+           4 ihist:           0 %, time:15:31:22         100
+           5 ihist:           1 %, time:15:31:22         100
+           6 ihist:           1 %, time:15:31:22         100
+           7 ihist:           1 %, time:15:31:22         100
+           8 ihist:           1 %, time:15:31:22         100
+           9 ihist:           1 %, time:15:31:23         100
+          10 ihist:           2 %, time:15:31:23         100
+          15 ihist:           3 %, time:15:31:23         100
+          20 ihist:           4 %, time:15:31:23         100
+          25 ihist:           5 %, time:15:31:23         100
+          30 ihist:           6 %, time:15:31:23         100
+          35 ihist:           7 %, time:15:31:23         100
+          40 ihist:           8 %, time:15:31:23         100
+          45 ihist:           9 %, time:15:31:23         100
+          50 ihist:          10 %, time:15:31:24         100
+          55 ihist:          11 %, time:15:31:24         100
+          60 ihist:          12 %, time:15:31:24         100
+          65 ihist:          13 %, time:15:31:24         100
+          70 ihist:          14 %, time:15:31:24         100
+          75 ihist:          15 %, time:15:31:24         100
+          80 ihist:          16 %, time:15:31:24         100
+          85 ihist:          17 %, time:15:31:25         100
+          90 ihist:          18 %, time:15:31:25         100
+          95 ihist:          19 %, time:15:31:25         100
+         100 ihist:          20 %, time:15:31:25         100
+         105 ihist:          21 %, time:15:31:25         100
+         110 ihist:          22 %, time:15:31:25         100
+         115 ihist:          23 %, time:15:31:25         100
+         120 ihist:          24 %, time:15:31:26         100
+         125 ihist:          25 %, time:15:31:26         100
+         130 ihist:          26 %, time:15:31:26         100
+         135 ihist:          27 %, time:15:31:26         100
+         140 ihist:          28 %, time:15:31:26         100
+         145 ihist:          29 %, time:15:31:26         100
+         150 ihist:          30 %, time:15:31:26         100
+         155 ihist:          31 %, time:15:31:27         100
+         160 ihist:          32 %, time:15:31:27         100
+         165 ihist:          33 %, time:15:31:27         100
+         170 ihist:          34 %, time:15:31:27         100
+         175 ihist:          35 %, time:15:31:27         100
+         180 ihist:          36 %, time:15:31:27         100
+         185 ihist:          37 %, time:15:31:27         100
+         190 ihist:          38 %, time:15:31:27         100
+         195 ihist:          39 %, time:15:31:28         100
+         200 ihist:          40 %, time:15:31:28         100
+         205 ihist:          41 %, time:15:31:28         100
+         210 ihist:          42 %, time:15:31:28         100
+         215 ihist:          43 %, time:15:31:28         100
+         220 ihist:          44 %, time:15:31:28         100
+         225 ihist:          45 %, time:15:31:28         100
+         230 ihist:          46 %, time:15:31:29         100
+         235 ihist:          47 %, time:15:31:29         100
+         240 ihist:          48 %, time:15:31:29         100
+         245 ihist:          49 %, time:15:31:29         100
+         250 ihist:          50 %, time:15:31:29         100
+         255 ihist:          51 %, time:15:31:29         100
+         260 ihist:          52 %, time:15:31:29         100
+         265 ihist:          53 %, time:15:31:29         100
+         270 ihist:          54 %, time:15:31:30         100
+         275 ihist:          55 %, time:15:31:30         100
+         280 ihist:          56 %, time:15:31:30         100
+         285 ihist:          57 %, time:15:31:30         100
+         290 ihist:          58 %, time:15:31:30         100
+         295 ihist:          59 %, time:15:31:30         100
+         300 ihist:          60 %, time:15:31:30         100
+         305 ihist:          61 %, time:15:31:31         100
+         310 ihist:          62 %, time:15:31:31         100
+         315 ihist:          63 %, time:15:31:31         100
+         320 ihist:          64 %, time:15:31:31         100
+         325 ihist:          65 %, time:15:31:32         100
+         330 ihist:          66 %, time:15:31:32         100
+         335 ihist:          67 %, time:15:31:32         100
+         340 ihist:          68 %, time:15:31:32         100
+         345 ihist:          69 %, time:15:31:32         100
+         350 ihist:          70 %, time:15:31:32         100
+         355 ihist:          71 %, time:15:31:32         100
+         360 ihist:          72 %, time:15:31:33         100
+         365 ihist:          73 %, time:15:31:33         100
+         370 ihist:          74 %, time:15:31:33         100
+         375 ihist:          75 %, time:15:31:33         100
+         380 ihist:          76 %, time:15:31:33         100
+         385 ihist:          77 %, time:15:31:33         100
+         390 ihist:          78 %, time:15:31:33         100
+         395 ihist:          79 %, time:15:31:34         100
+         400 ihist:          80 %, time:15:31:34         100
+         405 ihist:          81 %, time:15:31:34         100
+         410 ihist:          82 %, time:15:31:34         100
+         415 ihist:          83 %, time:15:31:34         100
+         420 ihist:          84 %, time:15:31:34         100
+         425 ihist:          85 %, time:15:31:34         100
+         430 ihist:          86 %, time:15:31:35         100
+         435 ihist:          87 %, time:15:31:35         100
+         440 ihist:          88 %, time:15:31:35         100
+         445 ihist:          89 %, time:15:31:35         100
+         450 ihist:          90 %, time:15:31:35         100
+         455 ihist:          91 %, time:15:31:35         100
+         460 ihist:          92 %, time:15:31:35         100
+         465 ihist:          93 %, time:15:31:36         100
+         470 ihist:          94 %, time:15:31:36         100
+         475 ihist:          95 %, time:15:31:36         100
+         480 ihist:          96 %, time:15:31:36         100
+         485 ihist:          97 %, time:15:31:36         100
+         490 ihist:          98 %, time:15:31:37         100
+         495 ihist:          99 %, time:15:31:37         100
+         500 ihist:         100 %, time:15:31:37         100
+ ihist: end history of projectile_loop
+ end history
+ start gsum_stat
+ end gsum_stat
+ end gsum_fluence
+   output.F90: yield    3  0.584280
+   output.F90: yield    4  0.205340
+ end outp

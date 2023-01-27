@@ -1,0 +1,306 @@
+{
+    "general": {
+        "title": "HAr_FeW_60",
+        "simulation": "TRIDYN2022"
+    },
+    "beam_arguments": {
+        "kinetic_energy_mode": "FIXED",
+        "angle_mode": "FIXED"
+    },
+    "beam_rows": [
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 1,
+            "symbol": "H",
+            "element": {
+                "symbol": "H",
+                "name": {
+                    "en": "hydrogen",
+                    "de": "Wasserstoff"
+                },
+                "atomic_nr": 1,
+                "period": 1,
+                "group": 1,
+                "atomic_mass": 1.008,
+                "atomic_density": 0.04271,
+                "periodic_table_symbol": "H",
+                "mass_density": null,
+                "surface_binding_energy": 0.0,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "H",
+                    "name": {
+                        "en": "hydrogen",
+                        "de": "Wasserstoff"
+                    },
+                    "atomic_nr": 1,
+                    "period": 1,
+                    "group": 1,
+                    "atomic_mass": 1.008,
+                    "atomic_density": 0.04271,
+                    "periodic_table_symbol": "H",
+                    "mass_density": null,
+                    "surface_binding_energy": 0.0,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 0.5,
+            "max_atomic_fraction": 0.9999,
+            "energy": 500.0,
+            "angle": 60.0
+        },
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 2,
+            "symbol": "Ar",
+            "element": {
+                "symbol": "Ar",
+                "name": {
+                    "en": "argon",
+                    "de": "Argon"
+                },
+                "atomic_nr": 18,
+                "period": 3,
+                "group": 18,
+                "atomic_mass": 39.948,
+                "atomic_density": 0.02488,
+                "periodic_table_symbol": "Ar",
+                "mass_density": null,
+                "surface_binding_energy": 0.0,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "Ar",
+                    "name": {
+                        "en": "argon",
+                        "de": "Argon"
+                    },
+                    "atomic_nr": 18,
+                    "period": 3,
+                    "group": 18,
+                    "atomic_mass": 39.948,
+                    "atomic_density": 0.02488,
+                    "periodic_table_symbol": "Ar",
+                    "mass_density": null,
+                    "surface_binding_energy": 0.0,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 0.5,
+            "max_atomic_fraction": 0.9999,
+            "energy": 500.0,
+            "angle": 60.0
+        }
+    ],
+    "target_arguments": {
+        "optional": {
+            "film_thickness": 0.0,
+            "global_density": false
+        },
+        "thickness": 2000.0,
+        "segments": 200
+    },
+    "target_rows": [
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 3,
+            "symbol": "Fe",
+            "element": {
+                "symbol": "Fe",
+                "name": {
+                    "en": "iron",
+                    "de": "Eisen"
+                },
+                "atomic_nr": 26,
+                "period": 4,
+                "group": 8,
+                "atomic_mass": 55.847,
+                "atomic_density": 0.08483,
+                "periodic_table_symbol": "Fe",
+                "mass_density": null,
+                "surface_binding_energy": 4.34,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "Fe",
+                    "name": {
+                        "en": "iron",
+                        "de": "Eisen"
+                    },
+                    "atomic_nr": 26,
+                    "period": 4,
+                    "group": 8,
+                    "atomic_mass": 55.847,
+                    "atomic_density": 0.08483,
+                    "periodic_table_symbol": "Fe",
+                    "mass_density": null,
+                    "surface_binding_energy": 4.34,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 1.0,
+            "energy": 0.0,
+            "angle": 0.0
+        },
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 4,
+            "symbol": "W",
+            "element": {
+                "symbol": "W",
+                "name": {
+                    "en": "tungsten",
+                    "de": "Wolfram"
+                },
+                "atomic_nr": 74,
+                "period": 6,
+                "group": 6,
+                "atomic_mass": 183.85,
+                "atomic_density": 0.0632,
+                "periodic_table_symbol": "W",
+                "mass_density": null,
+                "surface_binding_energy": 8.68,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "W",
+                    "name": {
+                        "en": "tungsten",
+                        "de": "Wolfram"
+                    },
+                    "atomic_nr": 74,
+                    "period": 6,
+                    "group": 6,
+                    "atomic_mass": 183.85,
+                    "atomic_density": 0.0632,
+                    "periodic_table_symbol": "W",
+                    "mass_density": null,
+                    "surface_binding_energy": 8.68,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 0.5,
+            "max_atomic_fraction": 1.0,
+            "energy": 0.0,
+            "angle": 0.0
+        }
+    ],
+    "structure": [
+        {
+            "name": "Layer1",
+            "segments": 100,
+            "thickness": 1000.0,
+            "abundances": [
+                0.5,
+                0.5
+            ]
+        },
+        {
+            "name": "Layer2",
+            "segments": 100,
+            "thickness": 1000.0,
+            "abundances": [
+                1.0,
+                0.0
+            ]
+        }
+    ],
+    "settings": {
+        "optional": {
+            "no_recoils": false,
+            "inelastic_loss_model": "LINDHARD_SCHARFF_AND_OEN_ROBINSON",
+            "collisions": 1,
+            "projectiles": 50000,
+            "precision": false,
+            "vacancy_level": 0.0,
+            "log_frequency": 100,
+            "integral_frequency": 100,
+            "output_frequency": 100,
+            "profile_output": true,
+            "profile_energy": false,
+            "integral_outputs": [
+                "spyl",
+                "srfc",
+                "srfe",
+                "reem"
+            ],
+            "projectile_outputs": [
+                "incd",
+                "rang",
+                "scat",
+                "rrlv",
+                "incd",
+                "scat",
+                "scat"
+            ],
+            "log_reflected": true,
+            "log_sputtered": false
+        },
+        "title": "HAr_FeW_60",
+        "comment": "H and Ar on Fe and W 60deg",
+        "mode": "DYNAMIC",
+        "fluence": 1.0,
+        "threads": 1
+    },
+    "additional": [
+        ""
+    ]
+}

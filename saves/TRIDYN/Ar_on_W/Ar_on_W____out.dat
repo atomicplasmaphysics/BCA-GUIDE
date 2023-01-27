@@ -1,0 +1,103 @@
+ program TRIDYN2022 - version Jan-2022
+ 1D dynamic composition under ion bombardment
+
+ Argon on Wolfram                                                                         
+
+ run ID: Ar_on_W___
+ elapsed time:      0: 0:32
+ total cpu time:    0: 0:32
+ terminated: 28-Sep-2022 15:33
+
+ static mode: dynamic relaxation suppressed
+
+ nr. of components:  2
+ nr. of irradiation conditions:  1
+ total fluence: 0.1000E+01 A^-2
+ nr. of incident pseudoprojectiles:     100000
+ one pseudoatom corresponds to  0.1000E-04 atoms/A^2
+ resulting precision parameter= 0.1582E-04
+ random seed:     12345
+ nr. of threads:   1
+
+ computational volume:
+ initial computational depth:   2000.0 A
+ nr. of depth intervals: 200
+ initial depth spacing:  10.0 A
+ semi-infinite body 
+ initial composition homogeneous
+
+  list of atomic components:
+  cpt. cs   z     m      be    ed    ef     dns0     ck
+  1    Ar   18.  39.95  0.00  8.00  8.68 0.2488E-01 1.00
+  2    W    74. 183.85  0.00  8.00  8.68 0.6320E-01 1.00
+
+  irradiation conditions:
+  cond.  1: constant incident energy; component=  1; energy(keV)=    0.500; angle of incidence(deg)=   0.00; fraction= 1.000
+
+ collisional control and parameters:
+ equipartitioned Lindhard-Scharff nonlocal and Oen-Robinson local electronic stopping
+
+  sbe:  cpt.     1     2
+         1      0.00  0.00
+         2      0.00  8.68
+
+
+ results and statistics:
+ initial average atomic density= 0.06320 A^-3
+ irrad.condition  1: fluence= 0.10000E+01 A^-2
+ max. nr. of simultaneous pseudoatoms=          18
+ total nr. of cascade atoms per unit area= 0.295601E+02 A^-2; av. start energy= 0.2655E+02 eV
+ total backward sputtering yield= 0.5672E+00; av. energy= 0.2057E+02 eV
+ total nr. of vacancies per unit area= 0.295601E+02 A^-2
+
+ areal densities and fluences (A^-2):
+ (in static mode, data are partly ficticious to demonstrate atomic balance)
+ (bottom: added/lost at bottom by dynamic adjustment)
+ cpt.  initial     incident  scatt/transm  reemitted   sputtered    bottom     final
+   1   0.0000E+00  0.1000E+01 -0.3056E+00 -0.0000E+00 -0.0000E+00  0.0000E+00  0.6943E+00
+   2   0.1264E+03  0.0000E+00 -0.0000E+00 -0.0000E+00 -0.5672E+00  0.0000E+00  0.1258E+03
+
+ pseudoprojectile statistics:
+   backscatt.: projectiles scattered from top surface
+   disc_bottom: projectiles discarded after reaching bottom within body
+ irradiation condition  1: component=  1
+   launched   = 0.10000E+06  av.energy= 0.5000E+03 eV
+   slowed down= 0.69435E+05  av.range = 0.1337E+02 A  max.range= 0.6116E+02 A
+   backscatt. = 0.30565E+05  av.energy= 0.1477E+03 eV
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+
+ pseudo recoil atom statistics:
+   backsputt.: recoil atoms sputtered from top surface
+   disc_bottom: recoil atom discarded after reaching bottom within body
+   interstitials: deposited in body by over-threshold recoil atoms
+   vacancies: left in body by over-threshold or sub-threshold sputtered recoil atoms
+ component  1:
+   generated  = 0.00000E+00  av.energy= 0.0000E+00 eV
+   backsputt. = 0.00000E+00  av.energy= 0.0000E+00 eV  yield= 0.0000E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.00000E+00
+   vacancies  = 0.00000E+00
+ component  2:
+   generated  = 0.29560E+07  av.energy= 0.2655E+02 eV
+   backsputt. = 0.56718E+05  av.energy= 0.2057E+02 eV  yield= 0.5672E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.28993E+07
+   vacancies  = 0.29560E+07
+ all:
+   generated  = 0.29560E+07  av.energy= 0.2655E+02 eV
+   backsputt. = 0.56718E+05  av.energy= 0.2057E+02 eV  yield= 0.5672E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.28993E+07
+   vacancies  = 0.29560E+07
+
+ deposited energy (total run)
+                 by projectiles  by recoils     by all
+ component  1:
+   electronic =    0.6572E+07    0.0000E+00    0.6572E+07 eV
+   nuclear    =    0.4267E+07    0.0000E+00    0.4267E+07 eV
+ component  2:
+   electronic =    0.0000E+00    0.5246E+07    0.5246E+07 eV
+   nuclear    =    0.0000E+00    0.2774E+08    0.2774E+08 eV
+ all:
+   electronic =    0.6572E+07    0.5246E+07    0.1182E+08 eV
+   nuclear    =    0.4267E+07    0.2774E+08    0.3201E+08 eV

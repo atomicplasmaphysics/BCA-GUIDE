@@ -1,0 +1,15 @@
+ H_Ar_on_Fe_W_60deg                                                             
+  
+time for proj     :       7.14  s      48.7  %
+time for recoil   :       5.39  s      36.8  %
+time for gsum/hist:       0.00  s       0.0  %
+time for part/hist:       1.96  s      13.4  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.04  s       0.3  %
+time for out/hist :       0.00  s       0.0  %
+  time for history:       0.11  s       0.8  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :      14.71  s
+time for SDTrimSP :       0.25 min
+time for SDTrimSP :       0.00  h
+number of PEs:    1 NH=       500 NR= 100 NH*NR=          50000

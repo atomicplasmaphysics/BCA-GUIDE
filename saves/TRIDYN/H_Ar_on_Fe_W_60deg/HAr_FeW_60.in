@@ -1,0 +1,19 @@
+HAr_FeW_60 H and Ar on Fe and W 60deg
+# obligatory control parameters
+cdat 1 1.0 1
+geom 2000.0 200 0.0
+atda H Ar Fe W
+irra 1 500.0 60.0 0.5
+irra 2 500.0 60.0 0.5
+# optional control parameters
+thrd 1
+pspr 50000
+coll 1 0
+damg 0.0
+elst 3
+exst 1 0.9999 3 0
+exst 2 0.9999 3 0
+fout 100 100 100
+outp
+outi spyl srfc srfe reem
+outl incd rang scat rrlv

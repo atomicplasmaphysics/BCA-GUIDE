@@ -1,0 +1,146 @@
+ program TRIDYN2022 - version Jan-2022
+ 1D dynamic composition under ion bombardment
+
+ H and Ar on Fe and W 60deg                                                               
+
+ run ID: HAr_FeW_60
+ elapsed time:      0: 0:25
+ total cpu time:    0: 0:25
+ terminated: 28-Sep-2022 15:30
+
+ dynamic mode
+
+ nr. of components:  4
+ nr. of irradiation conditions:  2
+ total fluence: 0.1000E+01 A^-2
+ nr. of incident pseudoprojectiles:      50000
+ one pseudoatom corresponds to  0.2000E-04 atoms/A^2
+ resulting precision parameter= 0.2543E-04
+ random seed:     12345
+ nr. of threads:   1
+
+ computational volume:
+ initial computational depth:   2000.0 A
+ nr. of depth intervals: 200
+ initial depth spacing:  10.0 A
+ semi-infinite body 
+ initial composition from layer input data set
+
+  list of atomic components:
+  cpt. cs   z     m      be    ed    ef     dns0     ck
+  1    H     1.   1.01  0.00  8.00  4.34 0.4271E-01 1.00
+  2    Ar   18.  39.95  0.00  8.00  4.34 0.2488E-01 1.00
+  3    Fe   26.  55.85  0.00  8.00  4.34 0.8483E-01 1.00
+  4    W    74. 183.85  0.00  8.00  4.34 0.6320E-01 1.00
+
+  irradiation conditions:
+  cond.  1: constant incident energy; component=  1; energy(keV)=    0.500; angle of incidence(deg)=  60.00; fraction= 0.500
+  cond.  2: constant incident energy; component=  2; energy(keV)=    0.500; angle of incidence(deg)=  60.00; fraction= 0.500
+
+ collisional control and parameters:
+ equipartitioned Lindhard-Scharff nonlocal and Oen-Robinson local electronic stopping
+
+  sbe:  cpt.     1     2     3     4
+         1      0.00  0.00  0.00  0.00
+         2      0.00  0.00  0.00  0.00
+         3      0.00  0.00  4.34  6.51
+         4      0.00  0.00  6.51  8.68
+
+ dynamic relaxation after    500 pseudoprojectile histories each
+ direct reemission of component  1 above max. atomic fraction 1.000
+ direct reemission of component  2 above max. atomic fraction 1.000
+ integral output after      500 pseudoprojectile histories each
+ compositional profile and damage outputs  after      500 pseudoprojectile histories each
+
+ results and statistics:
+ initial average atomic density= 0.07863 A^-3
+ irrad.condition  1: fluence= 0.49918E+00 A^-2
+ irrad.condition  2: fluence= 0.50082E+00 A^-2
+ total fluence= 0.10000E+01 A^-2
+ max. nr. of simultaneous pseudoatoms=          26
+ total nr. of cascade atoms per unit area= 0.203715E+02 A^-2; av. start energy= 0.1801E+02 eV
+ total backward sputtering yield= 0.7717E+00; av. energy= 0.3427E+02 eV
+ total nr. of vacancies per unit area= 0.107292E+02 A^-2
+ max. rel. change of layer areal density per pseudoprojectile=  0.0444
+ final swelling=     0.674 A
+
+ areal densities and fluences (A^-2):
+ (bottom: added/lost at bottom by dynamic adjustment)
+ cpt.  initial     incident  scatt/transm  reemitted   sputtered    bottom     final
+   1   0.0000E+00  0.4992E+00 -0.3183E+00 -0.0000E+00 -0.2840E-02  0.0000E+00  0.1781E+00
+   2   0.0000E+00  0.5008E+00 -0.2619E+00 -0.0000E+00 -0.1060E+00  0.0000E+00  0.1329E+00
+   3   0.1210E+03  0.0000E+00 -0.0000E+00 -0.0000E+00 -0.4093E+00  0.0000E+00  0.1206E+03
+   4   0.3622E+02  0.0000E+00 -0.0000E+00 -0.0000E+00 -0.2536E+00  0.0000E+00  0.3596E+02
+
+ pseudoprojectile statistics:
+   backscatt.: projectiles scattered from top surface
+   disc_bottom: projectiles discarded after reaching bottom within body
+ irradiation condition  1: component=  1
+   launched   = 0.24959E+05  av.energy= 0.5000E+03 eV
+   slowed down= 0.90450E+04  av.range = 0.9053E+02 A  max.range= 0.2889E+03 A
+   backscatt. = 0.15914E+05  av.energy= 0.3350E+03 eV
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+ irradiation condition  2: component=  2
+   launched   = 0.25041E+05  av.energy= 0.5000E+03 eV
+   slowed down= 0.11946E+05  av.range = 0.1045E+02 A  max.range= 0.4265E+02 A
+   backscatt. = 0.13095E+05  av.energy= 0.2456E+03 eV
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+ all:
+   launched   = 0.50000E+05  av.energy= 0.5000E+03 eV
+   slowed down= 0.20991E+05
+   backscatt. = 0.29009E+05  av.energy= 0.2946E+03 eV
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+
+ pseudo recoil atom statistics:
+   backsputt.: recoil atoms sputtered from top surface
+   disc_bottom: recoil atom discarded after reaching bottom within body
+   interstitials: deposited in body by over-threshold recoil atoms
+   vacancies: left in body by over-threshold or sub-threshold sputtered recoil atoms
+ component  1:
+   generated  = 0.12850E+04  av.energy= 0.1605E+02 eV
+   backsputt. = 0.14200E+03  av.energy= 0.1706E+02 eV  yield= 0.2840E-02
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.58200E+03
+   vacancies  = 0.72400E+03
+ component  2:
+   generated  = 0.55888E+05  av.energy= 0.2063E+02 eV
+   backsputt. = 0.53000E+04  av.energy= 0.2875E+02 eV  yield= 0.1060E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.26981E+05
+   vacancies  = 0.32281E+05
+ component  3:
+   generated  = 0.48341E+06  av.energy= 0.1872E+02 eV
+   backsputt. = 0.20463E+05  av.energy= 0.3669E+02 eV  yield= 0.4093E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.23657E+06
+   vacancies  = 0.25704E+06
+ component  4:
+   generated  = 0.47800E+06  av.energy= 0.1699E+02 eV
+   backsputt. = 0.12682E+05  av.energy= 0.3287E+02 eV  yield= 0.2536E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.23374E+06
+   vacancies  = 0.24642E+06
+ all:
+   generated  = 0.10186E+07  av.energy= 0.1801E+02 eV
+   backsputt. = 0.38587E+05  av.energy= 0.3427E+02 eV  yield= 0.7717E+00
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.49787E+06
+   vacancies  = 0.53646E+06
+
+ deposited energy (total run)
+                 by projectiles  by recoils     by all
+ component  1:
+   electronic =    0.5966E+07    0.9708E+04    0.5976E+07 eV
+   nuclear    =    0.7290E+06    0.8320E+04    0.7374E+06 eV
+ component  2:
+   electronic =    0.9687E+06    0.8142E+05    0.1050E+07 eV
+   nuclear    =    0.3291E+06    0.3478E+06    0.6769E+06 eV
+ component  3:
+   electronic =    0.0000E+00    0.5986E+06    0.5986E+06 eV
+   nuclear    =    0.0000E+00    0.2773E+07    0.2773E+07 eV
+ component  4:
+   electronic =    0.0000E+00    0.4738E+06    0.4738E+06 eV
+   nuclear    =    0.0000E+00    0.2647E+07    0.2647E+07 eV
+ all:
+   electronic =    0.6935E+07    0.1164E+07    0.8098E+07 eV
+   nuclear    =    0.1058E+07    0.5776E+07    0.6834E+07 eV
