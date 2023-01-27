@@ -65,19 +65,7 @@ clearFiles()
 
 # build app
 hidden_imports = [
-    'scipy.special._ufuncs_cxx',
-    'scipy.linalg.cython_blas',
-    'scipy.linalg.cython_lapack',
-    'scipy.integrate',
-    'scipy.integrate.quadrature',
-    'scipy.integrate.odepack',
-    'scipy.integrate._odepack',
-    'scipy.integrate.quadpack',
-    'scipy.integrate._quadpack',
-    'scipy.integrate._ode',
-    'scipy.integrate.vode',
-    'scipy.integrate._dop',
-    'scipy.integrate.lsoda'
+    'scipy.optimize'
 ]
 
 exe_name = f'{GlobalConf.GlobalConf.title}'
@@ -85,9 +73,9 @@ system_name = system()
 if system_name == 'Windows':
     exe_name += '_windows.exe'
 elif system_name == 'Linux':
-    exe_name += '_linux'
+    exe_name += '_linux.exe'
 else:
-    exe_name += '.exe'
+    exe_name += f'_{system_name}.exe'
 divider = ';' if system_name == 'Windows' else ':'
 pyinstaller_parameters = [
     f'{parent_dir}/main.py',
