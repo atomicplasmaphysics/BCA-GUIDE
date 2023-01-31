@@ -6,7 +6,7 @@ Thus, the layout and functionality of this GUI are similar but improved.
 A detailed manual for the BCA-GUIDE is provided in the document `BCA-GUIDE_maual.pdf` (https://doi.org/doi-to-tu-bib-manual).
 
 The BCA-GUIDE is freely available and distributed under the GPLv3 licence.
-As a condition of free usage, the manuscript of the GUI for SDTrimSP by Szabo, et al. (https://doi.org/10.1016/j.nimb.2022.04.008) and the manual of the BCA-GUIDE by A. Redl, et al. ((https://doi.org/doi-to-tu-bib-manual)) must be cited in any publication that presents results obtained with help of this GUI.
+As a condition of free usage, the manuscript of the GUI for SDTrimSP by Szabo, et al. (https://doi.org/10.1016/j.nimb.2022.04.008) and the manual of the BCA-GUIDE by A. Redl, et al. (https://doi.org/doi-to-tu-bib-manual) must be cited in any publication that presents results obtained with help of this GUI.
 
 ## Currently supported BCA-codes
 
