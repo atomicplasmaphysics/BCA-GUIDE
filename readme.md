@@ -1,4 +1,4 @@
-# BAC-GUIDE
+# BCA-GUIDE
 *Copyright(C) 2022, Alexander Redl, Paul S. Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke, Wolfhard Möller, Richard A. Wilhelm, Friedrich Aumayr*
 
 The ***B*inary *C*ollision *A*pproximation *G*raphical *U*ser *I*nterface for *D*isplaying and *E*xecution of simulations)** is an extension of the [**GUI for SDTrimSP**](https://github.com/psszabo/SDTrimSP-GUI) (P. S. Szabo, et al. Nucl. Instrum. Meth. Phys. Res. B (2022), https://doi.org/10.1016/j.nimb.2022.04.008).
