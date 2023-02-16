@@ -464,11 +464,10 @@ class MainWindow(QMainWindow):
         if not opened:
             dialog = DownloadDialog(
                 parent=self,
-                # TODO: update URL
-                url='https://gitlab.tuwien.ac.at/e01629061/bca-sims/-/blob/main/BCA-GUIDE_manual.pdf',
+                url='https://repositum.tuwien.at/bitstream/20.500.12708/152394/1/2022-BCA-GUIDE%20Manual-ao.pdf',
                 path=self.manual_path,
                 name='BCA-GUIDE_manual.pdf',
-                expected_file_size=788950
+                expected_file_size=818324
             )
             dialog.open()
 

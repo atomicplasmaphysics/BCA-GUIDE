@@ -3,10 +3,10 @@
 
 The ***B*inary *C*ollision *A*pproximation *G*raphical *U*ser *I*nterface for *D*isplaying and *E*xecution of simulations)** is an extension of the [**GUI for SDTrimSP**](https://github.com/psszabo/SDTrimSP-GUI) (P. S. Szabo, et al. Nucl. Instrum. Meth. Phys. Res. B (2022), https://doi.org/10.1016/j.nimb.2022.04.008).
 Thus, the layout and functionality of this GUI are similar but improved.
-A detailed manual for the BCA-GUIDE is provided in the document `BCA-GUIDE_maual.pdf` (https://doi.org/doi-to-tu-bib-manual).
+A detailed manual for the BCA-GUIDE is provided in the document `BCA-GUIDE_maual.pdf` (https://doi.org/10.34726/3526).
 
 The BCA-GUIDE is freely available and distributed under the GPLv3 licence.
-As a condition of free usage, the manuscript of the GUI for SDTrimSP by Szabo, et al. (https://doi.org/10.1016/j.nimb.2022.04.008) and the manual of the BCA-GUIDE by A. Redl, et al. (https://doi.org/doi-to-tu-bib-manual) must be cited in any publication that presents results obtained with help of this GUI.
+As a condition of free usage, the manuscript of the GUI for SDTrimSP by Szabo, et al. (https://doi.org/10.1016/j.nimb.2022.04.008) and the manual of the BCA-GUIDE by A. Redl, et al. (https://doi.org/10.34726/3526) must be cited in any publication that presents results obtained with help of this GUI.
 
 ## Currently supported BCA-codes
 
