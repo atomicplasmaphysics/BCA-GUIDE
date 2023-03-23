@@ -3641,7 +3641,7 @@ class SimulationOutput(SimulationsOutput):
                 surface[hist_counter] = float(hist_pars[1])
 
                 # read surface atomic fractions
-                surface_conc[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float)
+                surface_conc[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
                 if np.sum(surface_conc[hist_counter]) < 1.:
                     surface_conc[hist_counter, 0] = 1. - np.sum(surface_conc[hist_counter])
 
@@ -3650,25 +3650,25 @@ class SimulationOutput(SimulationsOutput):
                     file.readline()
 
                 # read number of projectiles
-                nr_projectiles_array_per_element[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float)
+                nr_projectiles_array_per_element[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
                 nr_projectiles_array[hist_counter] = np.sum(nr_projectiles_array_per_element[hist_counter, :])
 
                 # read number of backscattered particles
-                nr_reflected[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float)
+                nr_reflected[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
 
                 # skip energy of backscattered particles, and number and energy of transmitted projectiles
                 for _ in range(3):
                     file.readline()
 
                 # read number of backsputtered particles
-                nr_sputtered[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float)
+                nr_sputtered[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
 
                 # skip energy of backsputtered particles , and number, energy of transmitted sputtered particles, energy of all projectiles
                 for _ in range(4):
                     file.readline()
 
                 # read number of reemitted atoms
-                nr_reemitted[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float)
+                nr_reemitted[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
 
                 # chemical erosion --> not recorded further
                 file.readline()
@@ -3682,7 +3682,7 @@ class SimulationOutput(SimulationsOutput):
 
                 for i in range(nqx):
                     # f.readline()
-                    layer_line = np.array(file.readline().split()).astype(np.float)
+                    layer_line = np.array(file.readline().split()).astype(np.float64)
                     depth_array[i] = layer_line[0]
                     # read layer concentrations for all ncp elements
                     for j in range(ncp):
