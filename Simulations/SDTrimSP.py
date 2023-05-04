@@ -2861,6 +2861,8 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         errors = []
         for i, setting in enumerate(settings.split('\n')):
             setting = setting.strip()
+            if not setting:
+                continue
             if setting.startswith('!'):
                 continue
 
@@ -2891,7 +2893,9 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             except (ValueError, IndexError):
                 pass
 
-            if parameter_type != data_type and not (parameter_type is None or parameter_type is str):
+            if not content[1]:
+                errors.append(f'Line {i + 1}: variable "{content[0]}" has no value')
+            elif parameter_type != data_type and not (parameter_type is None or parameter_type is str):
                 if not (parameter_type == float and data_type == int):
                     errors.append(f'Line {i + 1}: variable "{content[0]}" has wrong type (should be {parameter_type})')
 
