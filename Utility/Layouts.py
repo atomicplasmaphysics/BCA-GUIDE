@@ -20,9 +20,9 @@ from __future__ import annotations
 from typing import Union, Optional, Tuple, List, Callable
 from enum import Enum, auto
 
-from PyQt5.QtCore import Qt, QSize, QRect
-from PyQt5.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QSize, QRect
+from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor
+from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
     QListWidget, QListWidgetItem
@@ -187,7 +187,7 @@ class SpinBox(QSpinBox):
             self.setRange(int(input_range[0]), int(input_range[1]))
 
         if buttons is False:
-            self.setButtonSymbols(QSpinBox.NoButtons)
+            self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
 
         if not scroll:
             self.wheelEvent = lambda event: None
@@ -229,7 +229,7 @@ class DoubleSpinBox(QDoubleSpinBox):
             self.setDecimals(decimals)
 
         if buttons is False:
-            self.setButtonSymbols(QSpinBox.NoButtons)
+            self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
 
         if not scroll:
             self.wheelEvent = lambda event: None
@@ -320,7 +320,7 @@ class ComboBox(QComboBox):
 
         if tooltips is not None and len(tooltips) == len(entries):
             for i, tip in enumerate(tooltips):
-                self.setItemData(i, tip, Qt.ToolTipRole)
+                self.setItemData(i, tip, Qt.ItemDataRole.ToolTipRole)
 
         if disabled_list is not None:
             for i in disabled_list:
@@ -404,12 +404,12 @@ class FilePath(QWidget):
             self.path.setPlaceholderText(placeholder)
         self.path.setReadOnly(True)
         self.path.setMinimumWidth(300)
-        self.layout.addWidget(self.path, Qt.AlignLeft)
+        self.layout.addWidget(self.path, Qt.AlignmentFlag.AlignLeft)
 
         self.button = QPushButton('...')
         self.button.setMinimumSize(40, 10)
         self.button.setMaximumSize(40, 30)
-        self.layout.addWidget(self.button, Qt.AlignRight)
+        self.layout.addWidget(self.button, Qt.AlignmentFlag.AlignRight)
 
         self.function = function
         if function is not None:
@@ -515,7 +515,7 @@ class InputHLayout(QHBoxLayout):
                 self.input = QDoubleSpinBox(parent)
                 self.input.setDecimals(decimals)
             self.input.setSingleStep(step_size)
-            self.input.setButtonSymbols(QSpinBox.NoButtons)
+            self.input.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
             self.input.setMinimumSize(50, 20)
             self.input.setRange(input_range[0], input_range[1])
             self.input.setValue(self.default_value)
@@ -540,7 +540,7 @@ class InputHLayout(QHBoxLayout):
 
             if len(tooltips) == len(entries):
                 for i, tip in enumerate(tooltips):
-                    self.input.setItemData(i, tip, Qt.ToolTipRole)
+                    self.input.setItemData(i, tip, Qt.ItemDataRole.ToolTipRole)
 
             if len(disabled_list):
                 for i in disabled_list:
@@ -565,12 +565,12 @@ class InputHLayout(QHBoxLayout):
             self.path.setPlaceholderText(str(self.default_value))
             self.path.setReadOnly(True)
             self.path.setMinimumWidth(300)
-            self.fileSelectLayout.addWidget(self.path, Qt.AlignLeft)
+            self.fileSelectLayout.addWidget(self.path, Qt.AlignmentFlag.AlignLeft)
 
             self.fileBtn = QPushButton('...', parent)
             self.fileBtn.setMinimumSize(40, 10)
             self.fileBtn.setMaximumSize(40, 30)
-            self.fileSelectLayout.addWidget(self.fileBtn, Qt.AlignRight)
+            self.fileSelectLayout.addWidget(self.fileBtn, Qt.AlignmentFlag.AlignRight)
 
         # QLabel
         elif self.input_type == InputHLayout.InputType.LABEL:
@@ -719,19 +719,19 @@ class TabWithToolbar(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.super_layout = QBoxLayout(QBoxLayout.TopToBottom)
+        self.super_layout = QBoxLayout(QBoxLayout.Direction.TopToBottom)
         self.super_layout.setContentsMargins(0, 0, 0, 0)
 
         # Toolbar
         self.toolbar = QToolBar()
         self.toolbar.setFloatable(False)
         self.toolbar.setMovable(False)
-        self.toolbar.setContextMenuPolicy(Qt.CustomContextMenu)  # Disable the context menu of the toolbar itself
+        self.toolbar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # Disable the context menu of the toolbar itself
         self.toolbar.toggleViewAction().setEnabled(False)  # Disable the action in the context menus of the main window
         self.super_layout.addWidget(self.toolbar)
 
         # self.page as main layout
-        self.page = QBoxLayout(QBoxLayout.TopToBottom)
+        self.page = QBoxLayout(QBoxLayout.Direction.TopToBottom)
         self.super_layout.addLayout(self.page)
         self.setLayout(self.super_layout)
 
@@ -798,7 +798,7 @@ class ListWidgetItem(QListWidgetItem):
 
         # non selectable
         if not selectable or function is None:
-            self.setFlags(Qt.NoItemFlags)
+            self.setFlags(Qt.ItemFlag.NoItemFlags)
 
         if not grey:
             self.setForeground(QColor('#000000'))
@@ -808,7 +808,7 @@ class ListWidgetItem(QListWidgetItem):
         # bold
         if bold:
             item_font = self.font()
-            item_font.setWeight(QFont.Bold)
+            item_font.setWeight(QFont.Weight.Bold)
             self.setFont(item_font)
 
         # tooltip for slow
@@ -905,7 +905,7 @@ class FileEditor(QPlainTextEdit):
 
         if mono:
             mono_font = QFont('Monospace', 9)
-            mono_font.setStyleHint(QFont.TypeWriter)
+            mono_font.setStyleHint(QFont.StyleHint.TypeWriter)
             self.setFont(mono_font)
 
     def updateOffset(self, offset: int):
@@ -915,7 +915,7 @@ class FileEditor(QPlainTextEdit):
     def lineNumberAreaWidth(self):
         """Returns the width of the line number area"""
         digits = len(str(self.blockCount() + self.offset))
-        space = 5 + self.fontMetrics().width('9') * digits
+        space = 5 + self.fontMetrics().horizontalAdvance('9') * digits
         return space
 
     def updateLineNumberAreaWidth(self):
@@ -959,13 +959,13 @@ class FileEditor(QPlainTextEdit):
         height = self.fontMetrics().height()
         while block.isValid() and (top <= event.rect().bottom()):
             if block.isVisible() and (bottom >= event.rect().top()):
-                painter.setPen(Qt.black)
+                painter.setPen(Qt.GlobalColor.black)
                 painter.drawText(
                     0,
                     int(top),
                     int(self.line_number_area.width()),
                     int(height),
-                    Qt.AlignRight,
+                    Qt.AlignmentFlag.AlignRight,
                     str(block_number + 1 + self.offset)
                 )
 
@@ -994,7 +994,7 @@ class FileEditor(QPlainTextEdit):
 
         for selection in selections:
             selection.format.setBackground(self.color_highlight)
-            selection.format.setProperty(QTextFormat.FullWidthSelection, True)
+            selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
 
         self.setExtraSelections(selections)
 

@@ -19,9 +19,9 @@
 from urllib.parse import urlparse
 from urllib.request import urlretrieve
 
-from PyQt5.QtCore import QFileInfo, Qt, QUrl
-from PyQt5.QtGui import QFont, QDesktopServices
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QFileInfo, Qt, QUrl
+from PyQt6.QtGui import QFont, QDesktopServices
+from PyQt6.QtWidgets import (
     QCheckBox, QMessageBox, QDialog, QFileDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QProgressBar
 )
@@ -50,7 +50,7 @@ def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: str,
 
 
 def showMessageBox(parent, icon, window_title: str, text: str, info_message: str = '', detailed_message: str = '',
-                   standard_buttons: int = QMessageBox.Ok, check_box_text: str = '', expand_details: bool = False):
+                   standard_buttons: int = QMessageBox.StandardButton.Ok, check_box_text: str = '', expand_details: bool = False):
     """
     Displays message box
 

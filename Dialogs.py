@@ -16,12 +16,12 @@
 # https://www.gnu.org/licenses/.
 
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QDialog, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QComboBox,
     QLineEdit, QWidget, QDialogButtonBox, QCheckBox, QPushButton, QFileDialog
 )
-from PyQt5.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap
 
 from GlobalConf import GlobalConf
 

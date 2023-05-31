@@ -16,8 +16,8 @@
 # https://www.gnu.org/licenses/.
 
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QSpinBox, QDoubleSpinBox, QWidget, QComboBox, QGraphicsDropShadowEffect, QGraphicsColorizeEffect
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QSpinBox, QDoubleSpinBox, QWidget, QComboBox, QGraphicsDropShadowEffect, QGraphicsColorizeEffect
 
 
 def setWidgetBackground(widget: QWidget, enabled: bool, color: QColor = QColor(144, 12, 63, 255)):

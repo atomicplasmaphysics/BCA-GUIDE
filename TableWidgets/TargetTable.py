@@ -18,9 +18,9 @@
 
 from typing import List
 
-from PyQt5.QtGui import QRegExpValidator, QIcon
-from PyQt5.QtCore import pyqtSignal, QRegExp
-from PyQt5.QtWidgets import QLineEdit, QPushButton, QWidget, QHBoxLayout, QVBoxLayout
+from PyQt6.QtGui import QRegularExpressionValidator, QIcon
+from PyQt6.QtCore import pyqtSignal, QRegularExpression
+from PyQt6.QtWidgets import QLineEdit, QPushButton, QWidget, QHBoxLayout, QVBoxLayout
 
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Functions import limitSum
@@ -104,7 +104,7 @@ class TargetLayersRow(CustomRow):
         self.edit_button_hl.addStretch(1)
         self.edit_button.setLayout(self.edit_button_hl)
 
-        self.name_validator = QRegExpValidator(QRegExp('[a-zA-Z1-9]+'))
+        self.name_validator = QRegularExpressionValidator(QRegularExpression('[a-zA-Z1-9]+'))
         self.element_cells = []
         self.segment_thickness = 0
 

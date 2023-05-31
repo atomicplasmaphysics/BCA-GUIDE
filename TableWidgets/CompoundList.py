@@ -19,9 +19,8 @@
 from typing import List, Tuple
 
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QLabel, QCheckBox, QHBoxLayout
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QWidget, QLabel, QCheckBox, QHBoxLayout
 
 
 from Containers.Compound import Compound
@@ -46,7 +45,7 @@ class ListItemWidget(QWidget):
         # layout for checkbox and label
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(7, 3, 7, 3)
-        self.layout.setAlignment(Qt.AlignLeft)
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.checkbox = QCheckBox()
         self.checkbox.setChecked(False)
@@ -83,7 +82,7 @@ class CompoundList(QListWidget):
         # list widgets for all compounds
         for compound in self.compounds:
             item = QListWidgetItem()
-            item.setFlags(Qt.NoItemFlags)
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
 
             item_widget = ListItemWidget(parent, compound)
             item_widget.setDisabled(True)
@@ -182,7 +181,7 @@ class CompoundList(QListWidget):
 
         for i, (index, item, item_widget) in enumerate(items):
             new_item = QListWidgetItem()
-            new_item.setFlags(Qt.NoItemFlags)
+            new_item.setFlags(Qt.ItemFlag.NoItemFlags)
             new_item.setSizeHint(item_widget.sizeHint())
             self.insertItem(i, new_item)
             self.setItemWidget(new_item, item_widget)

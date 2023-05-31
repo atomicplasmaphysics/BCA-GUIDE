@@ -24,8 +24,8 @@ from re import findall, sub
 import numpy as np
 from scipy.optimize import curve_fit
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QLabel, QSlider
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QLabel, QSlider
 
 from Utility.Layouts import (
     MplCanvas, MplCanvasSettings, InputHBoxLayout,
@@ -1668,7 +1668,7 @@ class HlPlot(HlGeneralPlot):
         )
         self.layout_history_step.setHidden(True)
         self.addLayout(self.layout_history_step)
-        self.history_step_slider = QSlider(Qt.Horizontal)
+        self.history_step_slider = QSlider(Qt.Orientation.Horizontal)
         self.history_step_slider.setMinimumWidth(200)
         self.history_step_slider.setMinimum(0)
         self.history_step_slider.setToolTip(self.history_step_tooltip)

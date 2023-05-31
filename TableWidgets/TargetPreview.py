@@ -16,9 +16,9 @@
 # https://www.gnu.org/licenses/.
 
 
-from PyQt5.QtCore import QSize, QRect, Qt
-from PyQt5.QtGui import QPen, QPalette, QPainter, QColor, QFont, QFontMetrics
-from PyQt5.QtWidgets import QWidget
+from PyQt6.QtCore import QSize, QRect, Qt
+from PyQt6.QtGui import QPen, QPalette, QPainter, QColor, QFont, QFontMetrics
+from PyQt6.QtWidgets import QWidget
 
 
 class TargetPreview(QWidget):
@@ -32,7 +32,7 @@ class TargetPreview(QWidget):
         super().__init__(parent)
 
         self.antialiased = True
-        self.setBackgroundRole(QPalette.Base)
+        self.setBackgroundRole(QPalette.ColorRole.Base)
         self.setAutoFillBackground(True)
         self.pen = QPen(QColor(0, 0, 0))
 
@@ -98,7 +98,7 @@ class TargetPreview(QWidget):
 
         painter = QPainter(self)
         painter.setPen(self.pen)
-        painter.setRenderHint(QPainter.Antialiasing, self.antialiased)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialiased)
 
         x_coord = self.x_margin
         y_coord = self.y_margin
@@ -121,7 +121,7 @@ class TargetPreview(QWidget):
                 painter.fillRect(rect, QColor.fromHsv(int(i * 359 / len(self.elements)), 255, 255, 127))
                 rect.translate(self.legend_margin, 0)
                 rect.setSize(QSize(self.element_widths[i], self.legend_size))
-                painter.drawText(rect, Qt.AlignCenter, f'{self.elements[i]}')
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f'{self.elements[i]}')
 
                 x_coord = x_coord_new
 
@@ -156,5 +156,5 @@ class TargetPreview(QWidget):
                 painter.fillRect(rect2, QColor.fromHsv(int(j * 359 / len(self.elements)), 255, 255, 127))
                 last_x += w
 
-            painter.drawText(rect, Qt.AlignCenter, f'{layer[1]}')
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f'{layer[1]}')
             last_layer_y += layer_height

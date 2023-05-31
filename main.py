@@ -19,9 +19,9 @@
 from sys import argv
 from platform import system
 
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QApplication, QSplashScreen, QDesktopWidget
-from PyQt5.QtGui import QPixmap
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtWidgets import QApplication, QSplashScreen
+from PyQt6.QtGui import QPixmap
 
 import resources
 
@@ -45,9 +45,9 @@ def main():
     app = QApplication(argv)
 
     pixmap = QPixmap(':/icons/splash.png')
-    screen = QDesktopWidget().screenGeometry(-1)
+    screen = app.screens()[0].availableVirtualGeometry()
     splash_size = QSize(int(min(620, screen.width() * 0.5)), int(min(300, screen.height() * 0.5)))
-    pixmap = pixmap.scaled(splash_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    pixmap = pixmap.scaled(splash_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
     splash = QSplashScreen(pixmap)
     splash.show()
     app.processEvents()
@@ -55,7 +55,7 @@ def main():
     main_window = MainWindow()
     main_window.show()
     splash.finish(main_window)
-    app.exec_()
+    app.exec()
 
 
 if __name__ == '__main__':

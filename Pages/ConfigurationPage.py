@@ -17,14 +17,14 @@
 
 
 from __future__ import annotations
-from typing import Union, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from platform import system
 from json import dump, load
 from json.decoder import JSONDecodeError
 
-from PyQt5.QtCore import Qt, QTimer, QDir, QFileInfo
-from PyQt5.QtGui import QIcon, QKeySequence, QPixmap
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QTimer, QDir, QFileInfo
+from PyQt6.QtGui import QIcon, QKeySequence, QPixmap
+from PyQt6.QtWidgets import (
     QSplitter, QWidget, QPushButton, QListWidget, QLabel, QListWidgetItem,
     QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy
 )
@@ -74,36 +74,36 @@ class ConfigurationPage(TabWithToolbar):
         # New
         self.action_new = self.toolbar.addAction(QIcon(':/icons/new.png'), 'New')
         self.action_new.setToolTip('Reset all configured Simulations')
-        self.action_new.setShortcut(QKeySequence.New)
+        self.action_new.setShortcut(QKeySequence.StandardKey.New)
         self.action_new.triggered.connect(lambda: self.clearAll())
 
         # Open
         self.action_open = self.toolbar.addAction(QIcon(':/icons/open.png'), 'Open')
         self.action_open.setToolTip('Open saved simulation configurations')
-        self.action_open.setShortcut(QKeySequence.Open)
+        self.action_open.setShortcut(QKeySequence.StandardKey.Open)
         self.action_open.triggered.connect(lambda: self.open())
 
         # Save
         self.action_save = self.toolbar.addAction(QIcon(':/icons/save.png'), 'Save')
         self.action_save.setToolTip('Save all listed simulation configurations')
-        self.action_save.setShortcut(QKeySequence.Save)
+        self.action_save.setShortcut(QKeySequence.StandardKey.Save)
         self.action_save.triggered.connect(lambda: self.save())
 
         # Add empty space
         self.empty_space = QWidget()
-        self.empty_space.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.empty_space.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.toolbar.addWidget(self.empty_space)
 
         # Run
         self.action_run = self.toolbar.addAction(QIcon(':/icons/play.png'), 'Run')
         self.action_run.setToolTip('Run the selected simulation(s)')
-        self.action_run.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_R))
+        self.action_run.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_R))
         self.action_run.triggered.connect(lambda: self.runSelected())
 
         # Run detached
         self.action_run_detached = self.toolbar.addAction(QIcon(':/icons/play_detached.png'), 'Run detached')
         self.action_run_detached.setToolTip('Run the selected simulation(s) in detached mode.\nThe simulation(s) is(are) run in a separate window, and the GUI can be closed')
-        self.action_run_detached.setShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_R))
+        self.action_run_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_detached.triggered.connect(lambda: self.runSelected(detached=True))
 
         #
@@ -239,19 +239,19 @@ class ConfigurationPage(TabWithToolbar):
 
         # Simulation
         self.simulation_description_hbox = QHBoxLayout()
-        self.simulation_description_hbox.addWidget(QLabel('Simulation description:', self), split, alignment=Qt.AlignTop)
+        self.simulation_description_hbox.addWidget(QLabel('Simulation description:', self), split, alignment=Qt.AlignmentFlag.AlignTop)
         self.description_hbox = QHBoxLayout()
         self.description_logo = QLabel('', self)
         self.description_logo.hide()
-        self.description_hbox.addWidget(self.description_logo, alignment=Qt.AlignTop)
+        self.description_hbox.addWidget(self.description_logo, alignment=Qt.AlignmentFlag.AlignTop)
         self.description_label = QLabel('no description', self)
-        self.description_hbox.addWidget(self.description_label, alignment=Qt.AlignTop)
+        self.description_hbox.addWidget(self.description_label, alignment=Qt.AlignmentFlag.AlignTop)
         self.simulation_description_hbox.addLayout(self.description_hbox, 100 - split)
         self.simulation_configuration_group.addLayout(self.simulation_description_hbox)
 
         # Save button
         self.save_hbox = QHBoxLayout()
-        self.save_hbox.setAlignment(Qt.AlignCenter)
+        self.save_hbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.simulation_configuration_group.addSpacing(30)
         self.simulation_configuration_group.addLayout(self.save_hbox)
 
@@ -266,7 +266,7 @@ class ConfigurationPage(TabWithToolbar):
 
         # Stretch to bottom
         self.simulation_configuration_group.addStretch(1)
-        self.simulation_configuration_group.setAlignment(Qt.AlignRight)
+        self.simulation_configuration_group.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         # Add a parent to the simConfL and add that to the splitter (=self)
         self.settings_parent = QWidget(self)
@@ -286,7 +286,7 @@ class ConfigurationPage(TabWithToolbar):
         # Information
         self.simulation_configuration_list_label = QLabel('Click to edit configuration')
         self.simulation_configuration_list_label.setMaximumHeight(20)
-        self.simulation_configuration_list_group.addWidget(self.simulation_configuration_list_label, Qt.AlignLeft)
+        self.simulation_configuration_list_group.addWidget(self.simulation_configuration_list_label, Qt.AlignmentFlag.AlignLeft)
 
         # List of simulations
         self.simulation_configuration_list = QListWidget()
@@ -299,7 +299,7 @@ class ConfigurationPage(TabWithToolbar):
         QTimer.singleShot(0, self.listConfigView)
 
         # Stretch to bottom
-        self.simulation_configuration_list_group.setAlignment(Qt.AlignRight)
+        self.simulation_configuration_list_group.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         # Copy and delete Buttons
         self.copy_delete_hbox = QHBoxLayout()
@@ -360,14 +360,14 @@ class ConfigurationPage(TabWithToolbar):
         if non_closeable:
             _, result = showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'At least one simulation is currently not closeable. It is either running (⧖) or has unsaved changes (*)',
                 info_message='Continue anyways?',
                 detailed_message='\n'.join(non_closeable),
-                standard_buttons=QMessageBox.Ok | QMessageBox.Abort
+                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Abort
             )
-            if result == QMessageBox.Abort:
+            if result == QMessageBox.StandardButton.Abort:
                 return False
         return True
 
@@ -387,13 +387,13 @@ class ConfigurationPage(TabWithToolbar):
         if show_warning:
             _, result = showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'All listed simulation configurations will be cleared an list of simulation configurations will be reset.',
-                standard_buttons=QMessageBox.Ok | QMessageBox.Cancel
+                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
             )
 
-            if result == QMessageBox.Cancel:
+            if result == QMessageBox.StandardButton.Cancel:
                 return False
 
         self.main_window.simulation_configs = []
@@ -447,7 +447,7 @@ class ConfigurationPage(TabWithToolbar):
         if error_msg:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'Errors occurred while loading configuration. Effected configurations will not be loaded.',
                 detailed_message=error_msg
@@ -499,7 +499,7 @@ class ConfigurationPage(TabWithToolbar):
         self.simulation_configuration_list.addItem(self.new_configuration_text)
         for sc in self.main_window.simulation_configs:
             item = QListWidgetItem(sc.title)
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(Qt.CheckState.Unchecked)
             self.simulation_configuration_list.addItem(item)
         self.main_window.updateTabs()
         self.simulation_configuration_list.setCurrentRow(0)
@@ -511,7 +511,7 @@ class ConfigurationPage(TabWithToolbar):
         :param list_name: name of configuration in simulation_configuration_list
         """
 
-        items = self.simulation_configuration_list.findItems(list_name, Qt.MatchExactly)
+        items = self.simulation_configuration_list.findItems(list_name, Qt.MatchFlag.MatchExactly)
         if not items:
             self.simulation_configuration_list.setCurrentRow(0)
         else:
@@ -566,7 +566,9 @@ class ConfigurationPage(TabWithToolbar):
             self.description_label.setText(self.selected_configuration.program_description.strip())
             self.save_configuration_button.setText(self.save_configuration_button_text)
             if self.selected_configuration.program_logo:
-                self.description_logo.setPixmap(QPixmap(self.selected_configuration.program_logo).scaled(200, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                self.description_logo.setPixmap(
+                    QPixmap(self.selected_configuration.program_logo).scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                )
                 self.description_logo.show()
             else:
                 self.description_logo.hide()
@@ -595,7 +597,7 @@ class ConfigurationPage(TabWithToolbar):
                     warning_text += 'has unsaved changes (*). Please save unsaved changes to edit the configuration.'
                 showMessageBox(
                     self,
-                    QMessageBox.Warning,
+                    QMessageBox.Icon.Warning,
                     'Warning!',
                     warning_text
                 )
@@ -614,7 +616,7 @@ class ConfigurationPage(TabWithToolbar):
         if not title:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 '"Configuration title" can not be empty'
             )
@@ -622,7 +624,7 @@ class ConfigurationPage(TabWithToolbar):
         elif not folder:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'Path to "Simulation folder" can not be empty'
             )
@@ -630,7 +632,7 @@ class ConfigurationPage(TabWithToolbar):
         elif not binary:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'Path to "Simulation bolder" can not be empty'
             )
@@ -638,7 +640,7 @@ class ConfigurationPage(TabWithToolbar):
         elif title in [sc.title for sc in self.main_window.simulation_configs] and self.selected_configuration is None:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 '"Configuration title" already exists, choose a different'
             )
@@ -647,15 +649,15 @@ class ConfigurationPage(TabWithToolbar):
             if not GlobalConf.no_autodetect_version and self.program.getValue() != self.detected_program and simulation_check:
                 msg_box, result = showMessageBox(
                     self.main_window,
-                    QMessageBox.Warning,
+                    QMessageBox.Icon.Warning,
                     'Warning!',
                     f'Other simulation "<b>{version_detected}</b>" detected, than the selected "<b>{self.program.getValue(text=True)}</b>"',
                     check_box_text='Do not show again',
-                    standard_buttons=QMessageBox.Ok | QMessageBox.Abort
+                    standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Abort
                 )
                 if msg_box.checkBox().isChecked():
                     GlobalConf.no_autodetect_version = True
-                if result == QMessageBox.Abort:
+                if result == QMessageBox.StandardButton.Abort:
                     return False
 
             if self.selected_configuration is None:
@@ -698,7 +700,7 @@ class ConfigurationPage(TabWithToolbar):
                 if not self.selected_configuration.tab_widget.isClosable():
                     showMessageBox(
                         self,
-                        QMessageBox.Warning,
+                        QMessageBox.Icon.Warning,
                         'Warning!',
                         f'"{self.selected_configuration.title}" is currently not closeable. It is either running (⧖) or has unsaved changes (*)'
                     )
@@ -753,7 +755,9 @@ class ConfigurationPage(TabWithToolbar):
             if name == selected:
                 self.description_label.setText(desc.strip())
                 if logo:
-                    self.description_logo.setPixmap(QPixmap(logo).scaled(200, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                    self.description_logo.setPixmap(
+                        QPixmap(logo).scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    )
                     self.description_logo.show()
                 else:
                     self.description_logo.hide()
@@ -788,7 +792,7 @@ class ConfigurationPage(TabWithToolbar):
         if show_warning_window:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning',
                 f'Missing {simulation} folder location',
                 f'The main {simulation} folder, has not yet been defined.\nYou can do that either in the preferences or using the window which opens after pressing "OK".'
@@ -814,8 +818,13 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         if show_warning_window:
-            showMessageBox(self, QMessageBox.Warning, 'Warning', f'Missing {simulation} binary location',
-                           f'The {simulation} binary has not yet been defined.\nYou can do that either in the preferences or using the window which opens after pressing "OK".')
+            showMessageBox(
+                self,
+                QMessageBox.Icon.Warning,
+                'Warning',
+                f'Missing {simulation} binary location',
+                f'The {simulation} binary has not yet been defined.\nYou can do that either in the preferences or using the window which opens after pressing "OK".'
+            )
         # Starting directory
         if self.selected_configuration is not None:
             start_dir = self.selected_configuration.binary
@@ -905,11 +914,11 @@ class ConfigurationPage(TabWithToolbar):
         if non_closeable:
             _, result = showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'At least one simulation is currently running (⧖). Please wait until the simulation has finished',
                 detailed_message='\n'.join(non_closeable),
-                standard_buttons=QMessageBox.Ok
+                standard_buttons=QMessageBox.StandardButton.Ok
             )
             return
 

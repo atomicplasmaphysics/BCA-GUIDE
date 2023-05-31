@@ -16,7 +16,7 @@
 # https://www.gnu.org/licenses/.
 
 
-from PyQt5.QtCore import QDir, QSettings, QLocale
+from PyQt6.QtCore import QDir, QSettings, QLocale
 
 
 class GlobalConf:

@@ -18,9 +18,9 @@
 
 from typing import List, Union
 
-from PyQt5.QtCore import pyqtSignal, QObject
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox
+from PyQt6.QtCore import pyqtSignal, QObject
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox
 
 
 class CustomRowField:
@@ -80,7 +80,7 @@ class CustomRow(QObject):
 
         for widget in self.row_widgets:
             if isinstance(widget, QAbstractSpinBox):
-                widget.setButtonSymbols(QAbstractSpinBox.NoButtons)
+                widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
 
     def selectRowInput(self):
         """Select row as input"""
@@ -120,14 +120,14 @@ class CustomTable(QTableWidget):
         super().__init__(row_count, len(self.header_labels), parent)
         self.rows: List[CustomRow] = []
 
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setSelectionMode(QAbstractItemView.NoSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.verticalHeader().setVisible(False)
         self.setHorizontalHeaderLabels(self.header_labels)
 
         self.horizontal_header = self.horizontalHeader()
-        self.horizontal_header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.horizontal_header.setSectionResizeMode(0, QHeaderView.Fixed)
+        self.horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.horizontal_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.horizontal_header.setMinimumSectionSize(40)
 
         self.add_button = QPushButton(QIcon(':/icons/add.png'), '')

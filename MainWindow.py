@@ -18,9 +18,9 @@
 
 from typing import List
 
-from PyQt5.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir
-from PyQt5.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices
-from PyQt5.QtWidgets import QMainWindow, QTabWidget, QDesktopWidget, QMessageBox
+from PyQt6.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir
+from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QScreen
+from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
 
 import resources
 
@@ -75,7 +75,7 @@ class MainWindow(QMainWindow):
         # Save all
         self.action_save_all = self.menu_file.addAction(QIcon(':/icons/save.png'), 'Save all')
         self.action_save_all.setToolTip('Save configuration for all tabs')
-        self.action_save_all.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.Key_S))
+        self.action_save_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_S))
         self.action_save_all.triggered.connect(lambda: self.menuSave())
 
         # Open all - not needed
@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
         # Reset all
         self.action_reset_all = self.menu_file.addAction(QIcon(':/icons/refresh.png'), 'Reset all')
         self.action_reset_all.setToolTip('Resets configuration for all tabs')
-        self.action_reset_all.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.Key_N))
+        self.action_reset_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_N))
         self.action_reset_all.triggered.connect(lambda: self.menuReset())
 
         self.menu_file.addSeparator()
@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         # Close all
         self.action_close_all = self.menu_file.addAction(QIcon(':/icons/close.png'), 'Close all tabs')
         self.action_close_all.setToolTip('Closes all tabs')
-        self.action_close_all.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.Key_W))
+        self.action_close_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_W))
         self.action_close_all.triggered.connect(lambda: self.menuCloseAll())
 
         self.menu_file.addSeparator()
@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
         # Preferences
         self.action_preferences = self.menu_file.addAction(QIcon(':/icons/preferences.png'), 'Preferences')
         self.action_preferences.setToolTip('Open preferences dialog')
-        self.action_preferences.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_H))
+        self.action_preferences.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_H))
         self.action_preferences.triggered.connect(lambda: PreferencesDialog(self).open())
 
         self.menu_file.addSeparator()
@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
         # Quit
         self.action_quit = self.menu_file.addAction('Quit')
         self.action_quit.setToolTip('Quit the program')
-        self.action_quit.setShortcut(QKeySequence.Quit)
+        self.action_quit.setShortcut(QKeySequence.StandardKey.Quit)
         self.action_quit.triggered.connect(lambda: self.close())
 
         # Simulation
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
         # Close current tab
         self.closeAction = self.menu_simulation.addAction(QIcon(':/icons/close.png'), 'Close current tab')
         self.closeAction.setToolTip('Closes currently active tab')
-        self.closeAction.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_W))
+        self.closeAction.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_W))
         self.closeAction.setDisabled(True)
         self.closeAction.triggered.connect(lambda: self.menuClose())
 
@@ -130,19 +130,19 @@ class MainWindow(QMainWindow):
         # Run all tabs
         self.action_run_all = self.menu_simulation.addAction(QIcon(':/icons/play.png'), 'Run all tabs')
         self.action_run_all.setToolTip('Runs all opened tab')
-        self.action_run_all.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.Key_R))
+        self.action_run_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_R))
         self.action_run_all.triggered.connect(lambda: self.menuRun())
 
         # Run all tabs detached
         self.action_run_all_detached = self.menu_simulation.addAction(QIcon(':/icons/play_detached.png'), 'Run all tabs detached')
         self.action_run_all_detached.setToolTip('Runs all opened tab in detached mode')
-        self.action_run_all_detached.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.SHIFT + Qt.Key_R))
+        self.action_run_all_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_all_detached.triggered.connect(lambda: self.menuRun(detached=True))
 
         # Abort all tabs
         self.action_abort_all = self.menu_simulation.addAction(QIcon(':/icons/abort.png'), 'Abort all tabs')
         self.action_abort_all.setToolTip('Aborts all running tabs')
-        self.action_abort_all.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + + Qt.Key_P))
+        self.action_abort_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_P))
         self.action_abort_all.triggered.connect(lambda: self.menuAbort())
 
         # Help
@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
         else:
             self.resize(width, height)
             frame_geometry = self.frameGeometry()
-            center_point = QDesktopWidget().availableGeometry().center()
+            center_point = QScreen().availableSize().center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 
@@ -386,7 +386,7 @@ class MainWindow(QMainWindow):
         if non_closable:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 f'Some tabs are either running (⧖) or have unsaved changes (*). "{", ".join(non_closable)}"'
             )
@@ -410,7 +410,7 @@ class MainWindow(QMainWindow):
                 if not selected_conf.tab_widget.isClosable():
                     showMessageBox(
                         self,
-                        QMessageBox.Warning,
+                        QMessageBox.Icon.Warning,
                         'Warning!',
                         f'"{selected_conf.title}" is currently not closeable. It is either running (⧖) or has unsaved changes (*)'
                     )
@@ -437,11 +437,11 @@ class MainWindow(QMainWindow):
         if non_closeable:
             _, result = showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'At least one simulation is currently running (⧖). Please wait until the simulation has finished',
                 detailed_message='\n'.join(non_closeable),
-                standard_buttons=QMessageBox.Ok
+                standard_buttons=QMessageBox.StandardButton.Ok
             )
             return
 

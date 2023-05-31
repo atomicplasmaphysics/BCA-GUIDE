@@ -26,9 +26,9 @@ from locale import getpreferredencoding
 from re import sub
 from subprocess import Popen, getstatusoutput
 
-from PyQt5.QtCore import Qt, QUrl, QDir, QFile, QFileInfo, QProcess, QTimer
-from PyQt5.QtGui import QIcon, QKeySequence, QDesktopServices
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QUrl, QDir, QFile, QFileInfo, QProcess, QTimer
+from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices
+from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox,
     QSizePolicy, QPushButton, QListWidget, QAbstractItemView, QProgressBar,
     QMessageBox, QFileDialog, QScrollArea, QApplication
@@ -118,7 +118,7 @@ class SimulationPage(TabWithToolbar):
         if not self.simulation_class.updateElements(self.simulation_configuration.folder, self.simulation_configuration.version) and not GlobalConf.skip_element_info:
             msg_box, _ = showMessageBox(
                 self.main_window,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 f'Unable to load simulation element data for {self.simulation_configuration.version}, using default element data from <b>SDTrimSP v6.01</b>',
                 check_box_text='Do not show again'
@@ -161,32 +161,32 @@ class SimulationPage(TabWithToolbar):
         # New
         self.action_new = self.toolbar.addAction(QIcon(':/icons/new.png'), 'New')
         self.action_new.setToolTip('<b>Reset</b> this simulation-tab and the input fields to their default states')
-        self.action_new.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_N))
+        self.action_new.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_N))
         self.action_new.triggered.connect(lambda: self.resetSettings())
 
         # Open
         self.action_open = self.toolbar.addAction(QIcon(':/icons/open.png'), 'Open')
         self.action_open.setToolTip('<b>Open</b> an existing simulation input setting')
-        self.action_open.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_O))
+        self.action_open.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_O))
         self.action_open.triggered.connect(lambda: self.loadSettings())  # self.loadSettings(from_json=False)
 
         # Import
         self.action_import = self.toolbar.addAction(QIcon(':/icons/convert.png'), 'Convert')
         self.action_import.setToolTip('<b>Convert</b> simulation input setting')
-        self.action_import.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_I))
+        self.action_import.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_I))
         self.action_import.triggered.connect(lambda: self.importSettings())
 
         # Save
         self.action_save = self.toolbar.addAction(QIcon(':/icons/save_new.png'), 'Save')
         self.action_save.setToolTip('<b>Save</b> the current settings of this simulation-tab to a simulation-tab input file')
-        self.action_save.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_S))
+        self.action_save.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_S))
         self.action_save.setEnabled(False)
         self.action_save.triggered.connect(lambda: self.saveSettings())
 
         # Save as
         self.action_save_as = self.toolbar.addAction(QIcon(':/icons/save_as.png'), 'Save as')
         self.action_save_as.setToolTip('<b>Save</b> the current settings of this simulation-tab under a different name and/or in a different location')
-        self.action_save_as.setShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
+        self.action_save_as.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_S))
         self.action_save_as.setEnabled(False)
         self.action_save_as.triggered.connect(lambda: self.saveSettings(new_folder=True))
 
@@ -196,7 +196,7 @@ class SimulationPage(TabWithToolbar):
         # Preferences
         self.action_preferences = self.toolbar.addAction(QIcon(':/icons/preferences.png'), 'Preferences')
         self.action_preferences.setToolTip('Open the <b>general settings</b> of this simulation configuration')
-        self.action_preferences.setShortcut(QKeySequence.Preferences)
+        self.action_preferences.setShortcut(QKeySequence.StandardKey.Preferences)
         self.action_preferences.triggered.connect(lambda: self.main_window.switchSettingsTab(self.simulation_configuration))
 
         # Separator
@@ -217,7 +217,7 @@ class SimulationPage(TabWithToolbar):
         # Run
         self.action_run = self.toolbar.addAction(QIcon(':/icons/play.png'), 'Run')
         self.action_run.setToolTip('Save the current settings and <b>run the simulation</b> on the input file')
-        self.action_run.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_R))
+        self.action_run.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_R))
         self.action_run.triggered.connect(lambda: self.runSimulation())
 
         # Run progress bar
@@ -230,7 +230,7 @@ class SimulationPage(TabWithToolbar):
         # Run abort
         self.action_abort = self.toolbar.addAction(QIcon(':/icons/abort.png'), 'Abort')
         self.action_abort.setToolTip('<b>Abort</b> the currently active simulation')
-        self.action_abort.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_P))
+        self.action_abort.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_P))
         self.action_abort.setEnabled(False)
         self.action_abort.triggered.connect(lambda: self.process.kill())
         self.toolbar.addSeparator()
@@ -238,7 +238,7 @@ class SimulationPage(TabWithToolbar):
         # Run detached
         self.action_run_detached = self.toolbar.addAction(QIcon(':/icons/play_detached.png'), 'Run detached')
         self.action_run_detached.setToolTip('Save the current settings and <b>run the simulation</b> on the input file in detached mode.\nThe simulation is run in a separate window, and the GUI can be closed')
-        self.action_run_detached.setShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_R))
+        self.action_run_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_detached.triggered.connect(lambda: self.runSimulation(detached=True))
 
         # Separator
@@ -246,7 +246,7 @@ class SimulationPage(TabWithToolbar):
 
         # Add empty space
         self.empty_space = QWidget()
-        self.empty_space.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.empty_space.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.toolbar.addWidget(self.empty_space)
 
         # Name of working directory
@@ -261,7 +261,7 @@ class SimulationPage(TabWithToolbar):
 
         # Open docs button
         self.action_open_documentation = self.toolbar.addAction(QIcon(':/icons/book.png'), 'Simulation documentation')
-        self.action_open_documentation.setShortcut(QKeySequence.HelpContents)
+        self.action_open_documentation.setShortcut(QKeySequence.StandardKey.HelpContents)
         self.updateDocs()
         self.action_open_documentation.triggered.connect(self.openDocs)
 
@@ -281,7 +281,7 @@ class SimulationPage(TabWithToolbar):
         self.tab_widget.addTab(self.settings_tab_splitter, 'Simulation setup')
 
         self.composition_splitter = QSplitter(self)
-        self.composition_splitter.setOrientation(Qt.Vertical)
+        self.composition_splitter.setOrientation(Qt.Orientation.Vertical)
         self.settings_tab_splitter.addWidget(self.composition_splitter)
 
         #
@@ -345,7 +345,7 @@ class SimulationPage(TabWithToolbar):
         self.settings_group_layout_target.addLayout(self.target_composition_preview)
 
         self.target_preview = TargetPreview(self)
-        self.target_preview.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.target_preview.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.target_preview_vbox.addWidget(self.target_preview)
 
         # Target layers
@@ -369,7 +369,7 @@ class SimulationPage(TabWithToolbar):
                 table_beam=self.table_beam,
                 table_target=self.table_target
             )
-            self.compound_list.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+            self.compound_list.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
             self.target_compound_vbox.addWidget(self.compound_list)
 
         self.settings_group_layout_target.addLayout(self.target_structure_compounds)
@@ -404,7 +404,7 @@ class SimulationPage(TabWithToolbar):
         self.additional_settings.textChanged.connect(lambda: self.checkAdditionalSettings(silent=True))
         self.additional_settings_vbox.addWidget(self.additional_settings)
 
-        self.settings_group_layout_settings.setAlignment(Qt.AlignRight)
+        self.settings_group_layout_settings.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.settings_group_layout_settings.addLayout(self.additional_settings_vbox)
         self.settings_group_layout_settings.addStretch(1)
 
@@ -415,8 +415,8 @@ class SimulationPage(TabWithToolbar):
         self.settings_group_settings.setLayout(self.settings_group_layout_settings)
         self.settings_group_settings.setStyleSheet('QGroupBox { background-color: white; }')
         self.settings_scroll_area.setWidgetResizable(True)
-        self.settings_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.settings_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.settings_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.settings_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.settings_scroll_area.setMinimumWidth(self.settings_group_settings.sizeHint().width() + self.settings_scroll_area.verticalScrollBar().sizeHint().width())
         self.settings_scroll_area.setStyleSheet('QScrollArea { border: none; }')
         self.settings_scroll_area.setWidget(self.settings_group_settings)
@@ -475,7 +475,7 @@ class SimulationPage(TabWithToolbar):
         self.open_output_file_button.setEnabled(False)
         self.output_list_vbox.hl.addWidget(self.open_output_file_button)
         self.output_files_list = QListWidget(self)
-        self.output_files_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.output_files_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.output_list_vbox.addWidget(self.output_files_list)
         self.parent_widget_output_list.setLayout(self.output_list_vbox)
         self.output_files_splitter.addWidget(self.parent_widget_output_list)
@@ -496,9 +496,9 @@ class SimulationPage(TabWithToolbar):
             tooltip='Positive sign will show first lines, negative sign will show last lines. Disable if all lines should be visible'
         )
         self.layout_output_preview_line_count.checkbox.setMaximumWidth(120)
-        self.layout_output_preview_line_count.checkbox.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.layout_output_preview_line_count.checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.output_preview_line_count.setMaximumWidth(50)
-        self.output_preview_line_count.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.output_preview_line_count.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.output_preview_vbox.hl.addLayout(self.layout_output_preview_line_count)
         self.parent_widget_output_preview.setLayout(self.output_preview_vbox)
         self.output_files_splitter.addWidget(self.parent_widget_output_preview)
@@ -527,7 +527,7 @@ class SimulationPage(TabWithToolbar):
         self.save_plot_button.clicked.connect(self.savePlot)
         self.plot_list_vbox.hl.addWidget(self.save_plot_button)
         self.output_parameters_list = ListWidget(self)
-        self.output_parameters_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.output_parameters_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.plot_list_vbox.addWidget(self.output_parameters_list)
         self.parent_widget_plot_list.setLayout(self.plot_list_vbox)
         self.simulation_result_splitter.addWidget(self.parent_widget_plot_list)
@@ -685,7 +685,7 @@ class SimulationPage(TabWithToolbar):
 
         popup_icon = value_dict.get('popup_icon')
         if popup_icon is None:
-            popup_icon = QMessageBox.Information
+            popup_icon = QMessageBox.Icon.Information
 
         popup_info_message = value_dict.get('popup_info_message')
         if popup_info_message is None:
@@ -863,7 +863,7 @@ class SimulationPage(TabWithToolbar):
 
         # delete all files except input files
         files = []
-        for file in QDir(self.simulation_configuration.save_folder).entryInfoList(filters=QDir.Files):
+        for file in QDir(self.simulation_configuration.save_folder).entryInfoList(filters=QDir.Filter.Files):
             file_name = file.fileName()
             if not inFileList(file_name, input_files):
                 files.append(file)
@@ -871,15 +871,15 @@ class SimulationPage(TabWithToolbar):
         if files and not GlobalConf.skip_delete_info:
             msg_box, result = showMessageBox(
                 self,
-                QMessageBox.Information,
+                QMessageBox.Icon.Information,
                 'Attention!',
                 'Files in the working directory will be deleted',
                 info_message=f'In order to run the simulation, all non-input files in the working directory<br><br>{self.simulation_configuration.save_folder}<br><br>will be deleted automatically.',
                 detailed_message='Affected files:\n\n' + '\n'.join([file.fileName() for file in files]),
-                standard_buttons=QMessageBox.Ok | QMessageBox.Cancel,
+                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
                 check_box_text='Do not show again'
             )
-            if result == QMessageBox.Cancel:
+            if result == QMessageBox.StandardButton.Cancel:
                 return
             if msg_box.checkBox().isChecked():
                 GlobalConf.skip_delete_info = True
@@ -967,17 +967,17 @@ class SimulationPage(TabWithToolbar):
         if self.simulation_configuration.unsaved_changes:
             _, result = showMessageBox(
                 self,
-                QMessageBox.Information,
+                QMessageBox.Icon.Information,
                 'Attention!',
                 'The document has been modified',
                 info_message=f'Do you want to save your changes?',
-                standard_buttons=QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel
+                standard_buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
             )
 
-            if result == QMessageBox.Cancel:
+            if result == QMessageBox.StandardButton.Cancel:
                 return
 
-            elif result == QMessageBox.Save:
+            elif result == QMessageBox.StandardButton.Save:
                 if not self.saveSettings():
                     return
 
@@ -1022,17 +1022,17 @@ class SimulationPage(TabWithToolbar):
         if self.simulation_configuration.unsaved_changes and unsaved_warning:
             _, result = showMessageBox(
                 self,
-                QMessageBox.Information,
+                QMessageBox.Icon.Information,
                 'Attention!',
                 'The document has been modified',
                 info_message=f'Do you want to save your changes?',
-                standard_buttons=QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel
+                standard_buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
             )
 
-            if result == QMessageBox.Cancel:
+            if result == QMessageBox.StandardButton.Cancel:
                 return False
 
-            elif result == QMessageBox.Save:
+            elif result == QMessageBox.StandardButton.Save:
                 if not self.saveSettings():
                     return False
 
@@ -1041,7 +1041,7 @@ class SimulationPage(TabWithToolbar):
             if not QDir().exists(path):
                 showMessageBox(
                     self,
-                    QMessageBox.Warning,
+                    QMessageBox.Icon.Warning,
                     'Error!',
                     'Invalid file path',
                     f'Input file path "{path}" does not exist'
@@ -1094,7 +1094,7 @@ class SimulationPage(TabWithToolbar):
                 if error_list:
                     showMessageBox(
                         self,
-                        QMessageBox.Information,
+                        QMessageBox.Icon.Information,
                         'Information!',
                         'Problems while loading input file',
                         f'The following problems occurred while trying to load files from "{self.simulation_configuration.save_folder}"',
@@ -1106,7 +1106,7 @@ class SimulationPage(TabWithToolbar):
         if not arguments:
             showMessageBox(
                 self,
-                QMessageBox.Information,
+                QMessageBox.Icon.Information,
                 'Information!',
                 'Input files could not be read',
                 'There are either no input files present, or the chosen simulation does not support the present input files. Try to open the input files with the corresponding simulation selected and copy the generated "input.json" file.'
@@ -1115,14 +1115,14 @@ class SimulationPage(TabWithToolbar):
         if isinstance(arguments, str):
             showMessageBox(
                 self,
-                QMessageBox.Information,
+                QMessageBox.Icon.Information,
                 'Information!',
                 'Input files could not be read',
                 'There are either no input files present, or the chosen simulation does not support the present input files. Try to open the input files with the corresponding simulation selected and copy the generated "input.json" file.'
             )
             return False
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
         # reset beam, target and layer tables
         self.target_layers.resetTable()
@@ -1191,7 +1191,7 @@ class SimulationPage(TabWithToolbar):
 
         result = None
         folder = ''
-        while result != QMessageBox.Yes:
+        while result != QMessageBox.StandardButton.Yes:
             folder = QFileDialog.getExistingDirectory(
                 self,
                 'Select the folder where the imported files should be saved',
@@ -1208,11 +1208,11 @@ class SimulationPage(TabWithToolbar):
 
             _, result = showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'This folder already contains files',
                 info_message=f'Do you want to save the settings in\n"{folder}"?',
-                standard_buttons=QMessageBox.Yes | QMessageBox.No
+                standard_buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
 
         self.simulation_configuration.save_folder = folder
@@ -1245,7 +1245,7 @@ class SimulationPage(TabWithToolbar):
         if not self.table_beam.allRowsHaveData() or not self.table_target.allRowsHaveData():
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'All elements must be defined in order to save the input file'
             )
@@ -1263,7 +1263,7 @@ class SimulationPage(TabWithToolbar):
         if not self.simulation_configuration.save_folder or new_folder:
             result = None
             folder = ''
-            while result != QMessageBox.Yes:
+            while result != QMessageBox.StandardButton.Yes:
                 folder = QFileDialog.getExistingDirectory(
                     self,
                     'Select the folder where the files will be saved',
@@ -1280,11 +1280,11 @@ class SimulationPage(TabWithToolbar):
 
                 _, result = showMessageBox(
                     self,
-                    QMessageBox.Warning,
+                    QMessageBox.Icon.Warning,
                     'Warning!',
                     'This folder already contains files',
                     info_message=f'Do you want to save the settings in\n"{folder}"?',
-                    standard_buttons=QMessageBox.Yes | QMessageBox.No
+                    standard_buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
 
             self.simulation_configuration.save_folder = folder
@@ -1391,7 +1391,7 @@ class SimulationPage(TabWithToolbar):
             if not silent:
                 showMessageBox(
                     self,
-                    QMessageBox.Information,
+                    QMessageBox.Icon.Information,
                     'Valid!',
                     'No problems with the additional settings detected.'
                 )
@@ -1400,7 +1400,7 @@ class SimulationPage(TabWithToolbar):
         if not silent:
             showMessageBox(
                 self,
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 'Warning!',
                 'Problems with settings detected.',
                 info_message='Some settings appear multiple times, or there are unknown or invalid ones.\nNote that multiple occurring settings overwrite previous ones.',
@@ -1500,10 +1500,10 @@ class SimulationPage(TabWithToolbar):
         if 'stop from subroutine' in log or exit_code == 66:
             exit_status = -1
 
-        if exit_status == QProcess.NormalExit:
+        if exit_status == QProcess.ExitStatus.NormalExit:
             result = 'finished'
             status = SimulationPage.RunStatus.DONE
-        elif exit_status == QProcess.CrashExit:
+        elif exit_status == QProcess.ExitStatus.CrashExit:
             result = 'aborted'
             status = SimulationPage.RunStatus.ABORTED
         else:
@@ -1575,7 +1575,7 @@ class SimulationPage(TabWithToolbar):
         skipped_files = ['input.json']
         skipped_files.extend(self.simulation_class.SkipList)
 
-        for file in QDir(self.simulation_configuration.save_folder).entryInfoList(filters=QDir.Files):
+        for file in QDir(self.simulation_configuration.save_folder).entryInfoList(filters=QDir.Filter.Files):
             file_name = file.fileName()
             if inFileList(file_name, skipped_files):
                 continue
@@ -1639,7 +1639,7 @@ class SimulationPage(TabWithToolbar):
             file_content_text += '\n'.join(file_content[line_limit:])
             file_content = file_content_text
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         # self.outputFilePreview.setPlainText(file_content)
         # delete old text and append new text is faster than overwriting with new text
         self.outputFilePreview.setPlainText('')

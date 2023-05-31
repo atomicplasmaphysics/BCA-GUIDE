@@ -23,8 +23,8 @@ from threading import Thread, Lock
 import numpy as np
 import matplotlib.pyplot as plt
 
-from PyQt5.QtCore import pyqtSignal, Qt, QObject
-from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
+from PyQt6.QtCore import pyqtSignal, Qt, QObject
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
 from Utility.Layouts import ListWidget, MplCanvas
 from Utility.Indexing import RepeatingList, ElementList
@@ -2111,7 +2111,7 @@ class SimulationsOutput(QObject):
 
         else:
             # wait cursor
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
             result = plot(**plot_args)
             if result is None:

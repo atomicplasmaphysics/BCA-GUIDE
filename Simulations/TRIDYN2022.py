@@ -23,8 +23,8 @@ from re import findall
 import numpy as np
 
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
 
 from Utility.Layouts import (
     MplCanvas, MplCanvasSettings, InputHBoxLayout, DoubleSpinBox, SpinBox,
@@ -1378,7 +1378,7 @@ class CompRowBeamSettings(CompRow):
         self.cutoff_energy.setContentsMargins(0, 0, 0, 0)
         self.cutoff_energy.setStyleSheet('border: 1px solid black;')
         self.cutoff_energy_hbox = QHBoxLayout()
-        self.cutoff_energy_hbox.setAlignment(Qt.AlignLeft)
+        self.cutoff_energy_hbox.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.cutoff_energy_hbox.setContentsMargins(5, 0, 0, 0)
         self.cutoff_energy.setLayout(self.cutoff_energy_hbox)
         self.cutoff_energy_checkbox = QCheckBox()
@@ -3104,7 +3104,7 @@ class HlPlot(HlGeneralPlot):
         )
         self.layout_history_step.setHidden(True)
         self.addLayout(self.layout_history_step)
-        self.history_step_slider = QSlider(Qt.Horizontal)
+        self.history_step_slider = QSlider(Qt.Orientation.Horizontal)
         self.history_step_slider.setMinimumWidth(200)
         self.history_step_slider.setMinimum(0)
         self.history_step_slider.setToolTip(self.history_step_tooltip)
@@ -4679,7 +4679,7 @@ class SimulationOutput(SimulationsOutput):
             result['nh'] = int(contents[3])
             result['ncp'] = int(contents[4])
             result['nirr'] = int(contents[5])
-            result['idrel'] = int(contents[6][0]) # only first character, since '*****' is added in static mode
+            result['idrel'] = int(contents[6][0])  # only first character, since '*****' is added in static mode
             result['iproj'] = int(contents[7])
             result['irand'] = int(contents[8])
             result['ioutd'] = contents[9] == 'T'

@@ -18,8 +18,8 @@
 
 from typing import List, Union
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QComboBox, QPushButton, QDoubleSpinBox, QSpinBox
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QComboBox, QPushButton, QDoubleSpinBox, QSpinBox
 
 from Utility.ModifyWidget import setWidgetHighlight, widgetGetValue, widgetSetValue
 from Utility.Functions import limitSum
