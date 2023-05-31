@@ -46,6 +46,12 @@ Version     System
 3.10.0      macOS
 3.11.0      Windows
 ```
+
+All packages can be installed using
+```bash
+>> pip install -r requirements.txt
+```
+
 To execute the GUI, download all files from this repository and execute the `main.py` file from the console.
 ```bash
 >> python3 main.py
