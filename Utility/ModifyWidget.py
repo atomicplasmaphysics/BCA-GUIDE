@@ -58,20 +58,6 @@ def setWidgetHighlight(widget: QWidget, enabled: bool, color: QColor = QColor(25
 
 def widgetGetValue(widget):
     """
-    Gets value of QWidget
-    Currently QSpinBox, QDoubleSpinBox and QComboBox are supported
-
-    :param widget: widget where the value should be taken from
-    """
-
-    if isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
-        return widget.value()
-    elif isinstance(widget, QComboBox):
-        return widget.currentIndex()
-
-
-def widgetGetValue(widget):
-    """
     Gets the value of a widget
     Currently QSpinBox, QDoubleSpinBox and QComboBox are supported
 

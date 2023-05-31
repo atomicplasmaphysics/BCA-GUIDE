@@ -76,7 +76,7 @@ def showMessageBox(parent, icon, window_title: str, text: str, info_message: str
     # Automatically expand the details
     if expand_details:
         for b in msg_box.buttons():
-            if msg_box.buttonRole(b) == QMessageBox.ActionRole:
+            if msg_box.buttonRole(b) == QMessageBox.ButtonRole.ActionRole:
                 b.click()
                 break
     return msg_box, msg_box.exec()
@@ -101,7 +101,7 @@ class DownloadDialog(QDialog):
         self.name = name
         self.expected_file_size = expected_file_size
 
-        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowTitleHint)
         self.setWindowTitle('Missing documentation PDF')
 
         # Layout

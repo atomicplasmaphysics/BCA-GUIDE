@@ -25,7 +25,7 @@
 #      matplotlib   3.6.0
 #      numpy        1.23.3
 #      pyinstaller  5.4.1
-#      PyQt5        5.15.7
+#      PyQt6        6.5.0
 #      scipy        1.9.1
 #
 #  2) Just run this python script and a 'BCA-GUIDE' executable will be generated in the main folder

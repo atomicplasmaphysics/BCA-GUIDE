@@ -96,19 +96,19 @@ class ManualDialog(QDialog):
                 '2) Open the input file in simulation X'
             ))
             label_open = QLabel('', self)
-            label_open.setPixmap(QPixmap(':/icons/open.png').scaled(icon_size, icon_size, transformMode=Qt.SmoothTransformation))
+            label_open.setPixmap(QPixmap(':/icons/open.png').scaled(icon_size, icon_size, transformMode=Qt.TransformationMode.SmoothTransformation))
             self.layout.addWidget(label_open)
             self.layout.addWidget(QLabel(
                 '3) Save the simulation X'
             ))
             label_save = QLabel('', self)
-            label_save.setPixmap(QPixmap(':/icons/save.png').scaled(icon_size, icon_size, transformMode=Qt.SmoothTransformation))
+            label_save.setPixmap(QPixmap(':/icons/save.png').scaled(icon_size, icon_size, transformMode=Qt.TransformationMode.SmoothTransformation))
             self.layout.addWidget(label_save)
             self.layout.addWidget(QLabel(
                 '4) Change to simulation Y and click the convert button'
             ))
             label_import = QLabel('', self)
-            label_import.setPixmap(QPixmap(':/icons/convert.png').scaled(icon_size, icon_size, transformMode=Qt.SmoothTransformation))
+            label_import.setPixmap(QPixmap(':/icons/convert.png').scaled(icon_size, icon_size, transformMode=Qt.TransformationMode.SmoothTransformation))
             self.layout.addWidget(label_import)
             self.layout.addWidget(QLabel(
                 '5) Navigate to the folder, where simulation X was saved and select the <b>input.json</b> file<br>' +
@@ -125,15 +125,15 @@ class ManualDialog(QDialog):
         super().__init__(parent)
         self.parent_widget = parent
 
-        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self.setWindowTitle('Manual')
 
         self.layout = QVBoxLayout()
-        self.layout.setAlignment(Qt.AlignTop)
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # manual selector
         self.layout_manual_selector = QHBoxLayout()
-        self.layout_manual_selector.setAlignment(Qt.AlignLeft)
+        self.layout_manual_selector.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.layout_manual_selector.addWidget(QLabel('Show manual for:'))
         self.manual_selector = QComboBox()
         self.layout_manual_selector.addWidget(self.manual_selector)
@@ -171,7 +171,7 @@ class PreferencesDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowTitleHint)
         self.setWindowTitle('Preferences')
 
         self.layout = QVBoxLayout()
@@ -227,7 +227,7 @@ class PreferencesDialog(QDialog):
         self.layout.addWidget(self.no_autodetect_version)
 
         # Ok button
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         self.button_box.accepted.connect(self.updatePreferences)
         self.layout.addWidget(self.button_box)
 
@@ -268,7 +268,7 @@ class AboutDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self.setWindowTitle(f'About {GlobalConf.title}')
 
         self.layout = QGridLayout()
@@ -277,11 +277,11 @@ class AboutDialog(QDialog):
         # GUI about
         self.title_label_gui = QLabel(GlobalConf.title, self)
         self.title_label_gui.setStyleSheet('font-size: 16px; font-weight: bold;')
-        self.title_label_gui.setAlignment(Qt.AlignCenter)
+        self.title_label_gui.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(self.title_label_gui, 0, 0, 1, 2)
 
         self.iap_logo = QLabel('', self)
-        self.iap_logo.setPixmap(QPixmap(':icons/aboutlogo_iap.png').scaled(280, 113, transformMode=Qt.SmoothTransformation))
+        self.iap_logo.setPixmap(QPixmap(':icons/aboutlogo_iap.png').scaled(280, 113, transformMode=Qt.TransformationMode.SmoothTransformation))
         self.layout.addWidget(self.iap_logo, 1, 0)
 
         self.iap_label = QLabel(
@@ -315,14 +315,14 @@ class AboutDialog(QDialog):
         ):
             title_label = QLabel(title, self)
             title_label.setStyleSheet('font-size: 16px; font-weight: bold;')
-            title_label.setAlignment(Qt.AlignCenter)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self.layout.addWidget(title_label, layout_index, 0, 1, 2)
             layout_index += 1
 
             if logo:
                 logo_label = QLabel('', self)
-                logo_label.setPixmap(QPixmap(logo).scaled(280, 100, transformMode=Qt.SmoothTransformation))
+                logo_label.setPixmap(QPixmap(logo).scaled(280, 100, transformMode=Qt.TransformationMode.SmoothTransformation))
                 self.layout.addWidget(logo_label, layout_index, 0)
 
             information_label = QLabel(about.strip().replace('\n', '<br>'), self)

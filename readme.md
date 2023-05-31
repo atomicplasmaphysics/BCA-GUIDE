@@ -29,7 +29,7 @@ The GUI needs [Python 3](https://www.python.org/downloads/) with following packa
 ```
 Package     Version
 ----------- --------
-PyQt5       5.15.7
+PyQt6       6.5.0
 matplotlib  3.5.3
 numpy       1.23.2
 scipy       1.9.1
