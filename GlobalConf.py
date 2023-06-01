@@ -58,6 +58,8 @@ class GlobalConf:
     # window parameters
     window_width_name = 'window_width'
     window_height_name = 'window_height'
+    window_center_x_name = 'window_center_x'
+    window_center_y_name = 'window_center_y'
 
     def __init__(self):
         self.setLanguage()
@@ -112,7 +114,21 @@ class GlobalConf:
         GlobalConf.settings.sync()
 
     @staticmethod
+    def updateWindowCenter(x, y):
+        """Updates and saves settings object with window center parameters"""
+        GlobalConf.settings.setValue(GlobalConf.window_center_x_name, x)
+        GlobalConf.settings.setValue(GlobalConf.window_center_y_name, y)
+
+        GlobalConf.settings.sync()
+
+    @staticmethod
     def getWindowSize():
         """Returns (width, height) of window"""
         return (GlobalConf.settings.value(GlobalConf.window_width_name, defaultValue=1100, type=int),
                 GlobalConf.settings.value(GlobalConf.window_height_name, defaultValue=800, type=int))
+
+    @staticmethod
+    def getWindowCenter():
+        """Returns (x, y) of window center"""
+        return (GlobalConf.settings.value(GlobalConf.window_center_x_name, defaultValue=0, type=int),
+                GlobalConf.settings.value(GlobalConf.window_center_y_name, defaultValue=0, type=int))

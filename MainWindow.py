@@ -18,8 +18,8 @@
 
 from typing import List
 
-from PyQt6.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir
-from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QScreen
+from PyQt6.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir, QPoint
+from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
 
 import resources
@@ -192,12 +192,15 @@ class MainWindow(QMainWindow):
         self.tab_simulations.currentChanged.connect(lambda index: self.writeWindowTitleTab(index))
 
         width, height = GlobalConf.getWindowSize()
+        x, y = GlobalConf.getWindowCenter()
         if width == height == -1:
             self.showMaximized()
         else:
             self.resize(width, height)
             frame_geometry = self.frameGeometry()
-            center_point = QScreen().availableSize().center()
+            center_point = QPoint(x, y)
+            if x == y == 0:
+                center_point = QGuiApplication.screens()[0].availableVirtualGeometry().center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 
@@ -492,9 +495,12 @@ class MainWindow(QMainWindow):
 
             if self.isMaximized():
                 dimensions = (-1, -1)
+                center = (0, 0)
             else:
-                dimensions = self.width(), self.height()
+                dimensions = (self.width(), self.height())
+                center = (int(self.pos().x() + self.width() / 2), int(self.pos().y() + self.height() / 2))
             GlobalConf.updateWindowSize(*dimensions)
+            GlobalConf.updateWindowCenter(*center)
 
             event.accept()
 
