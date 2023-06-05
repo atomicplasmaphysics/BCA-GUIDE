@@ -28,7 +28,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QSlider
 
 from Utility.Layouts import (
-    MplCanvas, MplCanvasSettings, InputHBoxLayout,
+    MplCanvas, InputHBoxLayout,
     setWidgetBackground, ListWidget, ListWidgetItem,
     SpinBox, DoubleSpinBox, SpinBoxRange, ComboBox, LineEdit
 )
@@ -39,6 +39,7 @@ from Utility.Dialogs import DownloadDialog
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
 
+from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Arguments import (
     ArgumentValues, GeneralBeamArguments, GeneralTargetArguments,
     GeneralArguments, RowArguments, SimulationArguments, StructureArguments
@@ -4082,11 +4083,11 @@ class SimulationOutput(SimulationsOutput):
 
         for k in range(ncp):
             if np.max(stops[k]) > 0 and nr_of_projectiles[k]:
-                mpl_settings.plot(depth_x_values[k, :nr_of_depth_steps[k]],
-                                  stops[k, :nr_of_depth_steps[k]] / np.sum(stops[k, :nr_of_depth_steps[k]]) / depth_delta[k],
-                                  label=file_elements[k],
-                                  linewidth=self.line_width,
-                                  color=self.colors[self.getElementIndex(file_elements[k])])
+                mpl_settings.axes.plot(depth_x_values[k, :nr_of_depth_steps[k]],
+                                       stops[k, :nr_of_depth_steps[k]] / np.sum(stops[k, :nr_of_depth_steps[k]]) / depth_delta[k],
+                                       label=file_elements[k],
+                                       linewidth=self.line_width,
+                                       color=self.colors[self.getElementIndex(file_elements[k])])
                 data.append(depth_x_values[k, :])
                 data.append(stops[k, :] / np.sum(stops[k, :nr_of_depth_steps[k]]) / depth_delta[k])
                 plot_labels.append(f'Depth ({self.elements[k]}) [Angs]')
@@ -4096,11 +4097,11 @@ class SimulationOutput(SimulationsOutput):
         if not flag_plots:
             return
 
-        mpl_settings.set_xlim(xmin=0.0)
-        mpl_settings.set_ylim(ymin=0.0)
-        mpl_settings.legend()
-        mpl_settings.set_ylabel('Stopping Probability [1/Å]')
-        mpl_settings.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_xlim(xmin=0.0)
+        mpl_settings.axes.set_ylim(ymin=0.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_ylabel('Stopping Probability [1/Å]')
+        mpl_settings.axes.set_xlabel('Depth [Å]')
 
         return (data, plot_labels), mpl_settings
 
@@ -4134,24 +4135,24 @@ class SimulationOutput(SimulationsOutput):
         for k in range(ncp):
             if (np.max(nuclear_loss[k]) + np.max(electron_loss[k])) > 0 and nr_of_projectiles[k]:
                 color = self.colors[self.getElementIndex(file_elements[k])]
-                mpl_settings.plot(depth_x_values[k, :nr_of_depth_steps[k]],
-                                  nuclear_loss[k, :nr_of_depth_steps[k]] / nr_of_projectiles[k] / depth_delta[k],
-                                  label=f'{file_elements[k]} (nuclear)',
-                                  linestyle='--',
-                                  linewidth=self.line_width,
-                                  color=color)
-                mpl_settings.plot(depth_x_values[k, :nr_of_depth_steps[k]],
-                                  electron_loss[k, :nr_of_depth_steps[k]] / nr_of_projectiles[k] / depth_delta[k],
-                                  label=f'{file_elements[k]} (electronic)',
-                                  linestyle=':',
-                                  linewidth=self.line_width,
-                                  color=color)
-                mpl_settings.plot(depth_x_values[k, :nr_of_depth_steps[k]],
-                                  total_loss[k, :nr_of_depth_steps[k]] / nr_of_projectiles[k] / depth_delta[k],
-                                  label=f'{file_elements[k]} (total)',
-                                  linestyle='-',
-                                  linewidth=self.line_width,
-                                  color=color)
+                mpl_settings.axes.plot(depth_x_values[k, :nr_of_depth_steps[k]],
+                                       nuclear_loss[k, :nr_of_depth_steps[k]] / nr_of_projectiles[k] / depth_delta[k],
+                                       label=f'{file_elements[k]} (nuclear)',
+                                       linestyle='--',
+                                       linewidth=self.line_width,
+                                       color=color)
+                mpl_settings.axes.plot(depth_x_values[k, :nr_of_depth_steps[k]],
+                                       electron_loss[k, :nr_of_depth_steps[k]] / nr_of_projectiles[k] / depth_delta[k],
+                                       label=f'{file_elements[k]} (electronic)',
+                                       linestyle=':',
+                                       linewidth=self.line_width,
+                                       color=color)
+                mpl_settings.axes.plot(depth_x_values[k, :nr_of_depth_steps[k]],
+                                       total_loss[k, :nr_of_depth_steps[k]] / nr_of_projectiles[k] / depth_delta[k],
+                                       label=f'{file_elements[k]} (total)',
+                                       linestyle='-',
+                                       linewidth=self.line_width,
+                                       color=color)
                 data.append(depth_x_values[k, :])
                 data.append(nuclear_loss[k, :] / nr_of_projectiles[k] / depth_delta[k])
                 data.append(electron_loss[k, :] / nr_of_projectiles[k] / depth_delta[k])
@@ -4165,11 +4166,11 @@ class SimulationOutput(SimulationsOutput):
         if not flag_plots:
             return
 
-        mpl_settings.set_ylim(ymin=0.0)
-        mpl_settings.set_xlim(xmin=0.0)
-        mpl_settings.legend()
-        mpl_settings.set_ylabel('Energy Loss (normalized) [eV/Å]')
-        mpl_settings.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_ylim(ymin=0.0)
+        mpl_settings.axes.set_xlim(xmin=0.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_ylabel('Energy Loss (normalized) [eV/Å]')
+        mpl_settings.axes.set_xlabel('Depth [Å]')
 
         return (data, plot_labels), mpl_settings
 
@@ -4209,11 +4210,11 @@ class SimulationOutput(SimulationsOutput):
 
         for k in range(ncp):
             if np.max(vacancies[k]) > 0:
-                mpl_settings.plot(depth_x_values[k, :nr_of_depth_steps[k]],
-                                  vacancies[k, :nr_of_depth_steps[k]] / nr_of_projectiles / depth_delta[k],
-                                  label=file_elements[k],
-                                  linewidth=self.line_width,
-                                  color=self.colors[self.getElementIndex(file_elements[k])])
+                mpl_settings.axes.plot(depth_x_values[k, :nr_of_depth_steps[k]],
+                                       vacancies[k, :nr_of_depth_steps[k]] / nr_of_projectiles / depth_delta[k],
+                                       label=file_elements[k],
+                                       linewidth=self.line_width,
+                                       color=self.colors[self.getElementIndex(file_elements[k])])
                 data.append(depth_x_values[k, :])
                 data.append(vacancies[k, :] / nr_of_projectiles / depth_delta[k])
                 plot_labels.append(f'Depth ({self.elements[k]}) [Angs]')
@@ -4225,23 +4226,23 @@ class SimulationOutput(SimulationsOutput):
             return
 
         if nr_of_plots > 1 and all(x == depth_delta[0] for x in depth_delta):
-            mpl_settings.plot(depth_x_values[np.argmax(nr_of_depth_steps), :max_nr_depth_steps],
-                              np.sum(vacancies[:, :max_nr_depth_steps], axis=0) / nr_of_projectiles / depth_delta[0],
-                              label='Total',
-                              linewidth=self.line_width,
-                              color=self.first_color)
+            mpl_settings.axes.plot(depth_x_values[np.argmax(nr_of_depth_steps), :max_nr_depth_steps],
+                                   np.sum(vacancies[:, :max_nr_depth_steps], axis=0) / nr_of_projectiles / depth_delta[0],
+                                   label='Total',
+                                   linewidth=self.line_width,
+                                   color=self.first_color)
 
             data.append(depth_x_values[np.argmax(nr_of_depth_steps), :])
             data.append(np.sum(vacancies[:, :max_nr_depth_steps], axis=0) / nr_of_projectiles / depth_delta[0])
             plot_labels.append('Depth (Total) [Angs]')
             plot_labels.append('Vacancies (Total) [1/Angs/ion]')
 
-        mpl_settings.set_ylim(ymin=0.0)
-        mpl_settings.set_xlim(xmin=0.0)
-        mpl_settings.legend()
-        mpl_settings.set_ylabel('Vacancies [1/Å/ion]')
-        mpl_settings.set_xlabel('Depth [Å]')
-        mpl_settings.set_title(f'Total Vacancies: {np.round(np.sum(vacancies) / nr_of_projectiles, 2)} / Ion')
+        mpl_settings.axes.set_ylim(ymin=0.0)
+        mpl_settings.axes.set_xlim(xmin=0.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_ylabel('Vacancies [1/Å/ion]')
+        mpl_settings.axes.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_title(f'Total Vacancies: {np.round(np.sum(vacancies) / nr_of_projectiles, 2)} / Ion')
 
         return (data, plot_labels), mpl_settings
 
@@ -4294,14 +4295,14 @@ class SimulationOutput(SimulationsOutput):
                                    bounds=(0., [np.max(total_yield), 90., 10., 1., 10.]))
 
             angles_fit = np.arange(0., 90., 0.1)
-            mpl_settings.plot(angles_fit,
-                              self.ecksteinAngleFit(angles_fit, *popt),
-                              label='Eckstein Fit',
-                              linestyle='--',
-                              linewidth=1,
-                              color='black')
+            mpl_settings.axes.plot(angles_fit,
+                                   self.ecksteinAngleFit(angles_fit, *popt),
+                                   label='Eckstein Fit',
+                                   linestyle='--',
+                                   linewidth=1,
+                                   color='black')
 
-            mpl_settings.set_title(f'Fit: Y$_0$ = {np.round(popt[0], 3)} atoms/ion, $\\alpha_0$ = {np.round(popt[1], 3)}°, b = {np.round(popt[2], 3)}, c = {np.round(popt[3], 3)}, f = {np.round(popt[4], 3)}')
+            mpl_settings.axes.set_title(f'Fit: Y$_0$ = {np.round(popt[0], 3)} atoms/ion, $\\alpha_0$ = {np.round(popt[1], 3)}°, b = {np.round(popt[2], 3)}, c = {np.round(popt[3], 3)}, f = {np.round(popt[4], 3)}')
             fit_params_string = f'Fit: Y0 = {np.round(popt[0], 3)} atoms/ion, alpha0 = {np.round(popt[1], 3)}°, b = {np.round(popt[2], 3)}, c = {np.round(popt[3], 3)}, f = {np.round(popt[4], 3)}'
 
         data = []
@@ -4310,12 +4311,12 @@ class SimulationOutput(SimulationsOutput):
         plot_counter = 0
         for i, element in enumerate(elements):
             if np.max(sputt_coefficients[:, i]) > 0.:
-                mpl_settings.plot(angles[:last_index],
-                                  sputt_coefficients[:last_index, i],
-                                  label=element,
-                                  marker='o',
-                                  linestyle='',
-                                  color=self.colors[self.getElementIndex(element)])
+                mpl_settings.axes.plot(angles[:last_index],
+                                       sputt_coefficients[:last_index, i],
+                                       label=element,
+                                       marker='o',
+                                       linestyle='',
+                                       color=self.colors[self.getElementIndex(element)])
 
                 if not plot_counter:
                     data.append(angles[:last_index])
@@ -4329,22 +4330,22 @@ class SimulationOutput(SimulationsOutput):
             return
 
         elif plot_counter > 1:
-            mpl_settings.plot(angles[:last_index],
-                              total_yield[:last_index],
-                              label='Total',
-                              marker='o',
-                              linestyle='',
-                              color=self.first_color)
+            mpl_settings.axes.plot(angles[:last_index],
+                                   total_yield[:last_index],
+                                   label='Total',
+                                   marker='o',
+                                   linestyle='',
+                                   color=self.first_color)
 
             data.append(total_yield[:last_index])
             plot_labels.append('Total')
             plot_labels.append(fit_params_string)
 
-        mpl_settings.set_xlabel('Angle of Incidence $\\alpha$ [°]')
-        mpl_settings.set_ylabel('Sputtering Yield Y [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=-5., xmax=90.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Angle of Incidence $\\alpha$ [°]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield Y [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=-5., xmax=90.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4396,21 +4397,21 @@ class SimulationOutput(SimulationsOutput):
                                    bounds=(0., [np.max(amu_yield), 90., 10., 1., 10.]))
 
             angles_fit = np.arange(0., 90., 0.1)
-            mpl_settings.plot(angles_fit,
-                              self.ecksteinAngleFit(angles_fit, *popt),
-                              label='Eckstein Fit',
-                              linestyle='--',
-                              linewidth=1,
-                              color='black')
-            mpl_settings.set_title(f'Fit: Y$_0$ = {np.round(popt[0], 3)} amu/ion, $\\alpha_0$ = {np.round(popt[1], 3)}°, b = {np.round(popt[2], 3)}, c = {np.round(popt[3], 3)}, f = {np.round(popt[4], 3)}')
+            mpl_settings.axes.plot(angles_fit,
+                                   self.ecksteinAngleFit(angles_fit, *popt),
+                                   label='Eckstein Fit',
+                                   linestyle='--',
+                                   linewidth=1,
+                                   color='black')
+            mpl_settings.axes.set_title(f'Fit: Y$_0$ = {np.round(popt[0], 3)} amu/ion, $\\alpha_0$ = {np.round(popt[1], 3)}°, b = {np.round(popt[2], 3)}, c = {np.round(popt[3], 3)}, f = {np.round(popt[4], 3)}')
             fit_params_string = f'Fit: Y0 = {np.round(popt[0], 3)} amu/ion, alpha0 = {np.round(popt[1], 3)}°, b = {np.round(popt[2], 3)}, c = {np.round(popt[3], 3)}, f = {np.round(popt[4], 3)}'
 
-        mpl_settings.plot(angles[:last_index],
-                          amu_yield[:last_index],
-                          label='SDTrimSP',
-                          marker='o',
-                          linestyle='',
-                          color=self.first_color)
+        mpl_settings.axes.plot(angles[:last_index],
+                               amu_yield[:last_index],
+                               label='SDTrimSP',
+                               marker='o',
+                               linestyle='',
+                               color=self.first_color)
 
         data = []
         plot_labels = []
@@ -4422,11 +4423,11 @@ class SimulationOutput(SimulationsOutput):
             plot_labels.append('y [amu/ion]')
             plot_labels.append(fit_params_string)
 
-        mpl_settings.set_xlabel('Angle of Incidence $\\alpha$ [°]')
-        mpl_settings.set_ylabel('Sputtering Yield y [amu/ion]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=-5., xmax=90.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Angle of Incidence $\\alpha$ [°]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield y [amu/ion]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=-5., xmax=90.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4470,12 +4471,12 @@ class SimulationOutput(SimulationsOutput):
         plot_counter = 0
         for i, element in enumerate(elements_projectiles):
             if np.max(refl_coefficients[:, i]) > 0.:
-                mpl_settings.plot(angles[:last_index],
-                                  refl_coefficients[:last_index, i],
-                                  label=element,
-                                  marker='o',
-                                  linestyle='',
-                                  color=self.colors[self.getElementIndex(element)])
+                mpl_settings.axes.plot(angles[:last_index],
+                                       refl_coefficients[:last_index, i],
+                                       label=element,
+                                       marker='o',
+                                       linestyle='',
+                                       color=self.colors[self.getElementIndex(element)])
 
                 if not plot_counter:
                     data.append(angles[:last_index])
@@ -4490,18 +4491,18 @@ class SimulationOutput(SimulationsOutput):
             return
 
         elif plot_counter > 1:
-            mpl_settings.plot(angles[:last_index],
-                              total_yield[:last_index],
-                              label='Total',
-                              marker='o',
-                              linestyle='',
-                              color=self.first_color)
+            mpl_settings.axes.plot(angles[:last_index],
+                                   total_yield[:last_index],
+                                   label='Total',
+                                   marker='o',
+                                   linestyle='',
+                                   color=self.first_color)
 
-        mpl_settings.set_xlabel('Angle of Incidence $\\alpha$ [°]')
-        mpl_settings.set_ylabel('Reflection Coefficient R')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=-5., xmax=90.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Angle of Incidence $\\alpha$ [°]')
+        mpl_settings.axes.set_ylabel('Reflection Coefficient R')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=-5., xmax=90.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4537,12 +4538,12 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(angles[:last_index],
-                          mean_depth[:last_index],
-                          label='Implantation Depth',
-                          marker='o',
-                          linestyle='',
-                          color=self.first_color)
+        mpl_settings.axes.plot(angles[:last_index],
+                               mean_depth[:last_index],
+                               label='Implantation Depth',
+                               marker='o',
+                               linestyle='',
+                               color=self.first_color)
 
         data = []
         plot_labels = []
@@ -4553,10 +4554,10 @@ class SimulationOutput(SimulationsOutput):
             plot_labels.append('Angle of Incidence [°]')
             plot_labels.append('Implantation Depth [Angs]')
 
-        mpl_settings.set_xlabel('Angle of Incidence $\\alpha$ [°]')
-        mpl_settings.set_ylabel('Implantation Depth [Å]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=-5., xmax=90.)
+        mpl_settings.axes.set_xlabel('Angle of Incidence $\\alpha$ [°]')
+        mpl_settings.axes.set_ylabel('Implantation Depth [Å]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=-5., xmax=90.)
 
         return (data, plot_labels), mpl_settings
 
@@ -4602,12 +4603,12 @@ class SimulationOutput(SimulationsOutput):
         plot_counter = 0
         for i, element in enumerate(elements):
             if np.max(sputt_coefficients[:, i]) > 0.:
-                mpl_settings.plot(energies[:last_index],
-                                  sputt_coefficients[:last_index, i],
-                                  label=element,
-                                  marker='o',
-                                  linestyle='',
-                                  color=self.colors[self.getElementIndex(element)])
+                mpl_settings.axes.plot(energies[:last_index],
+                                       sputt_coefficients[:last_index, i],
+                                       label=element,
+                                       marker='o',
+                                       linestyle='',
+                                       color=self.colors[self.getElementIndex(element)])
 
                 if not plot_counter:
                     data.append(energies[:last_index])
@@ -4622,20 +4623,20 @@ class SimulationOutput(SimulationsOutput):
             return
 
         elif plot_counter > 1:
-            mpl_settings.plot(energies[:last_index],
-                              total_yield[:last_index],
-                              label='Total',
-                              marker='o',
-                              linestyle='',
-                              color=self.first_color)
+            mpl_settings.axes.plot(energies[:last_index],
+                                   total_yield[:last_index],
+                                   label='Total',
+                                   marker='o',
+                                   linestyle='',
+                                   color=self.first_color)
             data.append(total_yield[:last_index])
             plot_labels.append('Total')
 
-        mpl_settings.set_xlabel('Kinetic Energy E [eV]')
-        mpl_settings.set_ylabel('Sputtering Yield Y [atoms/ion]')
-        mpl_settings.set_yscale('log')
-        mpl_settings.set_xscale('log')
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Kinetic Energy E [eV]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield Y [atoms/ion]')
+        mpl_settings.axes.set_yscale('log')
+        mpl_settings.axes.set_xscale('log')
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4673,12 +4674,12 @@ class SimulationOutput(SimulationsOutput):
 
         amu_yield = np.dot(sputt_coefficients, masses)
 
-        mpl_settings.plot(energies[:last_index],
-                          amu_yield[:last_index],
-                          label='SDTrimSP',
-                          marker='o',
-                          linestyle='',
-                          color=self.first_color)
+        mpl_settings.axes.plot(energies[:last_index],
+                               amu_yield[:last_index],
+                               label='SDTrimSP',
+                               marker='o',
+                               linestyle='',
+                               color=self.first_color)
 
         # possibly Eckstein energy fit here
 
@@ -4691,11 +4692,11 @@ class SimulationOutput(SimulationsOutput):
             plot_labels.append('Kinetic Energy [eV]')
             plot_labels.append('y [amu/ion]')
 
-        mpl_settings.set_xlabel('Kinetic Energy E [eV]')
-        mpl_settings.set_ylabel('Sputtering Yield y [amu/ion]')
-        mpl_settings.set_yscale('log')
-        mpl_settings.set_xscale('log')
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Kinetic Energy E [eV]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield y [amu/ion]')
+        mpl_settings.axes.set_yscale('log')
+        mpl_settings.axes.set_xscale('log')
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4739,12 +4740,12 @@ class SimulationOutput(SimulationsOutput):
         plot_counter = 0
         for i, element in enumerate(elements_projectiles):
             if np.max(refl_coefficients[:, i]) > 0.:
-                mpl_settings.plot(energies[:last_index],
-                                  refl_coefficients[:last_index, i],
-                                  label=element,
-                                  marker='o',
-                                  linestyle='',
-                                  color=self.colors[self.getElementIndex(element)])
+                mpl_settings.axes.plot(energies[:last_index],
+                                       refl_coefficients[:last_index, i],
+                                       label=element,
+                                       marker='o',
+                                       linestyle='',
+                                       color=self.colors[self.getElementIndex(element)])
 
                 if not plot_counter:
                     data.append(energies[:last_index])
@@ -4758,18 +4759,18 @@ class SimulationOutput(SimulationsOutput):
             return
 
         elif plot_counter > 1:
-            mpl_settings.plot(energies[:last_index],
-                              total_yield[:last_index],
-                              label='Total',
-                              marker='o',
-                              linestyle='',
-                              color=self.first_color)
+            mpl_settings.axes.plot(energies[:last_index],
+                                   total_yield[:last_index],
+                                   label='Total',
+                                   marker='o',
+                                   linestyle='',
+                                   color=self.first_color)
 
-        mpl_settings.set_xlabel('Kinetic Energy E [eV]')
-        mpl_settings.set_ylabel('Reflection Coefficient R')
-        mpl_settings.set_yscale('log')
-        mpl_settings.set_xscale('log')
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Kinetic Energy E [eV]')
+        mpl_settings.axes.set_ylabel('Reflection Coefficient R')
+        mpl_settings.axes.set_yscale('log')
+        mpl_settings.axes.set_xscale('log')
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4805,12 +4806,12 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(energies[:last_index],
-                          mean_depth[:last_index],
-                          label='Implantation Depth',
-                          marker='o',
-                          linestyle='',
-                          color=self.first_color)
+        mpl_settings.axes.plot(energies[:last_index],
+                               mean_depth[:last_index],
+                               label='Implantation Depth',
+                               marker='o',
+                               linestyle='',
+                               color=self.first_color)
 
         data = []
         plot_labels = []
@@ -4821,10 +4822,10 @@ class SimulationOutput(SimulationsOutput):
             plot_labels.append('Kinetic Energy [eV]')
             plot_labels.append('Implantation Depth [Angs]')
 
-        mpl_settings.set_xlabel('Kinetic Energy E [eV]')
-        mpl_settings.set_ylabel('Implantation Depth [Å]')
-        mpl_settings.set_yscale('log')
-        mpl_settings.set_xscale('log')
+        mpl_settings.axes.set_xlabel('Kinetic Energy E [eV]')
+        mpl_settings.axes.set_ylabel('Implantation Depth [Å]')
+        mpl_settings.axes.set_yscale('log')
+        mpl_settings.axes.set_xscale('log')
 
         return (data, plot_labels), mpl_settings
 
@@ -4835,10 +4836,10 @@ class SimulationOutput(SimulationsOutput):
         particle_data = self.getParticleData(projectile_or_recoil)
 
         mpl_settings = MplCanvasSettings()
-        mpl_settings.set_projection('polar')
+        mpl_settings.fig.add_subplot(projection='polar')
 
         if particle_data is None or not particle_data:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data = []
@@ -4859,11 +4860,11 @@ class SimulationOutput(SimulationsOutput):
             polar_plot_norm = np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])) / np.sum(np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])))
             # 0.5 ... normalization because both + and - polar angle are shown, np.pi/180. for conversion from 1/rad to 1/deg
             plot_data = 0.5 * np.pi / 180. * np.divide(hist, np.absolute(polar_plot_norm))
-            mpl_settings.plot(bin_edges_new,
-                              plot_data,
-                              label=element,
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(bin_edges_new,
+                                   plot_data,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
 
             if not plot_counter:
                 data.append(bin_edges_new / np.pi * 180.)
@@ -4875,28 +4876,27 @@ class SimulationOutput(SimulationsOutput):
             plot_counter += 1
 
         if not plot_counter:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         if is_projectile:
-            mpl_settings.set_title('Backscattered projectiles over polar angle')
+            mpl_settings.axes.set_title('Backscattered projectiles over polar angle')
         else:
-            mpl_settings.set_title('Sputtered recoils over polar angle')
+            mpl_settings.axes.set_title('Sputtered recoils over polar angle')
 
-        mpl_settings.set_xlabel('Probability [1/°]')
-        mpl_settings.grid(True)
-        mpl_settings.set_theta(
-            thetagrids=tuple([i * 10 for i in range(-9, 10)]),
-            thetamin=-90,
-            thetamax=90,
-            theta_offset=np.pi / 2,
-            theta_direction=-1)
-        mpl_settings.tick_params(
+        mpl_settings.axes.set_xlabel('Probability [1/°]')
+        mpl_settings.axes.grid(True)
+        mpl_settings.axes.set_thetagrids(tuple([i * 10 for i in range(-9, 10)]))
+        mpl_settings.axes.set_thetamin(-90)
+        mpl_settings.axes.set_thetamax(90)
+        mpl_settings.axes.set_theta_offset(np.pi / 2)
+        mpl_settings.axes.set_theta_direction(-1)
+        mpl_settings.axes.tick_params(
             axis='y',
             labelrotation=45,
             pad=4,
             labelsize=8)
-        mpl_settings.legend()
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4919,7 +4919,7 @@ class SimulationOutput(SimulationsOutput):
         mpl_settings = MplCanvasSettings()
 
         if particle_data is None or not particle_data:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data = []
@@ -4941,11 +4941,11 @@ class SimulationOutput(SimulationsOutput):
                 hist, bin_edges = np.histogram(energies, density=True, bins=int(np.max(energies) / 0.2))
 
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-            mpl_settings.plot(bin_edges_new,
-                              hist,
-                              label=element,
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(bin_edges_new,
+                                   hist,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
 
             data.append(bin_edges_new)
             plot_labels.append(f'Energy ({element}) [eV]')
@@ -4957,14 +4957,14 @@ class SimulationOutput(SimulationsOutput):
         if not plot_counter:
             return None, mpl_settings
 
-        mpl_settings.set_xlabel('Energy [eV]')
+        mpl_settings.axes.set_xlabel('Energy [eV]')
         if is_projectile:
-            mpl_settings.set_ylabel('Reflected ions [1/eV]')
+            mpl_settings.axes.set_ylabel('Reflected ions [1/eV]')
         else:
-            mpl_settings.set_ylabel('Sputtered atoms [1/eV]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=0.)
-        mpl_settings.legend()
+            mpl_settings.axes.set_ylabel('Sputtered atoms [1/eV]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=0.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -4987,10 +4987,10 @@ class SimulationOutput(SimulationsOutput):
         particle_data = self.getParticleData(projectile_or_recoil)
 
         mpl_settings = MplCanvasSettings()
-        mpl_settings.set_projection('polar')
+        mpl_settings.fig.add_subplot(projection='polar')
 
         if particle_data is None or not particle_data:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data = []
@@ -4998,7 +4998,7 @@ class SimulationOutput(SimulationsOutput):
 
         plot_data = particle_data[element]
         if len(plot_data) == 0:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         phi_intermed = np.arccos(plot_data[:, 1])
@@ -5025,15 +5025,13 @@ class SimulationOutput(SimulationsOutput):
 
         a, r = np.meshgrid(abins, rbins)
 
-        mpl_settings.set_theta(
-            thetamin=0,
-            thetamax=360,
-            theta_direction=-1,
-            theta_zero_location='E'
-        )
-        mpl_settings.set_yticklabels([])
-        mpl_settings.pcolormesh(a, r, hist.T, cmap='viridis', zorder=-1, vmin=0.)
-        mpl_settings.pcolormesh_label('Distribution of Particles [1/sr]', rotation=90)
+        mpl_settings.axes.set_thetamin(0)
+        mpl_settings.axes.set_thetamax(360)
+        mpl_settings.axes.set_theta_direction(-1)
+        mpl_settings.axes.set_theta_zero_location('E')
+        mpl_settings.axes.set_yticklabels([])
+        mpl_settings.axes.pcolormesh(a, r, hist.T, cmap='viridis', zorder=-1, vmin=0.)
+        mpl_settings.axes.pcolormesh_label('Distribution of Particles [1/sr]', rotation=90)  # colorbar.set_label()
 
         plot_labels.append('Rows: polar angles [°], columns: azimuthal angles [°], distribution of particles in [1/sr], first row/column gives the respective angle (center of the bin of the histogram), polar bins are chosen so that all bins have the same solid angle')
 
@@ -5058,7 +5056,7 @@ class SimulationOutput(SimulationsOutput):
             title = f'Angular distribution of backscattered {self.elements[element]} projectiles'
         else:
             title = f'Angular distribution of backsputtered {self.elements[element]} recoil atoms'
-        mpl_settings.set_title(title)
+        mpl_settings.axes.set_title(title)
 
         return (data, plot_labels), mpl_settings
 
@@ -5086,18 +5084,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence_array[1:],
-                              sputtered_yield[1:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence_array[1:],
+                                   sputtered_yield[1:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(sputtered_yield[1:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Sputtering Yield Y [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield Y [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5121,13 +5119,13 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(fluence_array[1:],
-                          np.sum(sputtered_yield[1:, :], axis=1),
-                          color=self.first_color)
+        mpl_settings.axes.plot(fluence_array[1:],
+                               np.sum(sputtered_yield[1:, :], axis=1),
+                               color=self.first_color)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Sputtering Yield Y [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield Y [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0.)
 
         return ([fluence_array[1:], np.sum(sputtered_yield[1:, :], axis=1)], ['Fluence[10^20 ions/m^2]', 'Y [atoms/ion]']), mpl_settings
 
@@ -5151,12 +5149,12 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(fluence_array[1:],
-                          amu_yield[1:],
-                          color=self.first_color)
+        mpl_settings.axes.plot(fluence_array[1:],
+                               amu_yield[1:],
+                               color=self.first_color)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Net Mass Removal y [amu/ion]')
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Net Mass Removal y [amu/ion]')
 
         return ([fluence_array[1:], amu_yield[1:]], ['Fluence[10^20 ions/m^2]', 'y [amu/ion]']), mpl_settings
 
@@ -5184,18 +5182,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence_array[1:],
-                              reflected_yield[1:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence_array[1:],
+                                   reflected_yield[1:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(reflected_yield[1:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Reflection Coefficient R [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0., ymax=1.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Reflection Coefficient R [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0., ymax=1.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5223,18 +5221,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence_array[1:],
-                              reemitted_yield[1:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence_array[1:],
+                                   reemitted_yield[1:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(reemitted_yield[1:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Reemission Coefficient [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0., ymax=1.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Reemission Coefficient [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0., ymax=1.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5262,18 +5260,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence_array[1:],
-                              surface_conc[1:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence_array[1:],
+                                   surface_conc[1:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(surface_conc[1:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Surface Concentration')
-        mpl_settings.set_ylim(ymin=0., ymax=1.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Surface Concentration')
+        mpl_settings.axes.set_ylim(ymin=0., ymax=1.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5297,12 +5295,12 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(fluence_array[1:],
-                          surface[1:],
-                          color=self.first_color)
+        mpl_settings.axes.plot(fluence_array[1:],
+                               surface[1:],
+                               color=self.first_color)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Surface Erosion [Å]')
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Surface Erosion [Å]')
 
         return ([fluence_array[1:], surface[1:]], ['Fluence[10^20 ions/m^2]', 'Surface Erosion [Angs]']), mpl_settings
 
@@ -5358,20 +5356,19 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Depth [Angs]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(self.depth_array,
-                              self.conc_array[history_step, i, :],
-                              label=element,
-                              linewidth=2,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(self.depth_array,
+                                   self.conc_array[history_step, i, :],
+                                   label=element,
+                                   linewidth=2,
+                                   color=self.colors[i])
 
             data.append(self.conc_array[history_step, i, :])
             plot_labels.append(element)
 
-        mpl_settings.set_ylim(ymin=0.0, ymax=1.0)
-        mpl_settings.legend()
-        mpl_settings.set_xlabel('Depth [Å]')
-        mpl_settings.set_ylabel('Concentrations')
-
-        mpl_settings.set_title(f'Fluence: {self.fluence_array[history_step]:.2f}$\\times 10^{{20}}$/m$^2$')
+        mpl_settings.axes.set_ylim(ymin=0.0, ymax=1.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_ylabel('Concentrations')
+        mpl_settings.axes.set_title(f'Fluence: {self.fluence_array[history_step]:.2f}$\\times 10^{{20}}$/m$^2$')
 
         return (data, plot_labels), mpl_settings

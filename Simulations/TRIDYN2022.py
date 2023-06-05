@@ -27,7 +27,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
 
 from Utility.Layouts import (
-    MplCanvas, MplCanvasSettings, InputHBoxLayout, DoubleSpinBox, SpinBox,
+    MplCanvas, InputHBoxLayout, DoubleSpinBox, SpinBox,
     SpinBoxRange, LineEdit, ComboBox, ListWidget, ListWidgetItem, setWidgetBackground
 )
 from Utility.Functions import (
@@ -39,6 +39,7 @@ from Utility.Indexing import DefaultAssumed, RunningIndex, ElementList
 from TableWidgets.CompTable import CompRow
 from TableWidgets.CustomTable import CustomRowField
 
+from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Arguments import (
     ArgumentValues, SimulationArguments, GeneralBeamArguments, GeneralTargetArguments,
     RowArguments, StructureArguments, GeneralArguments
@@ -5538,7 +5539,7 @@ class SimulationOutput(SimulationsOutput):
         mpl_settings = MplCanvasSettings()
         if deposited_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data = []
@@ -5558,11 +5559,11 @@ class SimulationOutput(SimulationsOutput):
             hist, bin_edges = np.histogram(coordinates[:, 0], bins=n_bins, density=True)
             bin_edges = (bin_edges[1:] + bin_edges[:-1]) / 2
 
-            mpl_settings.plot(bin_edges,
-                              hist,
-                              label=element,
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(bin_edges,
+                                   hist,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
             data.append(bin_edges)
             data.append(hist)
             plot_labels.append(f'Depth ({element}) [Angs]')
@@ -5571,14 +5572,14 @@ class SimulationOutput(SimulationsOutput):
 
         if not flag_plots:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        mpl_settings.set_xlim(xmin=0.0)
-        mpl_settings.set_ylim(ymin=0.0)
-        mpl_settings.legend()
-        mpl_settings.set_ylabel('Stopping Probability [1/Å]')
-        mpl_settings.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_xlim(xmin=0.0)
+        mpl_settings.axes.set_ylim(ymin=0.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_ylabel('Stopping Probability [1/Å]')
+        mpl_settings.axes.set_xlabel('Depth [Å]')
 
         return (data, plot_labels), mpl_settings
 
@@ -5589,7 +5590,7 @@ class SimulationOutput(SimulationsOutput):
 
         if depth_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (depth,
@@ -5608,25 +5609,25 @@ class SimulationOutput(SimulationsOutput):
             if i + 1 not in beam:
                 continue
 
-            mpl_settings.plot(depth,
-                              nuclear_deposition[:, i],
-                              label=f'{element} (nuclear)',
-                              linestyle='--',
-                              linewidth=self.line_width,
-                              color=self.colors[i])
-            mpl_settings.plot(depth,
-                              electronic_deposition[:, i],
-                              label=f'{element} (electronic)',
-                              linestyle=':',
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(depth,
+                                   nuclear_deposition[:, i],
+                                   label=f'{element} (nuclear)',
+                                   linestyle='--',
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
+            mpl_settings.axes.plot(depth,
+                                   electronic_deposition[:, i],
+                                   label=f'{element} (electronic)',
+                                   linestyle=':',
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
             total_deposition = nuclear_deposition[:, i] + electronic_deposition[:, i]
-            mpl_settings.plot(depth,
-                              total_deposition,
-                              label=f'{element} (total)',
-                              linestyle='-',
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(depth,
+                                   total_deposition,
+                                   label=f'{element} (total)',
+                                   linestyle='-',
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
             data.append(depth)
             data.append(nuclear_deposition[:, i])
             data.append(electronic_deposition[:, i])
@@ -5639,14 +5640,14 @@ class SimulationOutput(SimulationsOutput):
 
         if not flag_plots:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        mpl_settings.set_ylim(ymin=0.0)
-        mpl_settings.set_xlim(xmin=0.0)
-        mpl_settings.legend()
-        mpl_settings.set_ylabel('Energy Loss (normalized) [eV/Å]')
-        mpl_settings.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_ylim(ymin=0.0)
+        mpl_settings.axes.set_xlim(xmin=0.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_ylabel('Energy Loss (normalized) [eV/Å]')
+        mpl_settings.axes.set_xlabel('Depth [Å]')
 
         return (data, plot_labels), mpl_settings
 
@@ -5657,7 +5658,7 @@ class SimulationOutput(SimulationsOutput):
 
         if depth_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         mpl_settings = MplCanvasSettings()
@@ -5675,18 +5676,18 @@ class SimulationOutput(SimulationsOutput):
         if layer_depth.size > 1:
             depth_delta = layer_depth[0, 1] - layer_depth[0, 0]
 
-        mpl_settings.plot(layer_depth[0, :],
-                          vacancies[0, :] / depth_delta,
-                          label='Total',
-                          linewidth=self.line_width,
-                          color=self.first_color)
+        mpl_settings.axes.plot(layer_depth[0, :],
+                               vacancies[0, :] / depth_delta,
+                               label='Total',
+                               linewidth=self.line_width,
+                               color=self.first_color)
 
-        mpl_settings.set_ylim(ymin=0.0)
-        mpl_settings.set_xlim(xmin=0.0)
-        mpl_settings.legend()
-        mpl_settings.set_ylabel('Vacancies [1/Å/ion]')
-        mpl_settings.set_xlabel('Depth [Å]')
-        mpl_settings.set_title(f'Total Vacancies: {np.round(np.sum(vacancies[0, :]) / len(self.initial_protocol["ir"]), 2)} / Ion')
+        mpl_settings.axes.set_ylim(ymin=0.0)
+        mpl_settings.axes.set_xlim(xmin=0.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_ylabel('Vacancies [1/Å/ion]')
+        mpl_settings.axes.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_title(f'Total Vacancies: {np.round(np.sum(vacancies[0, :]) / len(self.initial_protocol["ir"]), 2)} / Ion')
 
         return ([layer_depth[0, :], vacancies[0, :]], ['Depth (Total) [Angs]', 'Vacancies (Total) [1/Angs/ion]']), mpl_settings
 
@@ -5697,7 +5698,7 @@ class SimulationOutput(SimulationsOutput):
 
         if yield_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (fluence,
@@ -5709,18 +5710,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence,
-                              sputtered_yield[:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence,
+                                   sputtered_yield[:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(sputtered_yield[:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Sputtering Yield Y [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield Y [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5731,7 +5732,7 @@ class SimulationOutput(SimulationsOutput):
 
         if yield_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (fluence,
@@ -5739,13 +5740,13 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(fluence,
-                          np.sum(sputtered_yield[:, :], axis=1),
-                          color=self.first_color)
+        mpl_settings.axes.plot(fluence,
+                               np.sum(sputtered_yield[:, :], axis=1),
+                               color=self.first_color)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Sputtering Yield Y [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Sputtering Yield Y [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0.)
 
         return ([fluence, np.sum(sputtered_yield[:, :], axis=1)], ['Fluence[10^20 ions/m^2]', 'Y [atoms/ion]']), mpl_settings
 
@@ -5760,7 +5761,7 @@ class SimulationOutput(SimulationsOutput):
 
         if None in [yield_data, deposited_data, initial_data]:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         mpl_settings = MplCanvasSettings()
@@ -5774,7 +5775,7 @@ class SimulationOutput(SimulationsOutput):
 
             if fluence_yield.size + 1 != fluence_reemitted.size:
                 mpl_settings = MplCanvasSettings()
-                mpl_settings.set_title('No data found')
+                mpl_settings.axes.set_title('No data found')
                 return None, mpl_settings
 
             reemitted_yield = reemitted_yield[1:, :] - reemitted_yield[:-1, :]
@@ -5804,12 +5805,12 @@ class SimulationOutput(SimulationsOutput):
 
             yield_amu += self.masses[i] * summe
 
-        mpl_settings.plot(fluence_yield,
-                          yield_amu,
-                          color=self.first_color)
+        mpl_settings.axes.plot(fluence_yield,
+                               yield_amu,
+                               color=self.first_color)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Net Mass Removal y [amu/ion]')
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Net Mass Removal y [amu/ion]')
 
         return ([fluence_yield, yield_amu], ['Fluence[10^20 ions/m^2]', 'y [amu/ion]']), mpl_settings
 
@@ -5822,7 +5823,7 @@ class SimulationOutput(SimulationsOutput):
 
         if None in [incident_data, initial_data]:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         mpl_settings = MplCanvasSettings()
@@ -5871,18 +5872,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence,
-                              reflected[:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence,
+                                   reflected[:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(reflected[:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Reflection Coefficient R [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0., ymax=1.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Reflection Coefficient R [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0., ymax=1.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5894,7 +5895,7 @@ class SimulationOutput(SimulationsOutput):
 
         if None in [reemitted_data, initial_data]:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings,axes.set_title('No data found')
             return None, mpl_settings
 
         (fluence,
@@ -5910,18 +5911,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence,
-                              reemitted[:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence,
+                                   reemitted[:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(reemitted[:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Reemission Coefficient [atoms/ion]')
-        mpl_settings.set_ylim(ymin=0., ymax=1.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Reemission Coefficient [atoms/ion]')
+        mpl_settings.axes.set_ylim(ymin=0., ymax=1.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5932,7 +5933,7 @@ class SimulationOutput(SimulationsOutput):
 
         if surface_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (fluence,
@@ -5944,18 +5945,18 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Fluence[10^20 ions/m^2]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(fluence,
-                              surface_fractions[:, i],
-                              label=element,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(fluence,
+                                   surface_fractions[:, i],
+                                   label=element,
+                                   color=self.colors[i])
 
             data.append(surface_fractions[:, i])
             plot_labels.append(element)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Surface Concentration')
-        mpl_settings.set_ylim(ymin=0., ymax=1.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Surface Concentration')
+        mpl_settings.axes.set_ylim(ymin=0., ymax=1.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -5966,7 +5967,7 @@ class SimulationOutput(SimulationsOutput):
 
         if surface_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (fluence,
@@ -5974,12 +5975,12 @@ class SimulationOutput(SimulationsOutput):
 
         mpl_settings = MplCanvasSettings()
 
-        mpl_settings.plot(fluence,
-                          surface,
-                          color=self.first_color)
+        mpl_settings.axes.plot(fluence,
+                               surface,
+                               color=self.first_color)
 
-        mpl_settings.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
-        mpl_settings.set_ylabel('Surface Erosion [Å]')
+        mpl_settings.axes.set_xlabel('Fluence [$10^{20}$ ions/m$^2$]')
+        mpl_settings.axes.set_ylabel('Surface Erosion [Å]')
 
         return ([fluence, surface], ['Fluence[10^20 ions/m^2]', 'Surface Erosion [Angs]']), mpl_settings
 
@@ -5990,7 +5991,7 @@ class SimulationOutput(SimulationsOutput):
 
         if depth_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (swelling_shrinking,
@@ -6005,7 +6006,7 @@ class SimulationOutput(SimulationsOutput):
         max_hist = swelling_shrinking.shape[0] - 1
         if max_hist < 0:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         self.fluence_array = np.sum(partial_fluences, axis=1)
@@ -6031,7 +6032,7 @@ class SimulationOutput(SimulationsOutput):
 
         if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         mpl_settings = MplCanvasSettings()
@@ -6040,21 +6041,20 @@ class SimulationOutput(SimulationsOutput):
         plot_labels = ['Depth [Angs]']
 
         for i, element in enumerate(self.elements):
-            mpl_settings.plot(self.depth_array[history_step, :],
-                              self.conc_array[i, history_step, :],
-                              label=element,
-                              linewidth=2,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(self.depth_array[history_step, :],
+                                   self.conc_array[i, history_step, :],
+                                   label=element,
+                                   linewidth=2,
+                                   color=self.colors[i])
 
             data.append(self.conc_array[i, history_step, :])
             plot_labels.append(element)
 
-        mpl_settings.set_ylim(ymin=0.0, ymax=1.0)
-        mpl_settings.legend()
-        mpl_settings.set_xlabel('Depth [Å]')
-        mpl_settings.set_ylabel('Concentrations')
-
-        mpl_settings.set_title(f'Fluence: {self.fluence_array[history_step]:.2f}$\\times 10^{{20}}$/m$^2$')
+        mpl_settings.axes.set_ylim(ymin=0.0, ymax=1.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_ylabel('Concentrations')
+        mpl_settings.axes.set_title(f'Fluence: {self.fluence_array[history_step]:.2f}$\\times 10^{{20}}$/m$^2$')
 
         return (data, plot_labels), mpl_settings
 
@@ -6083,15 +6083,13 @@ class SimulationOutput(SimulationsOutput):
 
         a, r = np.meshgrid(abins, rbins)
 
-        mpl_settings.set_theta(
-            thetamin=0,
-            thetamax=360,
-            theta_direction=-1,
-            theta_zero_location='E'
-        )
-        mpl_settings.set_yticklabels([])
-        mpl_settings.pcolormesh(a, r, hist.T, cmap='viridis', zorder=-1, vmin=0.)
-        mpl_settings.pcolormesh_label('Distribution of Particles [1/sr]', rotation=90)
+        mpl_settings.axes.set_thetamin(0)
+        mpl_settings.axes.set_thetamax(360)
+        mpl_settings.axes.set_theta_direction(-1)
+        mpl_settings.axes.set_theta_zero_location('E')
+        mpl_settings.axes.set_yticklabels([])
+        mpl_settings.axes.pcolormesh(a, r, hist.T, cmap='viridis', zorder=-1, vmin=0.)
+        mpl_settings.axes.pcolormesh_label('Distribution of Particles [1/sr]', rotation=90)
 
         plot_labels.append('Rows: polar angles [°], columns: azimuthal angles [°], distribution of particles in [1/sr], first row/column gives the respective angle (center of the bin of the histogram), polar bins are chosen so that all bins have the same solid angle')
 
@@ -6118,21 +6116,21 @@ class SimulationOutput(SimulationsOutput):
         """Plot and return backscattered particles of element"""
 
         mpl_settings = MplCanvasSettings()
-        mpl_settings.set_projection('polar')
+        mpl_settings.fig.add_subplot(projection='polar')
 
         if element not in range(len(self.elements)):
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         scattered_data = self.getScatteredData()
 
         if scattered_data is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         plot_data = scattered_data[element]
         if plot_data is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (proj_number,
@@ -6144,12 +6142,12 @@ class SimulationOutput(SimulationsOutput):
         result = self.plotPolar(cosines, mpl_settings, n_bins)
 
         if result is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data, mpl_settings = result
 
-        mpl_settings.set_title(f'Angular distribution of backscattered {self.elements[element]} projectiles')
+        mpl_settings.axes.set_title(f'Angular distribution of backscattered {self.elements[element]} projectiles')
 
         return data, mpl_settings
 
@@ -6157,21 +6155,21 @@ class SimulationOutput(SimulationsOutput):
         """Plot and return backsputtered recoils of element"""
 
         mpl_settings = MplCanvasSettings()
-        mpl_settings.set_projection('polar')
+        mpl_settings.fig.add_subplot(projection='polar')
 
         if element not in range(len(self.elements)):
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         scattered_data = self.getSputteredData()
 
         if scattered_data is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         plot_data = scattered_data[element]
         if plot_data is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         (proj_number,
@@ -6186,12 +6184,12 @@ class SimulationOutput(SimulationsOutput):
         result = self.plotPolar(cosines, mpl_settings, n_bins)
 
         if result is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data, mpl_settings = result
 
-        mpl_settings.set_title(f'Angular distribution of backsputtered {self.elements[element]} recoil atoms')
+        mpl_settings.axes.set_title(f'Angular distribution of backsputtered {self.elements[element]} recoil atoms')
 
         return data, mpl_settings
 
@@ -6202,7 +6200,7 @@ class SimulationOutput(SimulationsOutput):
 
         if scattered_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data = []
@@ -6225,11 +6223,11 @@ class SimulationOutput(SimulationsOutput):
             hist, bin_edges = np.histogram(energy, density=True, bins=100)
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
-            mpl_settings.plot(bin_edges_new,
-                              hist,
-                              label=element,
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(bin_edges_new,
+                                   hist,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
 
             data.append(bin_edges_new)
             plot_labels.append(f'Energy ({element}) [eV]')
@@ -6240,14 +6238,14 @@ class SimulationOutput(SimulationsOutput):
 
         if not plot_counter:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        mpl_settings.set_xlabel('Energy [eV]')
-        mpl_settings.set_ylabel('Reflected ions [1/eV]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=0.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Energy [eV]')
+        mpl_settings.axes.set_ylabel('Reflected ions [1/eV]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=0.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -6258,7 +6256,7 @@ class SimulationOutput(SimulationsOutput):
 
         if sputtered_data is None:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data = []
@@ -6284,11 +6282,11 @@ class SimulationOutput(SimulationsOutput):
             hist, bin_edges = np.histogram(energy, density=True, bins=int(np.max(energy) / 0.2))
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
-            mpl_settings.plot(bin_edges_new,
-                              hist,
-                              label=element,
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(bin_edges_new,
+                                   hist,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
 
             data.append(bin_edges_new)
             plot_labels.append(f'Energy ({element}) [eV]')
@@ -6299,14 +6297,14 @@ class SimulationOutput(SimulationsOutput):
 
         if not plot_counter:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        mpl_settings.set_xlabel('Energy [eV]')
-        mpl_settings.set_ylabel('Sputtered atoms [1/eV]')
-        mpl_settings.set_ylim(ymin=0.)
-        mpl_settings.set_xlim(xmin=0.)
-        mpl_settings.legend()
+        mpl_settings.axes.set_xlabel('Energy [eV]')
+        mpl_settings.axes.set_ylabel('Sputtered atoms [1/eV]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=0.)
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -6332,11 +6330,11 @@ class SimulationOutput(SimulationsOutput):
             polar_plot_norm = np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])) / np.sum(np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])))
             # 0.5 ... normalization because both + and - polar angle are shown, np.pi/180. for conversion from 1/rad to 1/deg
             plot_data = 0.5 * np.pi / 180. * np.divide(hist, np.absolute(polar_plot_norm))
-            mpl_settings.plot(bin_edges_new,
-                              plot_data,
-                              label=element,
-                              linewidth=self.line_width,
-                              color=self.colors[i])
+            mpl_settings.axes.plot(bin_edges_new,
+                                   plot_data,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
 
             if not plot_counter:
                 data.append(bin_edges_new / np.pi * 180.)
@@ -6349,23 +6347,22 @@ class SimulationOutput(SimulationsOutput):
 
         if not plot_counter:
             mpl_settings = MplCanvasSettings()
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        mpl_settings.set_xlabel('Probability [1/°]')
-        mpl_settings.grid(True)
-        mpl_settings.set_theta(
-            thetagrids=tuple([i * 10 for i in range(-9, 10)]),
-            thetamin=-90,
-            thetamax=90,
-            theta_offset=np.pi / 2,
-            theta_direction=-1)
-        mpl_settings.tick_params(
+        mpl_settings.axes.set_xlabel('Probability [1/°]')
+        mpl_settings.axes.grid(True)
+        mpl_settings.axes.set_thetagrids(tuple([i * 10 for i in range(-9, 10)]))
+        mpl_settings.axes.set_thetamin(-90)
+        mpl_settings.axes.set_thetamax(90)
+        mpl_settings.axes.set_theta_offset(np.pi / 2)
+        mpl_settings.axes.set_theta_direction(-1)
+        mpl_settings.axes.tick_params(
             axis='y',
             labelrotation=45,
             pad=4,
             labelsize=8)
-        mpl_settings.legend()
+        mpl_settings.axes.legend()
 
         return (data, plot_labels), mpl_settings
 
@@ -6375,10 +6372,10 @@ class SimulationOutput(SimulationsOutput):
         scattered_data = self.getScatteredData()
 
         mpl_settings = MplCanvasSettings()
-        mpl_settings.set_projection('polar')
+        mpl_settings.fig.add_subplot(projection='polar')
 
         if scattered_data is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         cosines_array = []
@@ -6396,12 +6393,12 @@ class SimulationOutput(SimulationsOutput):
         result = self.plotParticlesPolar(cosines_array, mpl_settings)
 
         if result is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data, mpl_settings = result
 
-        mpl_settings.set_title('Backscattered projectiles over polar angle')
+        mpl_settings.axes.set_title('Backscattered projectiles over polar angle')
 
         return data, mpl_settings
 
@@ -6411,10 +6408,10 @@ class SimulationOutput(SimulationsOutput):
         sputtered_data = self.getSputteredData()
 
         mpl_settings = MplCanvasSettings()
-        mpl_settings.set_projection('polar')
+        mpl_settings.fig.add_subplot(projection='polar')
 
         if sputtered_data is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         cosines_array = []
@@ -6435,11 +6432,11 @@ class SimulationOutput(SimulationsOutput):
         result = self.plotParticlesPolar(cosines_array, mpl_settings)
 
         if result is None:
-            mpl_settings.set_title('No data found')
+            mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
         data, mpl_settings = result
 
-        mpl_settings.set_title('Sputtered recoils over polar angle')
+        mpl_settings.axes.set_title('Sputtered recoils over polar angle')
 
         return data, mpl_settings
