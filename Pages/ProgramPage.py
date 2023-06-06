@@ -645,7 +645,7 @@ class SimulationPage(TabWithToolbar):
         self.update_simulation_data = QTimer(self)
         self.update_simulation_data.timeout.connect(self.updateProgress)
         self.update_simulation_data.timeout.connect(self.updateOutputFilesList)
-        self.update_simulation_data.timeout.connect(self.updateOutputParametersList)
+        self.update_simulation_data.timeout.connect(lambda: self.updateOutputParametersList(in_loop=True))
 
         #
         # STARTUP SETTINGS
@@ -1534,7 +1534,7 @@ class SimulationPage(TabWithToolbar):
         self.update_simulation_data.stop()
         self.run_progress.setValue(100)
         self.updateOutputFilesList()
-        self.updateOutputParametersList(forced=True)
+        self.updateOutputParametersList(forced=True, in_loop=True)
 
     def updateProgress(self):
         """Update the progress bar"""
@@ -1658,11 +1658,12 @@ class SimulationPage(TabWithToolbar):
         if not QFile.exists(file_path) or not QDesktopServices.openUrl(QUrl.fromUserInput(file_path)):
             self.main_window.writeStatusBar(f'Failed to open file "{file_path}"')
 
-    def updateOutputParametersList(self, forced: bool = False):
+    def updateOutputParametersList(self, forced: bool = False, in_loop: bool = False):
         """
         Updates the output parameter list
 
         :param forced: forces update
+        :param in_loop: if called during simulation running-loop
         """
 
         if not forced:
@@ -1685,7 +1686,10 @@ class SimulationPage(TabWithToolbar):
         if not QDir().exists(self.simulation_configuration.save_folder):
             return
         self.evaluation_class.listParameters(self.simulation_configuration.save_folder, self.output_parameters_list)
-        self.evaluation_class.clearPlotWindow()
+
+        # only reset plot window if not in loop
+        if not in_loop:
+            self.evaluation_class.clearPlotWindow()
 
         # reselect item
         for i in range(self.output_parameters_list.count()):

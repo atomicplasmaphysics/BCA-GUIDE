@@ -16,7 +16,7 @@
 # https://www.gnu.org/licenses/.
 
 
-from typing import List, Union, Tuple, Optional, Callable
+from typing import List, Union, Tuple, Optional
 from itertools import zip_longest
 from os import path, listdir
 from re import findall, sub
@@ -47,7 +47,7 @@ from Containers.Arguments import (
 from Containers.Element import Element, Elements
 
 from Simulations.Simulations import (
-    SimulationsInput, SimulationsOutput, HlGeneralBeamSettings,
+    SimulationsInput, SimulationsOutput, SimulationsAnalysis, HlGeneralBeamSettings,
     HlGeneralTargetSettings, VlGeneralSimulationSettings, HlGeneralPlot
 )
 
@@ -2961,7 +2961,341 @@ class SimulationOutput(SimulationsOutput):
     HlPlot = HlPlot
 
     def __init__(self, plot: MplCanvas, element_data: Elements):
+        self.analysis = SimulationAnalysis(element_data)
         super().__init__(plot, element_data)
+
+    def receive(self, value_dict: dict):
+        """Receives pyqtSignal -> dict"""
+
+        histories = value_dict.get('history')
+        if histories is not None:
+            self.analyse('plotDepthConcentration', {'history_step': int(histories)}, False)
+
+    def listParameters(self, save_folder: str, list_widget: ListWidget):
+        """
+        Builds ListWidget from files in save folder
+
+        :param save_folder: folder for output files
+        :param list_widget: empty ListWidget (extension of QListWidget) that should be written to
+        """
+
+        files = listdir(save_folder)
+        info_file = 'E0_31_target.dat'
+        if info_file not in files:
+            info_file = 'E0_31_target001.dat'
+            if info_file not in files:
+                list_widget.addItem(ListWidgetItem('Corrupted input files', bold=True))
+                return
+
+        self.analysis.updateData(save_folder, info_file)
+
+        # dynamic
+        if self.analysis.is_dynamic:
+            list_widget.addItem(ListWidgetItem('Results overview (only for finished static Simulations)', bold=True, grey=True))
+            list_widget.addItemEmpty()
+
+        # static
+        elif 'output.dat' in files:
+            list_widget.addItem(ListWidgetItem('Results overview:', bold=True))
+
+            output_data = self.analysis.getOutputFileData()
+            if output_data is None:
+                list_widget.addItem(ListWidgetItem('Corrupted input file', indent=1))
+                return
+
+            (sputter_yields,
+             total_sputter_yield,
+             amu_sputter_yield,
+             reflection_coefficients,
+
+             implantation_depth,
+             energy_loss_nuclear,
+             energy_loss_electron,
+
+             transmission_sputter_yields,
+             total_transmission_sputter_yield,
+             amu_transmission_sputter_yield,
+             transmission_coefficients) = output_data
+
+            energy_loss_total = energy_loss_nuclear + energy_loss_electron
+            transmission_happening = transmission_coefficients.any() or transmission_sputter_yields.any()
+
+            # sputtering yields
+            list_widget.addItem(ListWidgetItem('Sputtering yields:', indent=1))
+
+            for i, element in enumerate(self.analysis.elements):
+                if sputter_yields[i]:
+                    list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(sputter_yields[i])} atoms/ion', indent=2))
+
+            if not total_sputter_yield:
+                list_widget.addItem(ListWidgetItem('No sputtering occurred.', indent=2))
+
+            else:
+                list_widget.addItemEmpty()
+                list_widget.addItem(ListWidgetItem(f'Total\t{roundToStr(float(total_sputter_yield))} atoms/ion', indent=2))
+                list_widget.addItem(ListWidgetItem(f'\t{roundToStr(float(amu_sputter_yield))} amu/ion', indent=2))
+
+            # transmission sputtering yields
+            if transmission_happening:
+                list_widget.addItemEmpty()
+                list_widget.addItem(ListWidgetItem('Transmission sputtering yields:', indent=1))
+
+                for i, element in enumerate(self.analysis.elements):
+                    if transmission_sputter_yields[i]:
+                        list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(transmission_sputter_yields[i])} atoms/ion', indent=2))
+
+                if not total_transmission_sputter_yield:
+                    list_widget.addItem(ListWidgetItem('No transmission sputtering occurred.', indent=2))
+
+                else:
+                    list_widget.addItemEmpty()
+                    list_widget.addItem(ListWidgetItem(f'Total\t{roundToStr(float(total_transmission_sputter_yield))} atoms/ion', indent=2))
+                    list_widget.addItem(ListWidgetItem(f'\t{roundToStr(float(amu_transmission_sputter_yield))} amu/ion', indent=2))
+
+            # reflection coefficients
+            list_widget.addItemEmpty()
+            list_widget.addItem(ListWidgetItem('Reflection coefficients:', indent=1))
+
+            for i, element in enumerate(self.analysis.elements):
+                if reflection_coefficients[i]:
+                    list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(reflection_coefficients[i])}', indent=2))
+
+            if not np.sum(reflection_coefficients):
+                list_widget.addItem(ListWidgetItem('No projectile reflection occurred.', indent=2))
+
+            # transmission coefficients
+            if transmission_happening:
+                list_widget.addItemEmpty()
+                list_widget.addItem(ListWidgetItem('Transmission coefficients:', indent=1))
+
+                for i, element in enumerate(self.analysis.elements):
+                    if transmission_coefficients[i]:
+                        list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(transmission_coefficients[i])}', indent=2))
+
+                if not np.sum(transmission_coefficients):
+                    list_widget.addItem(ListWidgetItem('No transmission effects occurred.', indent=2))
+
+            # implantation depth
+            list_widget.addItemEmpty()
+            list_widget.addItem(ListWidgetItem('Mean implantation depth:', indent=1))
+
+            for i, element in enumerate(self.analysis.elements):
+                if implantation_depth[i]:
+                    list_widget.addItem(ListWidgetItem(f'{element}\t{implantation_depth[i]:.3f} Å', indent=2))
+
+            if not np.sum(implantation_depth):
+                list_widget.addItem(ListWidgetItem('No projectile implantation occurred.', indent=2))
+
+            # energy loss
+            list_widget.addItemEmpty()
+            list_widget.addItem(ListWidgetItem('Mean projectile energy loss:', indent=1))
+            list_widget.addItem(ListWidgetItem('\tNuclear\tElectronic\tTotal', indent=2))
+
+            for i, element in enumerate(self.analysis.elements):
+                if energy_loss_total[i]:
+                    list_widget.addItem(ListWidgetItem(f'{element}\t{energy_loss_nuclear[i]:.3f} eV\t{energy_loss_electron[i]:.3f} eV\t{energy_loss_total[i]:.3f} eV', indent=2))
+
+            list_widget.addItemEmpty()
+
+        # depth statistic
+        depth_proj_exists = 'depth_proj.dat' in files
+        depth_recoil_exists = 'depth_recoil.dat' in files
+        depth_damage_exists = 'depth_damage.dat' in files
+
+        if depth_proj_exists or depth_recoil_exists or depth_damage_exists:
+            list_widget.addItem(ListWidgetItem('Plot depth statistic:', bold=True))
+
+            if depth_proj_exists:
+                list_widget.addItem(ListWidgetItem('Implantation depth',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotImplantationDepth'}))
+                list_widget.addItem(ListWidgetItem('Projectile energy loss',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotEnergyLossDepth'}))
+
+            if depth_recoil_exists or depth_damage_exists:
+                list_widget.addItem(ListWidgetItem('Ion-induced damages',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotVacanciesDepth'}))
+
+        else:
+            list_widget.addItem(ListWidgetItem('Plot depth statistics (only for finished static Simulations)', bold=True, grey=True))
+
+        list_widget.addItemEmpty()
+
+        # fluence dependent quantities
+        if self.analysis.is_dynamic:
+            list_widget.addItem(ListWidgetItem('Plot over fluence:', bold=True))
+
+            list_widget.addItem(ListWidgetItem('Sputtering yields',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotSputterYields'}))
+            list_widget.addItem(ListWidgetItem('Total sputtering yield (atoms/ion)',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotSputterYieldsTotal'}))
+            list_widget.addItem(ListWidgetItem('Net mass removal (amu/ion)',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotSputterYieldsTotalAmu'}))
+            list_widget.addItem(ListWidgetItem('Reflection coefficients',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotReflectionCoefficients'}))
+            list_widget.addItem(ListWidgetItem('Reemission coefficients',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotReemissionCoefficients'}))
+            list_widget.addItem(ListWidgetItem('Surface concentrations',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotSurfaceConcentrations'}))
+            list_widget.addItem(ListWidgetItem('Surface level',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotSurfaceLevel'}))
+            list_widget.addItem(ListWidgetItem('Concentrations over depth',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'updateDepthConcentration',
+                                                              'plot_args': {'set_to_max': True},
+                                                              'hide': False}))
+
+        else:
+            list_widget.addItem(ListWidgetItem('Plot over fluence (only for dynamic Simulations)', bold=True, grey=True))
+
+        list_widget.addItemEmpty()
+
+        # angular dependence
+        nr_energies = 0
+        nr_angles = 0
+        series_data = self.analysis.getSerieFileData()
+
+        if series_data is not None:
+            (ncp,
+             ncp_proj,
+             elements,
+             elements_projectiles,
+             masses,
+
+             nr_energies,
+             nr_angles,
+             nr_total,
+
+             energies,
+             angles,
+             mean_depth,
+             refl_coefficients,
+             energ_refl_coefficients,
+             sputt_coefficients,
+             energ_sputt_coefficients,
+             ii) = series_data
+
+        if nr_angles > 1:
+            list_widget.addItem(ListWidgetItem('Plot angular dependence:', bold=True))
+            list_widget.addItem(ListWidgetItem('Angular dependence of sputtering yields (atoms/ion)',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotAngularSputterYields'}))
+            list_widget.addItem(ListWidgetItem('Angular dependence of sputtered mass (amu/ion)',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotAngularMassYields'}))
+            list_widget.addItem(ListWidgetItem('Angular dependence of reflection coefficients',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotAngularReflection'}))
+            list_widget.addItem(ListWidgetItem('Angular dependence of implantation depth',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotAngularMeanDepth'}))
+        else:
+            list_widget.addItem(ListWidgetItem('Plot angular dependence (only for "angle sweep")', bold=True, grey=True))
+        list_widget.addItemEmpty()
+
+        if nr_energies > 1:
+            list_widget.addItem(ListWidgetItem('Plot energy dependence:', bold=True))
+            list_widget.addItem(ListWidgetItem('Energy dependence of sputtering yields (atoms/ion)',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotEnergySputterYields'}))
+            list_widget.addItem(ListWidgetItem('Energy dependence of sputtered mass (amu/ion)',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotEnergyMassYields'}))
+            list_widget.addItem(ListWidgetItem('Energy dependence of reflection coefficients',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotEnergyReflection'}))
+            list_widget.addItem(ListWidgetItem('Energy dependence of implantation depth',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotEnergyMeanDepth'}))
+        else:
+            list_widget.addItem(ListWidgetItem('Plot energy dependence (only for "energy sweep")', bold=True, grey=True))
+        list_widget.addItemEmpty()
+
+        # reflected projectiles and sputtered recoils
+        back_p_exists = 'partic_back_p.dat' in files
+        back_r_exists = 'partic_back_r.dat' in files
+
+        if back_p_exists or back_r_exists:
+            list_widget.addItem(ListWidgetItem('Plot secondary particle distributions:', bold=True))
+
+            for i, element in enumerate(self.analysis.elements):
+                if back_p_exists:
+                    list_widget.addItem(ListWidgetItem(f'Backscattered {element} ions',
+                                                       indent=1,
+                                                       function=self.analyse,
+                                                       function_args={'plot': 'plotPolar',
+                                                                      'plot_args': {'element': i, 'projectile_or_recoil': 'p'}}))
+                if back_r_exists:
+                    list_widget.addItem(ListWidgetItem(f'Backsputtered {element} recoil atoms',
+                                                       indent=1,
+                                                       function=self.analyse,
+                                                       function_args={'plot': 'plotPolar',
+                                                                      'plot_args': {'element': i, 'projectile_or_recoil': 'r'}}))
+            list_widget.addItemEmpty()
+
+            if back_p_exists:
+                list_widget.addItem(ListWidgetItem('Polar angles of backscattered ions',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotParticlesPolarP'}))
+            if back_r_exists:
+                list_widget.addItem(ListWidgetItem('Polar angles of backsputtered recoils',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotParticlesPolarR'}))
+            list_widget.addItemEmpty()
+
+            if back_p_exists:
+                list_widget.addItem(ListWidgetItem('Energy of backscattered ions',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotParticlesEnergyP'}))
+            if back_r_exists:
+                list_widget.addItem(ListWidgetItem('Energy of backsputtered recoils',
+                                                   indent=1,
+                                                   function=self.analyse,
+                                                   function_args={'plot': 'plotParticlesEnergyR'}))
+            list_widget.addItemEmpty()
+
+        else:
+            list_widget.addItem(ListWidgetItem('Plot secondary particle distributions (only with additional output options)', bold=True, grey=True))
+
+
+class SimulationAnalysis(SimulationsAnalysis):
+    """
+    Class for calculating SDTrimSP specific parameters and plots
+    """
+    
+    def __init__(self, element_data: Elements):
+        super().__init__(element_data)
 
         self.is_dynamic = False
 
@@ -2971,19 +3305,7 @@ class SimulationOutput(SimulationsOutput):
         self.fluence_array = None
         self.depth_array = None
         self.conc_array = None
-
-    def receive(self, value_dict: dict):
-        """Receives pyqtSignal -> dict"""
-
-        histories = value_dict.get('history')
-        if histories is not None:
-            result = self.plotDepthConcentration(history_step=int(histories))
-            if result is None:
-                self.data = None
-            else:
-                self.data, plot_settings = result
-                plot_settings.apply(self.plot)
-
+        
     def reset(self):
         """Reset class"""
 
@@ -2997,23 +3319,7 @@ class SimulationOutput(SimulationsOutput):
         self.fluence_array = None
         self.depth_array = None
         self.conc_array = None
-
-    @staticmethod
-    def ecksteinAngleFit(angles, y0, alpha0, b, c, f):
-        """Eckstein fit function"""
-
-        out_value = np.zeros(len(angles))
-
-        for i, alpha in enumerate(angles):
-            if alpha == 0.:
-                out_value[i] = y0
-
-            else:
-                cos = np.cos((alpha / alpha0 * np.pi / 2) ** c)
-                out_value[i] = y0 * np.power(cos, -f) * np.exp(b * (1 - 1 / cos))
-
-        return out_value
-
+        
     def updateData(self, save_folder: str, file: str):
         """
         Update evaluation data from file
@@ -3046,13 +3352,13 @@ class SimulationOutput(SimulationsOutput):
 
         # get masses
         self.masses = np.array([self.element_data.elementFromSymbol(element).atomic_mass for element in elements])
-
+        
     def getElementIndex(self, element: str) -> int:
         """Returns index of element"""
         if element not in self.elements:
             return 0
         return self.elements.index(element)
-
+    
     def getOutputFileData(self) -> Optional[Tuple[np.ndarray, ...]]:
         """
         Return the output.dat file data
@@ -3586,7 +3892,7 @@ class SimulationOutput(SimulationsOutput):
                     depth_array,
                     conc_array
                  )
-                 
+
                  or None
         """
 
@@ -3724,338 +4030,7 @@ class SimulationOutput(SimulationsOutput):
             depth_array,
             conc_array
         )
-
-    def listParameters(self, save_folder: str, list_widget: ListWidget):
-        """
-        Builds ListWidget from files in save folder
-
-        :param save_folder: folder for output files
-        :param list_widget: empty ListWidget (extension of QListWidget) that should be written to
-        """
-
-        files = listdir(save_folder)
-        info_file = 'E0_31_target.dat'
-        if info_file not in files:
-            info_file = 'E0_31_target001.dat'
-            if info_file not in files:
-                list_widget.addItem(ListWidgetItem('Corrupted input files', bold=True))
-                return
-
-        self.updateData(save_folder, info_file)
-
-        # dynamic
-        if self.is_dynamic:
-            list_widget.addItem(ListWidgetItem('Results overview (only for finished static Simulations)', bold=True, grey=True))
-            list_widget.addItemEmpty()
-
-        # static
-        elif 'output.dat' in files:
-            list_widget.addItem(ListWidgetItem('Results overview:', bold=True))
-
-            output_data = self.getOutputFileData()
-            if output_data is None:
-                list_widget.addItem(ListWidgetItem('Corrupted input file', indent=1))
-                return
-
-            (sputter_yields,
-             total_sputter_yield,
-             amu_sputter_yield,
-             reflection_coefficients,
-
-             implantation_depth,
-             energy_loss_nuclear,
-             energy_loss_electron,
-
-             transmission_sputter_yields,
-             total_transmission_sputter_yield,
-             amu_transmission_sputter_yield,
-             transmission_coefficients) = output_data
-
-            energy_loss_total = energy_loss_nuclear + energy_loss_electron
-            transmission_happening = transmission_coefficients.any() or transmission_sputter_yields.any()
-
-            # sputtering yields
-            list_widget.addItem(ListWidgetItem('Sputtering yields:', indent=1))
-
-            for i, element in enumerate(self.elements):
-                if sputter_yields[i]:
-                    list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(sputter_yields[i])} atoms/ion', indent=2))
-
-            if not total_sputter_yield:
-                list_widget.addItem(ListWidgetItem('No sputtering occurred.', indent=2))
-
-            else:
-                list_widget.addItemEmpty()
-                list_widget.addItem(ListWidgetItem(f'Total\t{roundToStr(float(total_sputter_yield))} atoms/ion', indent=2))
-                list_widget.addItem(ListWidgetItem(f'\t{roundToStr(float(amu_sputter_yield))} amu/ion', indent=2))
-
-            # transmission sputtering yields
-            if transmission_happening:
-                list_widget.addItemEmpty()
-                list_widget.addItem(ListWidgetItem('Transmission sputtering yields:', indent=1))
-
-                for i, element in enumerate(self.elements):
-                    if transmission_sputter_yields[i]:
-                        list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(transmission_sputter_yields[i])} atoms/ion', indent=2))
-
-                if not total_transmission_sputter_yield:
-                    list_widget.addItem(ListWidgetItem('No transmission sputtering occurred.', indent=2))
-
-                else:
-                    list_widget.addItemEmpty()
-                    list_widget.addItem(ListWidgetItem(f'Total\t{roundToStr(float(total_transmission_sputter_yield))} atoms/ion', indent=2))
-                    list_widget.addItem(ListWidgetItem(f'\t{roundToStr(float(amu_transmission_sputter_yield))} amu/ion', indent=2))
-
-            # reflection coefficients
-            list_widget.addItemEmpty()
-            list_widget.addItem(ListWidgetItem('Reflection coefficients:', indent=1))
-
-            for i, element in enumerate(self.elements):
-                if reflection_coefficients[i]:
-                    list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(reflection_coefficients[i])}', indent=2))
-
-            if not np.sum(reflection_coefficients):
-                list_widget.addItem(ListWidgetItem('No projectile reflection occurred.', indent=2))
-
-            # transmission coefficients
-            if transmission_happening:
-                list_widget.addItemEmpty()
-                list_widget.addItem(ListWidgetItem('Transmission coefficients:', indent=1))
-
-                for i, element in enumerate(self.elements):
-                    if transmission_coefficients[i]:
-                        list_widget.addItem(ListWidgetItem(f'{element}\t{roundToStr(transmission_coefficients[i])}', indent=2))
-
-                if not np.sum(transmission_coefficients):
-                    list_widget.addItem(ListWidgetItem('No transmission effects occurred.', indent=2))
-
-            # implantation depth
-            list_widget.addItemEmpty()
-            list_widget.addItem(ListWidgetItem('Mean implantation depth:', indent=1))
-
-            for i, element in enumerate(self.elements):
-                if implantation_depth[i]:
-                    list_widget.addItem(ListWidgetItem(f'{element}\t{implantation_depth[i]:.3f} Å', indent=2))
-
-            if not np.sum(implantation_depth):
-                list_widget.addItem(ListWidgetItem('No projectile implantation occurred.', indent=2))
-
-            # energy loss
-            list_widget.addItemEmpty()
-            list_widget.addItem(ListWidgetItem('Mean projectile energy loss:', indent=1))
-            list_widget.addItem(ListWidgetItem('\tNuclear\tElectronic\tTotal', indent=2))
-
-            for i, element in enumerate(self.elements):
-                if energy_loss_total[i]:
-                    list_widget.addItem(ListWidgetItem(f'{element}\t{energy_loss_nuclear[i]:.3f} eV\t{energy_loss_electron[i]:.3f} eV\t{energy_loss_total[i]:.3f} eV', indent=2))
-
-            list_widget.addItemEmpty()
-
-        # depth statistic
-        depth_proj_exists = 'depth_proj.dat' in files
-        depth_recoil_exists = 'depth_recoil.dat' in files
-        depth_damage_exists = 'depth_damage.dat' in files
-
-        if depth_proj_exists or depth_recoil_exists or depth_damage_exists:
-            list_widget.addItem(ListWidgetItem('Plot depth statistic:', bold=True))
-
-            if depth_proj_exists:
-                list_widget.addItem(ListWidgetItem('Implantation depth',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotImplantationDepth}))
-                list_widget.addItem(ListWidgetItem('Projectile energy loss',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotEnergyLossDepth}))
-
-            if depth_recoil_exists or depth_damage_exists:
-                list_widget.addItem(ListWidgetItem('Ion-induced damages',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotVacanciesDepth}))
-
-        else:
-            list_widget.addItem(ListWidgetItem('Plot depth statistics (only for finished static Simulations)', bold=True, grey=True))
-
-        list_widget.addItemEmpty()
-
-        # fluence dependent quantities
-        if self.is_dynamic:
-            list_widget.addItem(ListWidgetItem('Plot over fluence:', bold=True))
-
-            list_widget.addItem(ListWidgetItem('Sputtering yields',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotSputterYields}))
-            list_widget.addItem(ListWidgetItem('Total sputtering yield (atoms/ion)',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotSputterYieldsTotal}))
-            list_widget.addItem(ListWidgetItem('Net mass removal (amu/ion)',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotSputterYieldsTotalAmu}))
-            list_widget.addItem(ListWidgetItem('Reflection coefficients',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotReflectionCoefficients}))
-            list_widget.addItem(ListWidgetItem('Reemission coefficients',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotReemissionCoefficients}))
-            list_widget.addItem(ListWidgetItem('Surface concentrations',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotSurfaceConcentrations}))
-            list_widget.addItem(ListWidgetItem('Surface level',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotSurfaceLevel}))
-            list_widget.addItem(ListWidgetItem('Concentrations over depth',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.updateDepthConcentration,
-                                                              'plot_args': {'set_to_max': True}}))
-
-        else:
-            list_widget.addItem(ListWidgetItem('Plot over fluence (only for dynamic Simulations)', bold=True, grey=True))
-
-        list_widget.addItemEmpty()
-
-        # angular dependence
-        nr_energies = 0
-        nr_angles = 0
-        series_data = self.getSerieFileData()
-
-        if series_data is not None:
-            (ncp,
-             ncp_proj,
-             elements,
-             elements_projectiles,
-             masses,
-
-             nr_energies,
-             nr_angles,
-             nr_total,
-
-             energies,
-             angles,
-             mean_depth,
-             refl_coefficients,
-             energ_refl_coefficients,
-             sputt_coefficients,
-             energ_sputt_coefficients,
-             ii) = series_data
-
-        if nr_angles > 1:
-            list_widget.addItem(ListWidgetItem('Plot angular dependence:', bold=True))
-            list_widget.addItem(ListWidgetItem('Angular dependence of sputtering yields (atoms/ion)',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotAngularSputterYields}))
-            list_widget.addItem(ListWidgetItem('Angular dependence of sputtered mass (amu/ion)',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotAngularMassYields}))
-            list_widget.addItem(ListWidgetItem('Angular dependence of reflection coefficients',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotAngularReflection}))
-            list_widget.addItem(ListWidgetItem('Angular dependence of implantation depth',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotAngularMeanDepth}))
-        else:
-            list_widget.addItem(ListWidgetItem('Plot angular dependence (only for "angle sweep")', bold=True, grey=True))
-        list_widget.addItemEmpty()
-
-        if nr_energies > 1:
-            list_widget.addItem(ListWidgetItem('Plot energy dependence:', bold=True))
-            list_widget.addItem(ListWidgetItem('Energy dependence of sputtering yields (atoms/ion)',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotEnergySputterYields}))
-            list_widget.addItem(ListWidgetItem('Energy dependence of sputtered mass (amu/ion)',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotEnergyMassYields}))
-            list_widget.addItem(ListWidgetItem('Energy dependence of reflection coefficients',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotEnergyReflection}))
-            list_widget.addItem(ListWidgetItem('Energy dependence of implantation depth',
-                                               indent=1,
-                                               function=self.plotFct,
-                                               function_args={'plot': self.plotEnergyMeanDepth}))
-        else:
-            list_widget.addItem(ListWidgetItem('Plot energy dependence (only for "energy sweep")', bold=True, grey=True))
-        list_widget.addItemEmpty()
-
-        # reflected projectiles and sputtered recoils
-        back_p_exists = 'partic_back_p.dat' in files
-        back_r_exists = 'partic_back_r.dat' in files
-
-        if back_p_exists or back_r_exists:
-            list_widget.addItem(ListWidgetItem('Plot secondary particle distributions:', bold=True))
-
-            for i, element in enumerate(self.elements):
-                if back_p_exists:
-                    list_widget.addItem(ListWidgetItem(f'Backscattered {element} ions',
-                                                       indent=1,
-                                                       function=self.plotFct,
-                                                       function_args={'plot': self.plotPolar,
-                                                                      'plot_args': {'element': i, 'projectile_or_recoil': 'p'}}))
-                if back_r_exists:
-                    list_widget.addItem(ListWidgetItem(f'Backsputtered {element} recoil atoms',
-                                                       indent=1,
-                                                       function=self.plotFct,
-                                                       function_args={'plot': self.plotPolar,
-                                                                      'plot_args': {'element': i, 'projectile_or_recoil': 'r'}}))
-            list_widget.addItemEmpty()
-
-            if back_p_exists:
-                list_widget.addItem(ListWidgetItem('Polar angles of backscattered ions',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotParticlesPolarP}))
-            if back_r_exists:
-                list_widget.addItem(ListWidgetItem('Polar angles of backsputtered recoils',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotParticlesPolarR}))
-            list_widget.addItemEmpty()
-
-            if back_p_exists:
-                list_widget.addItem(ListWidgetItem('Energy of backscattered ions',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotParticlesEnergyP}))
-            if back_r_exists:
-                list_widget.addItem(ListWidgetItem('Energy of backsputtered recoils',
-                                                   indent=1,
-                                                   function=self.plotFct,
-                                                   function_args={'plot': self.plotParticlesEnergyR}))
-            list_widget.addItemEmpty()
-
-        else:
-            list_widget.addItem(ListWidgetItem('Plot secondary particle distributions (only with additional output options)', bold=True, grey=True))
-
-    def plotFct(self, plot: Callable = None, plot_args: dict = None, hide: bool = True):
-        """
-        Call the plot function in a new thread with function parameters
-
-        :param plot: plot function
-        :param plot_args: plot function parameters as dictionary
-        :param hide: hide toolbar
-        """
-
-        if hide:
-            self.emit({
-                'hide': True
-            })
-        super().plotFct(plot, plot_args)
-
+    
     def plotImplantationDepth(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
         """Plot and return projectile stops over depth"""
 
@@ -5304,6 +5279,35 @@ class SimulationOutput(SimulationsOutput):
 
         return ([fluence_array[1:], surface[1:]], ['Fluence[10^20 ions/m^2]', 'Surface Erosion [Angs]']), mpl_settings
 
+    def plotDepthConcentration(self, history_step: int = 0) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
+        """Plot and return the depth concentration"""
+
+        if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
+            return
+
+        mpl_settings = MplCanvasSettings()
+
+        data = [self.depth_array]
+        plot_labels = ['Depth [Angs]']
+
+        for i, element in enumerate(self.elements):
+            mpl_settings.axes.plot(self.depth_array,
+                                   self.conc_array[history_step, i, :],
+                                   label=element,
+                                   linewidth=2,
+                                   color=self.colors[i])
+
+            data.append(self.conc_array[history_step, i, :])
+            plot_labels.append(element)
+
+        mpl_settings.axes.set_ylim(ymin=0.0, ymax=1.0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_xlabel('Depth [Å]')
+        mpl_settings.axes.set_ylabel('Concentrations')
+        mpl_settings.axes.set_title(f'Fluence: {self.fluence_array[history_step]:.2f}$\\times 10^{{20}}$/m$^2$')
+
+        return (data, plot_labels), mpl_settings
+
     def updateDepthConcentration(self, set_to_max: bool = False) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
         """Updates the plot and data of the depth concentration"""
 
@@ -5343,32 +5347,3 @@ class SimulationOutput(SimulationsOutput):
         })
 
         return result
-
-    def plotDepthConcentration(self, history_step: int = 0) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
-        """Plot and return the depth concentration"""
-
-        if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
-            return
-
-        mpl_settings = MplCanvasSettings()
-
-        data = [self.depth_array]
-        plot_labels = ['Depth [Angs]']
-
-        for i, element in enumerate(self.elements):
-            mpl_settings.axes.plot(self.depth_array,
-                                   self.conc_array[history_step, i, :],
-                                   label=element,
-                                   linewidth=2,
-                                   color=self.colors[i])
-
-            data.append(self.conc_array[history_step, i, :])
-            plot_labels.append(element)
-
-        mpl_settings.axes.set_ylim(ymin=0.0, ymax=1.0)
-        mpl_settings.axes.legend()
-        mpl_settings.axes.set_xlabel('Depth [Å]')
-        mpl_settings.axes.set_ylabel('Concentrations')
-        mpl_settings.axes.set_title(f'Fluence: {self.fluence_array[history_step]:.2f}$\\times 10^{{20}}$/m$^2$')
-
-        return (data, plot_labels), mpl_settings

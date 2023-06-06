@@ -16,22 +16,23 @@
 # https://www.gnu.org/licenses/.
 
 
-from typing import Union, Tuple, Callable, Optional, List
-from time import time
-from threading import Thread, Lock
+from typing import Union, Tuple, Optional, List
+from os import listdir
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from PyQt6.QtCore import pyqtSignal, Qt, QObject
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QObject, QThread
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
 from Utility.Layouts import ListWidget, MplCanvas
 from Utility.Indexing import RepeatingList, ElementList
+from Utility.Functions import getFileNameFromFileList, fileToNpArray
 
 from TableWidgets.CompTable import CompRow
-from Containers.Element import Element, Elements
 
+from Containers.MplCanvasSettings import MplCanvasSettings
+from Containers.Element import Element, Elements
 from Containers.Arguments import GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments
 
 
@@ -2015,12 +2016,9 @@ class SimulationsOutput(QObject):
     :param element_data: <Elements> container
     """
 
-    # change to True if calculations should be performed in separate thread
-    # caution: this will cause flickering of the plots when updating while simulation is running, needs further work
-    Threading = False
-
     # signals
     hlChange = pyqtSignal(dict)
+    analyseFunc = pyqtSignal(str, dict)
 
     # References to classes
     HlPlot = HlGeneralPlot
@@ -2030,25 +2028,21 @@ class SimulationsOutput(QObject):
 
         self.plot = plot
         self.element_data = element_data
-        self.data = None
-        self.save_folder = ''
+        self.waits = []
 
-        self.elements = ElementList()
-        self.masses = np.array([])
+        if not hasattr(self, 'analysis'):
+            self.analysis = SimulationsAnalysis(element_data)
+        self.thread = QThread()
 
-        self.first_color = 0, 0, 0  # (r, g, b)
-        self.line_width = 2
+        # connect signals
+        self.analyseFunc.connect(self.analysis.analyse)
+        self.analysis.returnSignal.connect(self.plotter)
+        self.analysis.gotSignal.connect(self.wait)
+        self.analysis.hlChange.connect(self.emit)
 
-        self.thread_lock = Lock()
-        self.thread_last_update = 0
-
-        # colors for plots
-        self.colors = RepeatingList()
-        order = [4, 0, 6, 8, 14, 12, 16, 18, 10, 3, 5, 1, 7, 9, 15, 13, 17, 11, 19]
-        colors = plt.get_cmap('tab20').colors
-        for i in order:
-            self.colors.append(colors[i])
-        self.first_color = colors[2]
+        # move to thread and start
+        self.analysis.moveToThread(self.thread)
+        self.thread.start()
 
     def emit(self, value_dict: dict = None):
         """
@@ -2073,25 +2067,25 @@ class SimulationsOutput(QObject):
     def reset(self):
         """Reset class"""
 
-        self.data = None
-        self.save_folder = ''
-
-        self.elements = ElementList()
-        self.masses = np.array([])
+        self.analysis.reset()
 
     def clearPlotWindow(self):
         """Clears the plot window"""
+
+        # TODO: check when plot window really has to be cleared -> avoid flickering
+        # TODO: maybe also in Pages/ProgramPage.py
 
         self.plot.fig.clf()
         self.plot.axes = self.plot.fig.add_subplot(projection='rectilinear')
         self.plot.fig.canvas.draw_idle()
 
-    def plotFct(self, plot: Callable = None, plot_args: dict = None):
+    def analyse(self, plot: str = None, plot_args: dict = None, hide: bool = True):
         """
-        Call the plot function in a new thread with function parameters
+        Call the analysis function in the thread with function parameters
 
-        :param plot: plot function
-        :param plot_args: plot function parameters as dictionary
+        :param plot: analysis and plot function
+        :param plot_args: analysis and plot function parameters as dictionary
+        :param hide: hide toolbar
         """
 
         if plot is None:
@@ -2100,58 +2094,47 @@ class SimulationsOutput(QObject):
         if plot_args is None:
             plot_args = {}
 
-        if self.Threading:
-            thread = Thread(
-                target=self.plotFctThread,
-                kwargs={
-                    'plot': plot,
-                    'plot_args': plot_args
-                })
-            thread.start()
+        self.emit({
+            'hide': hide
+        })
 
-        else:
-            # wait cursor
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self.analyseFunc.emit(plot, plot_args)
 
-            result = plot(**plot_args)
-            if result is None:
-                self.data = None
-                QApplication.restoreOverrideCursor()
-                return
-
-            self.data, plot_settings = result
-            plot_settings.apply(self.plot)
-
-            QApplication.restoreOverrideCursor()
-
-    def plotFctThread(self, plot: Callable, plot_args: dict):
+    def plotter(self, mpl_setting: MplCanvasSettings, identifier: int):
         """
-        Call the plot function with function parameters
+        Call the plot function in a new thread with function parameters
 
-        :param plot: plot function
-        :param plot_args: plot function parameters as dictionary
-        :return:
+        :param mpl_setting: calculated MplCanvasSettings
+        :param identifier: identifier of calculation
         """
 
-        our_time = time()
-
-        # do calculations
-        result = plot(**plot_args)
-        if not isinstance(result, tuple) or len(result) != 2:
-            self.data = None
+        if mpl_setting is None:
             return
-        self.data, plot_settings = result
 
-        # obtain the lock to update the plot
-        with self.thread_lock:
+        mpl_setting.apply(self.plot)
+        self.wait(identifier, False)
 
-            # check if some other thread has done more recent calculation of same routine
-            if our_time <= self.thread_last_update:
-                return
+    def wait(self, identifier: int, waiting: bool = True):
+        """
+        Waits for identified calculation to be done
 
-            # update plot
-            plot_settings.apply(self.plot)
-            self.thread_last_update = our_time
+        :param identifier: identifier of calculation
+        :param waiting: if identifier is awaited or done
+        """
+
+        if waiting:
+            self.waits.append(identifier)
+        else:
+            try:
+                self.waits.remove(identifier)
+            except ValueError:
+                pass
+
+        # wait cursor
+        if len(self.waits) == 0:
+            QApplication.restoreOverrideCursor()
+        else:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
     @staticmethod
     def listParameters(save_folder: str, list_widget: ListWidget):
@@ -2165,12 +2148,18 @@ class SimulationsOutput(QObject):
         raise NotImplementedError
 
     def getReturnData(self, precision: int = 7) -> Optional[str]:
-        """Returns data from plot as string ready to be written in file or None if no data is available"""
+        """
+        Returns data from plot as string ready to be written in file or None if no data is available
 
-        if self.data is None or len(self.data) != 2:
+        :param precision: precision of floats
+        """
+
+        analysis_data = self.analysis.data
+
+        if analysis_data is None or len(analysis_data) != 2:
             return
 
-        data, labels = self.data
+        data, labels = analysis_data
         output = '\t'.join(labels) + '\n'
         data_len = len(data)
         for i in range(len(data[0])):
@@ -2179,3 +2168,126 @@ class SimulationsOutput(QObject):
                 data_i.append(f'{data[j][i]:.{precision}E}')
             output += '\t'.join(data_i) + '\n'
         return output
+
+
+class SimulationsAnalysis(QObject):
+    """
+    Class for calculating simulation specific parameters and preparing plots
+
+    :param element_data: <Elements> container
+    """
+
+    # signals
+    gotSignal = pyqtSignal(int)
+    returnSignal = pyqtSignal(MplCanvasSettings, int)
+    hlChange = pyqtSignal(dict)
+
+    def __init__(self, element_data: Elements):
+        super().__init__()
+
+        self.data = None
+        self.element_data = element_data
+        self.save_folder = ''
+        self.counter = 0
+
+        self.elements = ElementList()
+        self.masses = np.array([])
+
+        self.first_color = 0, 0, 0  # (r, g, b)
+        self.line_width = 2
+
+        # colors for plots
+        self.colors = RepeatingList()
+        order = [4, 0, 6, 8, 14, 12, 16, 18, 10, 3, 5, 1, 7, 9, 15, 13, 17, 11, 19]
+        colors = plt.get_cmap('tab20').colors
+        for i in order:
+            self.colors.append(colors[i])
+        self.first_color = colors[2]
+
+    def reset(self):
+        """Reset class"""
+
+        self.data = None
+        self.save_folder = ''
+
+        self.elements = ElementList()
+        self.masses = np.array([])
+
+    def emit(self, value_dict: dict = None):
+        """
+        Emits settingsChanged pyqtSignal
+
+        :param value_dict: dictionary to emit
+        """
+
+        if value_dict is None:
+            return
+        self.hlChange.emit(value_dict)
+
+    @pyqtSlot(str, dict)
+    def analyse(self, func: str, func_args: dict):
+        """Executes analysis function if exists"""
+
+        self.gotSignal.emit(self.counter)
+
+        # check if func exists and is executable
+        analyse_func = getattr(self, func, None)
+        if callable(analyse_func):
+            result = analyse_func(**func_args)
+
+            # no return data
+            if result is None:
+                mpl_settings = MplCanvasSettings()
+                mpl_settings.axes.set_title('No data')
+                self.returnSignal.emit(mpl_settings, self.counter)
+
+            # return data
+            else:
+                self.data, mpl_settings = result
+                self.returnSignal.emit(mpl_settings, self.counter)
+
+            self.counter += 1
+
+        else:
+            raise AttributeError(f'Analyse function "{func}" not implemented')
+
+    @staticmethod
+    def ecksteinAngleFit(angles, y0, alpha0, b, c, f):
+        """Eckstein angle fit function"""
+
+        out_value = np.zeros(len(angles))
+
+        for i, alpha in enumerate(angles):
+            if alpha == 0.:
+                out_value[i] = y0
+
+            else:
+                cos = np.cos((alpha / alpha0 * np.pi / 2) ** c)
+                out_value[i] = y0 * np.power(cos, -f) * np.exp(b * (1 - 1 / cos))
+
+        return out_value
+
+    def genfromtxt(self, filename: str, skip_header: int = 0, **kwargs) -> Optional[np.ndarray]:
+        """
+        Extension of numpy genfromtxt.
+        Searches filename in save_folder and returns data inside
+
+        :param filename: name of file
+        :param skip_header: skips first lines
+
+        :return: None if file does not exist
+                 numpy.array of data in file
+        """
+
+        file = getFileNameFromFileList(filename, listdir(self.save_folder))
+        if not file:
+            return
+
+        # numpy genfromtxt is very slow, use own implementation instead
+        # data = np.genfromtxt(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
+        data = fileToNpArray(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
+
+        if not data.size:
+            return
+
+        return data
