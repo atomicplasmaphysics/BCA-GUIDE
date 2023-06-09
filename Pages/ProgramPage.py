@@ -114,7 +114,7 @@ class SimulationPage(TabWithToolbar):
         if not isinstance(self.evaluation_class, SimulationsOutput):
             exit('Provided evaluation class is not a <SimulationsOutput> class')
             # will never be reached, but useful for autocompletion in editor
-            self.evaluation_class = SimulationsOutput(self.output_plot_view, self.simulation_class.element_data)
+            self.evaluation_class = SimulationsOutput(self.output_plot_view, self.simulation_class.element_data, self.plot_vbox)
 
         if not self.simulation_configuration.base_save_folder:
             self.simulation_configuration.base_save_folder = f'{GlobalConf.save_path}/{self.simulation_class.SaveFolder}'
@@ -1611,7 +1611,11 @@ class SimulationPage(TabWithToolbar):
             return
 
         file_path = f'{self.simulation_configuration.save_folder}/{selected_items[0].text()}'
-        if not QFile(file_path).exists():
+        try:
+            with open(file_path, 'r') as file:
+                file_content = file.read()
+
+        except FileNotFoundError:
             self.outputFilePreview.clear()
             self.main_window.writeStatusBar(f'Failed to preview file "{file_path}"')
             self.open_output_file_button.setEnabled(False)
@@ -1619,8 +1623,7 @@ class SimulationPage(TabWithToolbar):
             return
 
         self.outputFilePreview.updateOffset(0)
-        with open(file_path, 'r') as file:
-            file_content = file.read()
+
         line_limit = 0
         if self.layout_output_preview_line_count.checkbox.isChecked():
             line_limit = self.output_preview_line_count.value()

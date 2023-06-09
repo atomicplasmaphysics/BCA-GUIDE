@@ -3848,12 +3848,13 @@ fout {idfout} {iddout} {idqout}{output}
         input_file = getFileNameFromFileList(self.InputFilename, files)
         layer_file = getFileNameFromFileList(self.LayerFilename, files)
 
-        if not input_file:
-            return False
-
         # get all contents from input file
-        with open(f'{folder}/{input_file}', 'r') as file:
-            contents = [line.strip() for line in file.readlines() if line.strip()]
+        try:
+            with open(f'{folder}/{input_file}', 'r') as file:
+                contents = [line.strip() for line in file.readlines() if line.strip()]
+
+        except FileNotFoundError:
+            return
 
         # obligatory input needs to be provided
         if len(contents) < 5:
@@ -4160,9 +4161,8 @@ fout {idfout} {iddout} {idqout}{output}
         structure = []
         if iq0 > 0:
             error_layer = 'Layer file has incorrect format.'
-            if not input_file:
-                error_list.append('No known layer files in this directory, assuming no layer file.')
-            else:
+
+            try:
                 # get all contents from layer file
                 with open(f'{folder}/{layer_file}', 'r') as file:
                     last_content = []
@@ -4216,6 +4216,9 @@ fout {idfout} {iddout} {idqout}{output}
                         last_abundances = abundances
                         last_content = content
                         segment_count = 1
+
+            except FileNotFoundError:
+                error_list.append('No known layer files in this directory, assuming no layer file.')
 
         index = RunningIndex()
 
@@ -4512,13 +4515,17 @@ fout {idfout} {iddout} {idqout}{output}
         if not indat_file:
             return -1
 
-        with open(f'{save_folder}/{indat_file}', 'r') as file:
-            file.readline()
-            line_contents = [sp.strip() for sp in file.readline().split(' ') if sp.strip()]
-            try:
-                particles = int(line_contents[3])
-            except (ValueError, IndexError):
-                return -1
+        try:
+            with open(f'{save_folder}/{indat_file}', 'r') as file:
+                file.readline()
+                line_contents = [sp.strip() for sp in file.readline().split(' ') if sp.strip()]
+                try:
+                    particles = int(line_contents[3])
+                except (ValueError, IndexError):
+                    return -1
+
+        except FileNotFoundError:
+            return -1
 
         return round(100 * simulated / particles)
 
@@ -4889,97 +4896,101 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         result = {}
 
-        with open(f'{self.save_folder}/{protocol}', 'r') as file:
-            # 'id'
-            result['id'] = file.readline()
+        try:
+            with open(f'{self.save_folder}/{protocol}', 'r') as file:
+                # 'id'
+                result['id'] = file.readline()
 
-            # 'flct', 'pseu', 'prcs', 'nh', 'ncp', 'nirr', 'idrel', 'iproj', 'irand', 'ioutd'
-            contents = file.readline().strip().split()
-            result['flct'] = float(contents[0])
-            result['pseu'] = float(contents[1])
-            result['prcs'] = float(contents[2])
-            result['nh'] = int(contents[3])
-            result['ncp'] = int(contents[4])
-            result['nirr'] = int(contents[5])
-            result['idrel'] = int(contents[6][0])  # only first character, since '*****' is added in static mode
-            result['iproj'] = int(contents[7])
-            result['irand'] = int(contents[8])
-            result['ioutd'] = contents[9] == 'T'
-
-            # 'xmax', 'nqx', 'dthf', 'dsf', 'srex'
-            contents = file.readline().strip().split()
-            result['xmax'] = float(contents[0])
-            result['nqx'] = int(contents[1])
-            result['dthf'] = float(contents[2])
-            result['dsf'] = float(contents[3])
-            result['srex'] = float(contents[4])
-
-            # 'inel', 'iwc', 'dmg0', 'csbe'
-            contents = file.readline().strip().split()
-            result['inel'] = int(contents[0])
-            result['iwc'] = int(contents[1])
-            result['dmg0'] = float(contents[2])
-            result['csbe'] = float(contents[3])
-
-            # 'ifout', 'idout', 'iqout', 'nqxn', 'nqxx'
-            contents = file.readline().strip().split()
-            result['ifout'] = int(contents[0])
-            result['idout'] = int(contents[1])
-            result['iqout'] = int(contents[2])
-            result['nqxn'] = int(contents[3])
-            result['nqxx'] = int(contents[4])
-
-            # 'irgl', 'iscl', 'ispl', 'ircl'
-            contents = file.readline().strip().split()
-            result['irgl'] = contents[0] == 'T'
-            result['iscl'] = contents[1] == 'T'
-            result['ispl'] = contents[2] == 'T'
-            result['ircl'] = contents[3] == 'T'
-
-            cp = []
-            for _ in range(result['ncp']):
-                cp_result = {}
-
-                # 'zz', 'm', 'be', 'ef', 'ed', 'qu0', 'dns0', 'ck', 'ircsp'
+                # 'flct', 'pseu', 'prcs', 'nh', 'ncp', 'nirr', 'idrel', 'iproj', 'irand', 'ioutd'
                 contents = file.readline().strip().split()
-                cp_result['zz'] = int(float(contents[0]))
-                cp_result['m'] = float(contents[1])
-                cp_result['be'] = float(contents[2])
-                cp_result['ef'] = float(contents[3])
-                cp_result['ed'] = float(contents[4])
-                cp_result['qu0'] = float(contents[5])
-                cp_result['dns0'] = float(contents[6])
-                cp_result['ck'] = float(contents[7])
-                cp_result['ircsp'] = contents[8] == 'T'
+                result['flct'] = float(contents[0])
+                result['pseu'] = float(contents[1])
+                result['prcs'] = float(contents[2])
+                result['nh'] = int(contents[3])
+                result['ncp'] = int(contents[4])
+                result['nirr'] = int(contents[5])
+                result['idrel'] = int(contents[6][0])  # only first character, since '*****' is added in static mode
+                result['iproj'] = int(contents[7])
+                result['irand'] = int(contents[8])
+                result['ioutd'] = contents[9] == 'T'
 
-                # 'ires', 'irep', 'qumax', 'pmxv', 'sbv'
+                # 'xmax', 'nqx', 'dthf', 'dsf', 'srex'
                 contents = file.readline().strip().split()
-                cp_result['ires'] = int(contents[0])
-                cp_result['irep'] = int(contents[1])
-                cp_result['qumax'] = float(contents[2])
-                cp_result['pmxv'] = float(contents[3])
-                cp_result['sbv'] = [float(val) for val in contents[4:]]
+                result['xmax'] = float(contents[0])
+                result['nqx'] = int(contents[1])
+                result['dthf'] = float(contents[2])
+                result['dsf'] = float(contents[3])
+                result['srex'] = float(contents[4])
 
-                cp.append(cp_result)
-            result['cp'] = cp
-
-            ir = []
-            for _ in range(result['nirr']):
-                ir_result = {}
-
-                # 'ircp', 'ie0', 'e0', 'ef0', 'alpha0', 'qubeam', 'iadis', 'adpar'
+                # 'inel', 'iwc', 'dmg0', 'csbe'
                 contents = file.readline().strip().split()
-                ir_result['ircp'] = int(contents[0])
-                ir_result['ie0'] = int(contents[1])
-                ir_result['e0'] = float(contents[2])
-                ir_result['ef0'] = float(contents[3])
-                ir_result['alpha0'] = float(contents[4])
-                ir_result['qubeam'] = float(contents[5])
-                ir_result['iadis'] = int(contents[6])
-                ir_result['adpar'] = [float(val) for val in contents[7:]]
+                result['inel'] = int(contents[0])
+                result['iwc'] = int(contents[1])
+                result['dmg0'] = float(contents[2])
+                result['csbe'] = float(contents[3])
 
-                ir.append(ir_result)
-            result['ir'] = ir
+                # 'ifout', 'idout', 'iqout', 'nqxn', 'nqxx'
+                contents = file.readline().strip().split()
+                result['ifout'] = int(contents[0])
+                result['idout'] = int(contents[1])
+                result['iqout'] = int(contents[2])
+                result['nqxn'] = int(contents[3])
+                result['nqxx'] = int(contents[4])
+
+                # 'irgl', 'iscl', 'ispl', 'ircl'
+                contents = file.readline().strip().split()
+                result['irgl'] = contents[0] == 'T'
+                result['iscl'] = contents[1] == 'T'
+                result['ispl'] = contents[2] == 'T'
+                result['ircl'] = contents[3] == 'T'
+
+                cp = []
+                for _ in range(result['ncp']):
+                    cp_result = {}
+
+                    # 'zz', 'm', 'be', 'ef', 'ed', 'qu0', 'dns0', 'ck', 'ircsp'
+                    contents = file.readline().strip().split()
+                    cp_result['zz'] = int(float(contents[0]))
+                    cp_result['m'] = float(contents[1])
+                    cp_result['be'] = float(contents[2])
+                    cp_result['ef'] = float(contents[3])
+                    cp_result['ed'] = float(contents[4])
+                    cp_result['qu0'] = float(contents[5])
+                    cp_result['dns0'] = float(contents[6])
+                    cp_result['ck'] = float(contents[7])
+                    cp_result['ircsp'] = contents[8] == 'T'
+
+                    # 'ires', 'irep', 'qumax', 'pmxv', 'sbv'
+                    contents = file.readline().strip().split()
+                    cp_result['ires'] = int(contents[0])
+                    cp_result['irep'] = int(contents[1])
+                    cp_result['qumax'] = float(contents[2])
+                    cp_result['pmxv'] = float(contents[3])
+                    cp_result['sbv'] = [float(val) for val in contents[4:]]
+
+                    cp.append(cp_result)
+                result['cp'] = cp
+
+                ir = []
+                for _ in range(result['nirr']):
+                    ir_result = {}
+
+                    # 'ircp', 'ie0', 'e0', 'ef0', 'alpha0', 'qubeam', 'iadis', 'adpar'
+                    contents = file.readline().strip().split()
+                    ir_result['ircp'] = int(contents[0])
+                    ir_result['ie0'] = int(contents[1])
+                    ir_result['e0'] = float(contents[2])
+                    ir_result['ef0'] = float(contents[3])
+                    ir_result['alpha0'] = float(contents[4])
+                    ir_result['qubeam'] = float(contents[5])
+                    ir_result['iadis'] = int(contents[6])
+                    ir_result['adpar'] = [float(val) for val in contents[7:]]
+
+                    ir.append(ir_result)
+                result['ir'] = ir
+
+        except FileNotFoundError:
+            return
 
         return result
 
@@ -5012,8 +5023,12 @@ class SimulationAnalysis(SimulationsAnalysis):
         particles = np.zeros(len(self.elements))
         launched_total = 0
 
-        with open(f'{self.save_folder}/{protocol}', 'r') as file:
-            lines = [line.strip() for line in file.readlines()]
+        try:
+            with open(f'{self.save_folder}/{protocol}', 'r') as file:
+                lines = [line.strip() for line in file.readlines()]
+
+        except FileNotFoundError:
+            return
 
         for i, line in enumerate(lines):
             if line.startswith('pseudoprojectile statistics:'):
@@ -5128,10 +5143,14 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         new_profiles = len(profiles)
 
-        with open(f'{self.save_folder}/{profiles[0]}', 'r') as file:
-            lines = [line.strip() for line in file.readlines() if line.strip()]
-            columns = len(lines[5].split())
-            layers = len(lines) - 5
+        try:
+            with open(f'{self.save_folder}/{profiles[0]}', 'r') as file:
+                lines = [line.strip() for line in file.readlines() if line.strip()]
+                columns = len(lines[5].split())
+                layers = len(lines) - 5
+
+        except FileNotFoundError:
+            return self.depth_profile_data
 
         nirr = self.initial_protocol['nirr'] if isinstance(self.initial_protocol['nirr'], int) else 1
 
@@ -5152,20 +5171,25 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         for i, profile in enumerate(profiles):
             profile = f'{self.save_folder}/{profile}'
-            with open(profile, 'r') as file:
-                swelling_shrinking[i] = float(file.readline().strip().split()[0].replace('D', 'E'))
 
-                partial_fluence = [float(flcp.replace('D', 'E')) for flcp in file.readline().strip().split()]
-                if len(partial_fluence) != nirr:
-                    partial_fluence = partial_fluence[:nirr]
-                    partial_fluence.extend([0] * (nirr - len(partial_fluence)))
-                partial_fluences[i] = np.array(partial_fluence)
+            try:
+                with open(profile, 'r') as file:
+                    swelling_shrinking[i] = float(file.readline().strip().split()[0].replace('D', 'E'))
 
-                reemitted[i] = np.array([float(reem.replace('D', 'E')) for reem in file.readline().strip().split()])
+                    partial_fluence = [float(flcp.replace('D', 'E')) for flcp in file.readline().strip().split()]
+                    if len(partial_fluence) != nirr:
+                        partial_fluence = partial_fluence[:nirr]
+                        partial_fluence.extend([0] * (nirr - len(partial_fluence)))
+                    partial_fluences[i] = np.array(partial_fluence)
 
-            # numpy genfromtxt is very slow
-            # data = np.genfromtxt(profile, skip_header=5)
-            data = fileToNpArray(profile, skip_header=5)
+                    reemitted[i] = np.array([float(reem.replace('D', 'E')) for reem in file.readline().strip().split()])
+
+                    # numpy genfromtxt is very slow
+                    # data = np.genfromtxt(profile, skip_header=5)
+                    data = fileToNpArray(profile, skip_header=5)
+
+            except FileNotFoundError:
+                continue
 
             layer_depth[i] = data[:, 0]
             atomic_density[i] = data[:, 1]

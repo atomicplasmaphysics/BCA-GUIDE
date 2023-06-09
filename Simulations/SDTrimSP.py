@@ -1802,12 +1802,14 @@ Andreas Mutzke
         version = []
         # checked on sourcecode or if 'src'-directory exists
         source_code = f'{folder}/src/SDTrimSP.F90'  # check sourcecode
-        if path.exists(source_code):
+        try:
             with open(source_code, 'r') as f:
                 for line in f:
                     if line.strip().startswith('avs0 ='):
                         version = [line.split('\'')[1]]  # save as array to we can ask its length
                         break
+        except FileNotFoundError:
+            pass
         if not version and path.exists(f'{folder}/src'):  # search path
             version = findall(r'\d+\.\d+', folder)
         if not version:  # search binary path
@@ -1886,7 +1888,7 @@ Andreas Mutzke
         update_tooltips = False
         if update_tooltips:
             output_variables_doc = f'{folder}/doc/output_files.txt'
-            if path.exists(output_variables_doc):
+            try:
                 with open(output_variables_doc, 'r') as file:
                     for line in file.readlines():
                         content = line.split('.dat')
@@ -1895,10 +1897,12 @@ Andreas Mutzke
 
                         output_file_name = f'{content[0].strip()}.dat'
                         self.OutputTooltips[output_file_name] = content[1].strip()
+            except FileNotFoundError:
+                pass
 
         # update possible input variables
         input_variables_doc = f'{folder}/doc/tri.inp.txt'
-        if path.exists(input_variables_doc):
+        try:
             with open(input_variables_doc, 'r') as file:
                 while file.readline().strip() != 'variable in tri.inp:':
                     continue
@@ -1928,6 +1932,9 @@ Andreas Mutzke
 
                     self.InputParameters.update({variable: data_type})
 
+        except FileNotFoundError:
+            pass
+
     def updateElements(self, folder: str, version: str) -> bool:
         """
         Updates list of <Element> for this simulation
@@ -1938,8 +1945,8 @@ Andreas Mutzke
 
         element_list = []
         table_path = f'{folder}/tables/table1'
-        if path.exists(table_path):
 
+        try:
             # get table contents
             table_str = []
             with open(table_path, 'r', encoding='cp1250') as file:
@@ -2094,6 +2101,9 @@ Andreas Mutzke
                     element_list.insert(-1, element)
                 else:
                     element_list.append(element)
+
+        except FileNotFoundError:
+            pass
 
         if not element_list:
             super().loadDefaultElements(version)
@@ -2533,19 +2543,20 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         input_file = f'{folder}/{self.InputFilename}'
         layer_file = f'{folder}/{self.LayerFilename}'
 
-        if not path.exists(input_file):
-            return False
-
         contents = DeleteDict()
 
         # get all contents from input file
-        with open(input_file, 'r') as file:
-            contents['title'] = file.readline().strip()
-            for line in file.readlines():
-                content = [p.strip() for p in line.strip().split('=')]
-                if len(content) != 2 or content[0] == 'text':
-                    continue
-                contents[content[0]] = content[1]
+        try:
+            with open(input_file, 'r') as file:
+                contents['title'] = file.readline().strip()
+                for line in file.readlines():
+                    content = [p.strip() for p in line.strip().split('=')]
+                    if len(content) != 2 or content[0] == 'text':
+                        continue
+                    contents[content[0]] = content[1]
+
+        except FileNotFoundError:
+            return False
 
         assumed = DefaultAssumed()
         error_list = []
@@ -2776,9 +2787,8 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         structure = []
         if iq0 < 0:
             error_layer = 'Layer file has incorrect format.'
-            if not path.exists(layer_file):
-                error_list.append('No known layer files in this directory, assuming no layer file.')
-            else:
+
+            try:
                 # get all contents from layer file
                 with open(layer_file, 'r') as file:
                     for line in file.readlines():
@@ -2820,6 +2830,9 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                             thickness=segments * thickness_per_segment,
                             abundances=abundances
                         ))
+
+            except FileNotFoundError:
+                error_list.append('No known layer files in this directory, assuming no layer file.')
 
         if not structure:
             abundances = [target.abundance for target in target_rows]
@@ -2919,15 +2932,19 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             return -1
 
         percent = -1
-        with open(f'{save_folder}/{log_file}', 'r') as file:
-            for line in reversed(file.readlines()):
-                data = line.split(' %')
-                if len(data) == 2 and data[0][0] not in ['I', 'W']:
-                    try:
-                        percent = int(data[0][-3:])
-                        break
-                    except (ValueError, IndexError):
-                        pass
+        try:
+            with open(f'{save_folder}/{log_file}', 'r') as file:
+                for line in reversed(file.readlines()):
+                    data = line.split(' %')
+                    if len(data) == 2 and data[0][0] not in ['I', 'W']:
+                        try:
+                            percent = int(data[0][-3:])
+                            break
+                        except (ValueError, IndexError):
+                            pass
+
+        except FileNotFoundError:
+            return -1
 
         # single run
         if not any('001' in file for file in files) or percent < 0:
@@ -2939,15 +2956,19 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             if self.InputFilename not in files:
                 return -1
             sweeps = DefaultValues(version).number_calc
-            with open(f'{save_folder}/{self.InputFilename}', 'r') as file:
-                for line in file.readlines():
-                    if not line.strip().startswith('number_calc'):
-                        continue
-                    try:
-                        sweeps = int(line.split(' = ')[1])
-                        break
-                    except ValueError:
-                        pass
+            try:
+                with open(f'{save_folder}/{self.InputFilename}', 'r') as file:
+                    for line in file.readlines():
+                        if not line.strip().startswith('number_calc'):
+                            continue
+                        try:
+                            sweeps = int(line.split(' = ')[1])
+                            break
+                        except ValueError:
+                            pass
+
+            except FileNotFoundError:
+                return -1
 
             return round((100 * current_sweep + percent) / sweeps)
 
@@ -3329,18 +3350,20 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         target = f'{save_folder}/{file}'
-        if not path.exists(target):
-            return
 
         # data from target file
         self.save_folder = save_folder
-        with open(target, 'r') as file:
-            for i in range(4):
-                file.readline()
-            contents = file.readline().split()
-            ncp = int(contents[2])
-            self.is_dynamic = int(contents[-1]) == 0
-            elements = file.readline().split()
+        try:
+            with open(target, 'r') as file:
+                for i in range(4):
+                    file.readline()
+                contents = file.readline().split()
+                ncp = int(contents[2])
+                self.is_dynamic = int(contents[-1]) == 0
+                elements = file.readline().split()
+
+        except FileNotFoundError:
+            return
 
         # check if both are equal
         if ncp != len(elements):
@@ -3382,11 +3405,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         output = f'{self.save_folder}/output.dat'
-        if not path.exists(output):
-            return
 
-        with open(output, 'r') as file:
-            content = [line.strip().lower() for line in file.readlines()]
+        try:
+            with open(output, 'r') as file:
+                content = [line.strip().lower() for line in file.readlines()]
+
+        except FileNotFoundError:
+            return
 
         # simulation results
         ncp = len(self.elements)
@@ -3598,77 +3623,79 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         serie = f'{self.save_folder}/serie.dat'
-        if not path.exists(serie):
-            return
 
-        with open(serie, 'r') as file:
-            file.readline()
-
-            # line 2: ncp and ncp_proj
-            line_content = file.readline().split()
-            ncp = int(line_content[0])
-            ncp_proj = int(line_content[1])
-
-            file.readline()
-
-            # line 4: elements
-            elements = file.readline().split()[-ncp:]
-
-            file.readline()
-
-            # line 6 - 6+ncp: element data
-            masses = np.zeros(ncp)
-            for i in range(ncp):
-                masses[i] = float(file.readline().split()[2])
-
-            # skip lines starting with '!'
-            line = file.readline()
-            while line.strip().startswith('!'):
-                line = file.readline()
-
-            # line (6+ncp+offset)+0 / +1: number energies / number angles
-            nr_energies = int(line.split()[0])
-            nr_angles = int(file.readline().split()[0])
-            nr_total = nr_angles * nr_energies
-
-            for _ in range(4):
+        try:
+            with open(serie, 'r') as file:
                 file.readline()
 
-            # line (6+ncp+offset)+6: elements list
-            elements_projectiles = []
-            line_elements = file.readline().split()
-            for i in range(ncp_proj):
-                elements_projectiles.append(line_elements[2 * i])
+                # line 2: ncp and ncp_proj
+                line_content = file.readline().split()
+                ncp = int(line_content[0])
+                ncp_proj = int(line_content[1])
 
-            energies = np.zeros(nr_total)
-            angles = np.zeros(nr_total)
-            mean_depth = np.zeros(nr_total)
-            refl_coefficients = np.zeros((nr_total, ncp_proj))
-            energ_refl_coefficients = np.zeros((nr_total, ncp_proj))
-            sputt_coefficients = np.zeros((nr_total, ncp))
-            energ_sputt_coefficients = np.zeros((nr_total, ncp))
+                file.readline()
 
-            expected_line_elements = 3 + 2 * ncp_proj + 2 * ncp
+                # line 4: elements
+                elements = file.readline().split()[-ncp:]
 
-            for i in range(nr_total):
-                line = file.readline().split()
+                file.readline()
 
-                if not line:
-                    break
+                # line 6 - 6+ncp: element data
+                masses = np.zeros(ncp)
+                for i in range(ncp):
+                    masses[i] = float(file.readline().split()[2])
 
-                while len(line) < expected_line_elements:
-                    line.extend(file.readline().split())
+                # skip lines starting with '!'
+                line = file.readline()
+                while line.strip().startswith('!'):
+                    line = file.readline()
 
-                energies[i] = line[0]
-                angles[i] = line[1]
-                mean_depth[i] = line[2]
+                # line (6+ncp+offset)+0 / +1: number energies / number angles
+                nr_energies = int(line.split()[0])
+                nr_angles = int(file.readline().split()[0])
+                nr_total = nr_angles * nr_energies
 
-                for j in range(ncp_proj):
-                    refl_coefficients[i, j] = floatSafe(line[3 + 2 * j], 0)
-                    energ_refl_coefficients[i, j] = floatSafe(line[3 + 2 * j + 1], 0)
-                for j in range(ncp):
-                    sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j], 0)
-                    energ_sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j + 1], 0)
+                for _ in range(4):
+                    file.readline()
+
+                # line (6+ncp+offset)+6: elements list
+                elements_projectiles = []
+                line_elements = file.readline().split()
+                for i in range(ncp_proj):
+                    elements_projectiles.append(line_elements[2 * i])
+
+                energies = np.zeros(nr_total)
+                angles = np.zeros(nr_total)
+                mean_depth = np.zeros(nr_total)
+                refl_coefficients = np.zeros((nr_total, ncp_proj))
+                energ_refl_coefficients = np.zeros((nr_total, ncp_proj))
+                sputt_coefficients = np.zeros((nr_total, ncp))
+                energ_sputt_coefficients = np.zeros((nr_total, ncp))
+
+                expected_line_elements = 3 + 2 * ncp_proj + 2 * ncp
+
+                for i in range(nr_total):
+                    line = file.readline().split()
+
+                    if not line:
+                        break
+
+                    while len(line) < expected_line_elements:
+                        line.extend(file.readline().split())
+
+                    energies[i] = line[0]
+                    angles[i] = line[1]
+                    mean_depth[i] = line[2]
+
+                    for j in range(ncp_proj):
+                        refl_coefficients[i, j] = floatSafe(line[3 + 2 * j], 0)
+                        energ_refl_coefficients[i, j] = floatSafe(line[3 + 2 * j + 1], 0)
+                    for j in range(ncp):
+                        sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j], 0)
+                        energ_sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j + 1], 0)
+
+        except FileNotFoundError:
+            return
 
         return (
             ncp,
@@ -3710,11 +3737,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         depth_file = f'{self.save_folder}/{filename}'
-        if not path.exists(depth_file):
-            return
 
-        with open(depth_file, 'r') as file:
-            content = [line.strip().lower() for line in file.readlines() if line.strip()]
+        try:
+            with open(depth_file, 'r') as file:
+                content = [line.strip().lower() for line in file.readlines() if line.strip()]
+
+        except FileNotFoundError:
+            return
 
         # number of elements
         ncp = int(content[2].split()[0])
@@ -3773,11 +3802,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         damage_file = f'{self.save_folder}/{filename}'
-        if not path.exists(damage_file):
-            return
 
-        with open(damage_file, 'r') as file:
-            content = [line.strip().lower() for line in file.readlines()]
+        try:
+            with open(damage_file, 'r') as file:
+                content = [line.strip().lower() for line in file.readlines()]
+
+        except FileNotFoundError:
+            return
 
         line_content = content[2].split()
         ncp = int(line_content[0])
@@ -3828,25 +3859,30 @@ class SimulationAnalysis(SimulationsAnalysis):
         is_projectile = projectile_or_recoil.startswith('p')
         letter_file_name = 'p' if is_projectile else 'r'
         file_path = f'{self.save_folder}/partic_back_{letter_file_name}.dat'
-        if not path.exists(file_path):
+
+        try:
+            with open(file_path, 'r') as file:
+                for _ in range(4):
+                    file.readline()
+                line_content = file.readline().split()
+                if not all(column in line_content for column in ['cosp', 'cosa', 'end-energy']):
+                    return
+                cosp_idx = line_content.index('cosp')
+                cosa_idx = line_content.index('cosa')
+                end_energy_idx = line_content.index('end-energy')
+
+        except FileNotFoundError:
             return
 
         old_data_len = len(self.particle_back_p_data) if is_projectile else len(self.particle_back_r_data)
 
-        with open(file_path, 'r') as file:
-            for _ in range(4):
-                file.readline()
-            line_content = file.readline().split()
-            if not all(column in line_content for column in ['cosp', 'cosa', 'end-energy']):
-                return
-            cosp_idx = line_content.index('cosp')
-            cosa_idx = line_content.index('cosa')
-            end_energy_idx = line_content.index('end-energy')
-
-        new_particle_file_data = fileToNpArray(file_path,
-                                               skip_header=5 + old_data_len,
-                                               skip_footer=2,
-                                               usecols=(0, cosp_idx, cosa_idx, end_energy_idx))
+        try:
+            new_particle_file_data = fileToNpArray(file_path,
+                                                   skip_header=5 + old_data_len,
+                                                   skip_footer=2,
+                                                   usecols=(0, cosp_idx, cosa_idx, end_energy_idx))
+        except FileNotFoundError:
+            return
 
         if new_particle_file_data.size:
             # Fix the data shape if just a single line was read
@@ -3897,107 +3933,109 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         file_path = f'{self.save_folder}/E0_31_target.dat'
-        if not path.exists(file_path):
-            return
 
         if not self.masses.size:
             self.getOutputFileData()
 
-        with open(file_path, 'r') as file:
-            # skip version header and name of simulation
-            for _ in range(2):
-                file.readline()
-
-            # read global parameter headers
-            while 'nh ' not in file.readline():
-                pass
-
-            global_pars = file.readline().split()
-            maxhist = int(global_pars[0])
-            nqx = int(global_pars[1])
-            ncp = int(global_pars[2])
-            ihist_out = int(global_pars[3])
-
-            # skip element symbols and history step headers
-            for _ in range(17):
-                file.readline()
-
-            # for loop over history steps, set up variables that will be plotted
-            max_hist_step = int(maxhist / ihist_out) + 1
-
-            fluence_array = np.zeros(max_hist_step)
-            surface = np.zeros(max_hist_step)  # surface minimum
-            surface_conc = np.zeros((max_hist_step, ncp))
-            nr_projectiles_array = np.zeros(max_hist_step)  # number of projectiles
-            nr_projectiles_array_per_element = np.zeros((max_hist_step, ncp))  # number of projectiles per element
-            nr_reflected = np.zeros((max_hist_step, ncp))  # number of reflected
-            nr_sputtered = np.zeros((max_hist_step, ncp))  # number of backsputtered
-            nr_reemitted = np.zeros((max_hist_step, ncp))  # number of reemitted projectiles
-            conc_array = np.zeros((max_hist_step, ncp, nqx))  # concentration over depth of each element for each history step
-
-            for hist_counter in range(max_hist_step):
-                # read fluence, surface_min, surface_max
-                hist_pars = file.readline().split()[0:2]
-
-                if not hist_pars:
-                    max_hist_step = hist_counter  # adjust max_hist_step
-                    # cut arrays for plotting
-                    fluence_array = fluence_array[:max_hist_step]
-                    surface = surface[:max_hist_step]
-                    surface_conc = surface_conc[:max_hist_step]
-                    conc_array = conc_array[:max_hist_step]
-                    break
-
-                fluence_array[hist_counter] = float(hist_pars[0])
-                surface[hist_counter] = float(hist_pars[1])
-
-                # read surface atomic fractions
-                surface_conc[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
-                if np.sum(surface_conc[hist_counter]) < 1.:
-                    surface_conc[hist_counter, 0] = 1. - np.sum(surface_conc[hist_counter])
-
-                # skip Momente and areal densitites
+        try:
+            with open(file_path, 'r') as file:
+                # skip version header and name of simulation
                 for _ in range(2):
                     file.readline()
 
-                # read number of projectiles
-                nr_projectiles_array_per_element[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
-                nr_projectiles_array[hist_counter] = np.sum(nr_projectiles_array_per_element[hist_counter, :])
+                # read global parameter headers
+                while 'nh ' not in file.readline():
+                    pass
 
-                # read number of backscattered particles
-                nr_reflected[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+                global_pars = file.readline().split()
+                maxhist = int(global_pars[0])
+                nqx = int(global_pars[1])
+                ncp = int(global_pars[2])
+                ihist_out = int(global_pars[3])
 
-                # skip energy of backscattered particles, and number and energy of transmitted projectiles
-                for _ in range(3):
+                # skip element symbols and history step headers
+                for _ in range(17):
                     file.readline()
 
-                # read number of backsputtered particles
-                nr_sputtered[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+                # for loop over history steps, set up variables that will be plotted
+                max_hist_step = int(maxhist / ihist_out) + 1
 
-                # skip energy of backsputtered particles , and number, energy of transmitted sputtered particles, energy of all projectiles
-                for _ in range(4):
-                    file.readline()
+                fluence_array = np.zeros(max_hist_step)
+                surface = np.zeros(max_hist_step)  # surface minimum
+                surface_conc = np.zeros((max_hist_step, ncp))
+                nr_projectiles_array = np.zeros(max_hist_step)  # number of projectiles
+                nr_projectiles_array_per_element = np.zeros((max_hist_step, ncp))  # number of projectiles per element
+                nr_reflected = np.zeros((max_hist_step, ncp))  # number of reflected
+                nr_sputtered = np.zeros((max_hist_step, ncp))  # number of backsputtered
+                nr_reemitted = np.zeros((max_hist_step, ncp))  # number of reemitted projectiles
+                conc_array = np.zeros((max_hist_step, ncp, nqx))  # concentration over depth of each element for each history step
 
-                # read number of reemitted atoms
-                nr_reemitted[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+                for hist_counter in range(max_hist_step):
+                    # read fluence, surface_min, surface_max
+                    hist_pars = file.readline().split()[0:2]
 
-                # chemical erosion --> not recorded further
-                file.readline()
+                    if not hist_pars:
+                        max_hist_step = hist_counter  # adjust max_hist_step
+                        # cut arrays for plotting
+                        fluence_array = fluence_array[:max_hist_step]
+                        surface = surface[:max_hist_step]
+                        surface_conc = surface_conc[:max_hist_step]
+                        conc_array = conc_array[:max_hist_step]
+                        break
 
-                # read two header lines + depth dependent concentrations
-                if not hist_counter:
+                    fluence_array[hist_counter] = float(hist_pars[0])
+                    surface[hist_counter] = float(hist_pars[1])
+
+                    # read surface atomic fractions
+                    surface_conc[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+                    if np.sum(surface_conc[hist_counter]) < 1.:
+                        surface_conc[hist_counter, 0] = 1. - np.sum(surface_conc[hist_counter])
+
+                    # skip Momente and areal densitites
                     for _ in range(2):
                         file.readline()
 
-                depth_array = np.zeros(nqx)
+                    # read number of projectiles
+                    nr_projectiles_array_per_element[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+                    nr_projectiles_array[hist_counter] = np.sum(nr_projectiles_array_per_element[hist_counter, :])
 
-                for i in range(nqx):
-                    # f.readline()
-                    layer_line = np.array(file.readline().split()).astype(np.float64)
-                    depth_array[i] = layer_line[0]
-                    # read layer concentrations for all ncp elements
-                    for j in range(ncp):
-                        conc_array[hist_counter, j, i] = layer_line[j + 2]
+                    # read number of backscattered particles
+                    nr_reflected[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+
+                    # skip energy of backscattered particles, and number and energy of transmitted projectiles
+                    for _ in range(3):
+                        file.readline()
+
+                    # read number of backsputtered particles
+                    nr_sputtered[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+
+                    # skip energy of backsputtered particles , and number, energy of transmitted sputtered particles, energy of all projectiles
+                    for _ in range(4):
+                        file.readline()
+
+                    # read number of reemitted atoms
+                    nr_reemitted[hist_counter, :] = np.array(file.readline().split()[0:ncp]).astype(np.float64)
+
+                    # chemical erosion --> not recorded further
+                    file.readline()
+
+                    # read two header lines + depth dependent concentrations
+                    if not hist_counter:
+                        for _ in range(2):
+                            file.readline()
+
+                    depth_array = np.zeros(nqx)
+
+                    for i in range(nqx):
+                        # f.readline()
+                        layer_line = np.array(file.readline().split()).astype(np.float64)
+                        depth_array[i] = layer_line[0]
+                        # read layer concentrations for all ncp elements
+                        for j in range(ncp):
+                            conc_array[hist_counter, j, i] = layer_line[j + 2]
+
+        except FileNotFoundError:
+            return
 
         # calculate yields
         reflected_yield = np.zeros((max_hist_step, ncp))  # number of reflected

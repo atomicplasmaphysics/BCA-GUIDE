@@ -2298,9 +2298,13 @@ class SimulationsAnalysis(QObject):
         if not file:
             return
 
-        # numpy genfromtxt is very slow, use own implementation instead
-        # data = np.genfromtxt(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
-        data = fileToNpArray(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
+        try:
+            # numpy genfromtxt is very slow, use own implementation instead
+            # data = np.genfromtxt(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
+            data = fileToNpArray(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
+
+        except FileNotFoundError:
+            return
 
         if not data.size:
             return
