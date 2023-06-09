@@ -20,6 +20,8 @@ from __future__ import annotations
 from typing import Union, Optional, Tuple, List, Callable
 from enum import Enum, auto
 
+from Styles import Styles
+
 from PyQt6.QtCore import Qt, QSize, QRect
 from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
@@ -423,6 +425,7 @@ class FilePath(QWidget):
             self.path.setText(path)
 
 
+# TODO: remove InputHLayout if no longer needed
 class InputHLayout(QHBoxLayout):
     """
     WARNING: deprecated, use InputHBoxLayout instead
@@ -744,17 +747,27 @@ class VBoxTitleLayout(QVBoxLayout):
     :param parent: parent widget
     :param title: title of top line
     :param title_style: style of title line
+    :param title_style_busy: style of title line in busy mode
+    :param busy_symbol: symbol when busy
     :param spacing: spacing of widgets
     :param add_stretch: if bool: addStretch(1) after title if True, else do nothing
                         if integer: addSpacing(addStretch) after title
     """
 
-    def __init__(self, parent, title: str, title_style: str = '', spacing: int = 0,
-                 add_stretch: Union[bool, int] = 0, *args, **kwargs):
+    def __init__(self, parent, title: str, title_style: str = Styles.title_style,
+                 title_style_busy: str = Styles.title_style, busy_symbol: str = '⧖',
+                 spacing: int = 0, add_stretch: Union[bool, int] = 0, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.parent = parent
+        self.title_str = title
+        self.title_style = title_style
+        self.title_style_busy = title_style_busy
+        self.busy_symbol = busy_symbol
+
         self.setSpacing(spacing)
         self.hl = QHBoxLayout()
-        self.title = QLabel(title, parent)
+
+        self.title = QLabel(self.title_str, self.parent)
         self.title.setStyleSheet(title_style)
         self.hl.addWidget(self.title)
 
@@ -764,6 +777,25 @@ class VBoxTitleLayout(QVBoxLayout):
             self.hl.addSpacing(add_stretch)
 
         self.addLayout(self.hl)
+
+    def busy(self, busy: bool = True, busy_text: str = ''):
+        """
+        Title changes when busy
+
+        :param busy: is busy or not
+        :param busy_text: additional busy text displayed in title
+        """
+
+        if busy:
+            if not busy_text:
+                self.title.setText(f'{self.title_str} {self.busy_symbol}')
+            else:
+                self.title.setText(f'{self.title_str} {self.busy_symbol} ({busy_text})')
+            self.title.setStyleSheet(self.title_style_busy)
+
+        else:
+            self.title.setText(self.title_str)
+            self.title.setStyleSheet(self.title_style)
 
 
 class ListWidgetItem(QListWidgetItem):
@@ -819,7 +851,7 @@ class ListWidgetItem(QListWidgetItem):
     def execute(self):
         """Executes the provided function with provided function arguments"""
         if self.function is not None:
-            self.function(**self.function_args)
+            self.function(**self.function_args, text=self.text().strip())
 
     @staticmethod
     def convert(item: Union[QListWidgetItem, ListWidgetItem]) -> ListWidgetItem:

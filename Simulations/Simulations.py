@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QObject, QThread
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
-from Utility.Layouts import ListWidget, MplCanvas
+from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout
 from Utility.Indexing import RepeatingList, ElementList
 from Utility.Functions import getFileNameFromFileList, fileToNpArray
 
@@ -2018,17 +2018,19 @@ class SimulationsOutput(QObject):
 
     # signals
     hlChange = pyqtSignal(dict)
-    analyseFunc = pyqtSignal(str, dict)
+    analyseFunc = pyqtSignal(str, dict, str)
 
     # References to classes
     HlPlot = HlGeneralPlot
 
-    def __init__(self, plot: MplCanvas, element_data: Elements):
+    def __init__(self, plot: MplCanvas, element_data: Elements, title_label: VBoxTitleLayout):
         super().__init__()
 
         self.plot = plot
         self.element_data = element_data
-        self.waits = []
+        self.title_label = title_label
+
+        self.waits = {}
 
         if not hasattr(self, 'analysis'):
             self.analysis = SimulationsAnalysis(element_data)
@@ -2079,13 +2081,14 @@ class SimulationsOutput(QObject):
         self.plot.axes = self.plot.fig.add_subplot(projection='rectilinear')
         self.plot.fig.canvas.draw_idle()
 
-    def analyse(self, plot: str = None, plot_args: dict = None, hide: bool = True):
+    def analyse(self, plot: str = None, plot_args: dict = None, hide: bool = True, text: str = ''):
         """
         Call the analysis function in the thread with function parameters
 
         :param plot: analysis and plot function
         :param plot_args: analysis and plot function parameters as dictionary
         :param hide: hide toolbar
+        :param text: text of analysis function
         """
 
         if plot is None:
@@ -2098,7 +2101,7 @@ class SimulationsOutput(QObject):
             'hide': hide
         })
 
-        self.analyseFunc.emit(plot, plot_args)
+        self.analyseFunc.emit(plot, plot_args, text)
 
     def plotter(self, mpl_setting: MplCanvasSettings, identifier: int):
         """
@@ -2112,28 +2115,32 @@ class SimulationsOutput(QObject):
             return
 
         mpl_setting.apply(self.plot)
-        self.wait(identifier, False)
+        self.wait(identifier, waiting=False)
 
-    def wait(self, identifier: int, waiting: bool = True):
+    def wait(self, identifier: int, text: str = '', waiting: bool = True):
         """
         Waits for identified calculation to be done
 
         :param identifier: identifier of calculation
+        :param text: descriptive text of calculation
         :param waiting: if identifier is awaited or done
         """
 
         if waiting:
-            self.waits.append(identifier)
+            self.waits[identifier] = text
         else:
             try:
-                self.waits.remove(identifier)
-            except ValueError:
+                del self.waits[identifier]
+            except KeyError:
                 pass
 
         # wait cursor
         if len(self.waits) == 0:
+            self.title_label.busy(False)
             QApplication.restoreOverrideCursor()
+
         else:
+            self.title_label.busy(True, list(self.waits.items())[-1][1])
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
     @staticmethod
@@ -2178,7 +2185,7 @@ class SimulationsAnalysis(QObject):
     """
 
     # signals
-    gotSignal = pyqtSignal(int)
+    gotSignal = pyqtSignal(int, str)
     returnSignal = pyqtSignal(MplCanvasSettings, int)
     hlChange = pyqtSignal(dict)
 
@@ -2224,11 +2231,19 @@ class SimulationsAnalysis(QObject):
             return
         self.hlChange.emit(value_dict)
 
-    @pyqtSlot(str, dict)
-    def analyse(self, func: str, func_args: dict):
-        """Executes analysis function if exists"""
+    @pyqtSlot(str, dict, str)
+    def analyse(self, func: str, func_args: dict, text: str):
+        """
+        Executes analysis function if exists
 
-        self.gotSignal.emit(self.counter)
+        :param func: name of analysis function to be executed
+        :param func_args: analysis function arguments
+        :param text: description of analysis function
+        """
+
+        # TODO: maybe a analyse queue
+
+        self.gotSignal.emit(self.counter, text)
 
         # check if func exists and is executable
         analyse_func = getattr(self, func, None)

@@ -27,7 +27,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
 
 from Utility.Layouts import (
-    MplCanvas, InputHBoxLayout, DoubleSpinBox, SpinBox,
+    MplCanvas, InputHBoxLayout, DoubleSpinBox, SpinBox, VBoxTitleLayout,
     SpinBoxRange, LineEdit, ComboBox, ListWidget, ListWidgetItem, setWidgetBackground
 )
 from Utility.Functions import (
@@ -3158,11 +3158,9 @@ multicomponent material systems with a planar surface, and keeps track of the
 dynamic modification of the system due to ion implantation, atomic relocation,
 sputtering and thin film deposition. TRIDYN is based on the binary collision
 approximation.
-
 A practically unlimited number of different atomic species and up to
 20 irradiation/deposition conditions with different incident species, energies
 and angles of incidence may be simultaneously treated.
-
 The code allows to predict 1D compositional and damage profiles, surface
 erosion (when sputtering prevails) or surface extension (when deposition prevails),
 and provides detailed statistics on ion slowing down, recoil transport and
@@ -4533,9 +4531,9 @@ class SimulationOutput(SimulationsOutput):
     # References to classes
     HlPlot = HlPlot
     
-    def __init__(self, plot: MplCanvas, element_data: Elements):
+    def __init__(self, plot: MplCanvas, element_data: Elements, title_label: VBoxTitleLayout):
         self.analysis = SimulationAnalysis(element_data)
-        super().__init__(plot, element_data)
+        super().__init__(plot, element_data, title_label)
 
     def receive(self, value_dict: dict):
         """Receives pyqtSignal -> dict"""

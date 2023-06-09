@@ -28,7 +28,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QSlider
 
 from Utility.Layouts import (
-    MplCanvas, InputHBoxLayout,
+    MplCanvas, InputHBoxLayout, VBoxTitleLayout,
     setWidgetBackground, ListWidget, ListWidgetItem,
     SpinBox, DoubleSpinBox, SpinBoxRange, ComboBox, LineEdit
 )
@@ -2960,9 +2960,9 @@ class SimulationOutput(SimulationsOutput):
     # References to classes
     HlPlot = HlPlot
 
-    def __init__(self, plot: MplCanvas, element_data: Elements):
+    def __init__(self, plot: MplCanvas, element_data: Elements, title_label: VBoxTitleLayout):
         self.analysis = SimulationAnalysis(element_data)
-        super().__init__(plot, element_data)
+        super().__init__(plot, element_data, title_label)
 
     def receive(self, value_dict: dict):
         """Receives pyqtSignal -> dict"""

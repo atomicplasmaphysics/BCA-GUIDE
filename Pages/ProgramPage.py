@@ -101,10 +101,16 @@ class SimulationPage(TabWithToolbar):
             # will never be reached, but useful for autocompletion in editor
             self.simulation_class = SimulationsInput()
 
+        # style elements needed in evaluation class
+        self.plot_vbox = VBoxTitleLayout(self, 'Outputs & plots', add_stretch=False)
         self.output_plot_view = MplCanvas()
 
         # instance of simulation specific evaluation class in folder 'Simulations'
-        self.evaluation_class = self.simulation_configuration.evaluation_class(self.output_plot_view, self.simulation_class.element_data)
+        self.evaluation_class = self.simulation_configuration.evaluation_class(
+            self.output_plot_view,
+            self.simulation_class.element_data,
+            self.plot_vbox
+        )
         if not isinstance(self.evaluation_class, SimulationsOutput):
             exit('Provided evaluation class is not a <SimulationsOutput> class')
             # will never be reached, but useful for autocompletion in editor
@@ -286,7 +292,7 @@ class SimulationPage(TabWithToolbar):
 
         #
         # BEAM SETTINGS
-        self.settings_layout_beam = VBoxTitleLayout(self, 'Beam Settings', Styles.title_style, 2, False)
+        self.settings_layout_beam = VBoxTitleLayout(self, 'Beam Settings', spacing=2, add_stretch=False)
         self.settings_group_layout_beam = QVBoxLayout()
         self.settings_group_layout_beam.setSpacing(5)
         self.settings_group_layout_beam.setContentsMargins(12, 0, 12, 0)
@@ -296,7 +302,7 @@ class SimulationPage(TabWithToolbar):
         self.settings_group_layout_beam.addLayout(self.general_beam_settings)
 
         # Beam composition title and composition
-        self.beam_composition_vbox = VBoxTitleLayout(self, 'Beam composition', Styles.title_style, 0, True)
+        self.beam_composition_vbox = VBoxTitleLayout(self, 'Beam composition', add_stretch=True)
         self.settings_group_layout_beam.addLayout(self.beam_composition_vbox)
 
         self.table_beam = CompTable(
@@ -317,7 +323,7 @@ class SimulationPage(TabWithToolbar):
 
         #
         # TARGET SETTINGS
-        self.target_settings_vbox = VBoxTitleLayout(self, 'Target Settings', Styles.title_style, 2, False)
+        self.target_settings_vbox = VBoxTitleLayout(self, 'Target Settings', spacing=2, add_stretch=False)
         self.settings_group_layout_target = QVBoxLayout()
         self.settings_group_layout_target.setSpacing(5)
         self.settings_group_layout_target.setContentsMargins(12, 6, 12, 6)
@@ -328,7 +334,7 @@ class SimulationPage(TabWithToolbar):
 
         # Target composition + target layers preview
         self.target_composition_preview = QHBoxLayout()
-        self.target_composition_vbox = VBoxTitleLayout(self, 'Target composition', Styles.title_style, 0, True)
+        self.target_composition_vbox = VBoxTitleLayout(self, 'Target composition', add_stretch=True)
         self.target_composition_preview.addLayout(self.target_composition_vbox)
 
         self.table_target = CompTableTarget(
@@ -340,7 +346,7 @@ class SimulationPage(TabWithToolbar):
         self.target_composition_vbox.addWidget(self.table_target)
 
         # Target preview
-        self.target_preview_vbox = VBoxTitleLayout(self, 'Preview', Styles.title_style, 0, 50)
+        self.target_preview_vbox = VBoxTitleLayout(self, 'Preview', add_stretch=50)
         self.target_composition_preview.addLayout(self.target_preview_vbox)
         self.settings_group_layout_target.addLayout(self.target_composition_preview)
 
@@ -350,7 +356,7 @@ class SimulationPage(TabWithToolbar):
 
         # Target layers
         self.target_structure_compounds = QHBoxLayout()
-        self.target_structure_vbox = VBoxTitleLayout(self, 'Target structure', Styles.title_style, 0, True)
+        self.target_structure_vbox = VBoxTitleLayout(self, 'Target structure', add_stretch=True)
         self.target_structure_compounds.addLayout(self.target_structure_vbox)
 
         self.target_layers = TargetLayersTable(self, 100, 100)
@@ -359,7 +365,7 @@ class SimulationPage(TabWithToolbar):
         # Compounds
         self.compound_list = None
         if self.simulation_class.CompoundList:
-            self.target_compound_vbox = VBoxTitleLayout(self, 'Compounds', Styles.title_style, 0, 50)
+            self.target_compound_vbox = VBoxTitleLayout(self, 'Compounds', add_stretch=50)
             self.target_structure_compounds.addLayout(self.target_compound_vbox)
 
             # Compound holder
@@ -384,12 +390,12 @@ class SimulationPage(TabWithToolbar):
 
         #
         # SIMULATION SETTINGS
-        self.simulation_settings_vbox = VBoxTitleLayout(self, 'Simulation Settings', Styles.title_style, 0, False)
+        self.simulation_settings_vbox = VBoxTitleLayout(self, 'Simulation Settings', add_stretch=False)
         self.settings_group_layout_settings = self.simulation_class.VlSimulationSettings(self.simulation_configuration.version)  # QVBoxLayout()
         self.settings_group_layout_settings.setSpacing(5)
 
         # Additional settings
-        self.additional_settings_vbox = VBoxTitleLayout(self, 'Additional Settings', Styles.title_style, 0, False)
+        self.additional_settings_vbox = VBoxTitleLayout(self, 'Additional Settings', add_stretch=False)
         self.check_settings_button = QPushButton(QIcon(':/icons/error_check.png'), '', self)
         self.check_settings_button.setMaximumWidth(50)
         self.check_settings_button.setToolTip('Check the settings for validity')
@@ -433,7 +439,7 @@ class SimulationPage(TabWithToolbar):
 
         # Input File / Input Parameters
         self.parent_widget_file_input = QWidget(self)
-        self.file_input_vbox = VBoxTitleLayout(self, 'INPUT', Styles.title_style, 0, False)
+        self.file_input_vbox = VBoxTitleLayout(self, 'INPUT', add_stretch=False)
         self.input_file_preview = FileEditor(self)
         self.file_input_vbox.addWidget(self.input_file_preview)
         self.parent_widget_file_input.setLayout(self.file_input_vbox)
@@ -441,7 +447,7 @@ class SimulationPage(TabWithToolbar):
 
         # Layer File
         self.parent_widget_file_layer = QWidget(self)
-        self.file_layer_vbox = VBoxTitleLayout(self, 'LAYER FILE', Styles.title_style, 0, False)
+        self.file_layer_vbox = VBoxTitleLayout(self, 'LAYER FILE', add_stretch=False)
         self.layer_file_preview = FileEditor(self)
         self.file_layer_vbox.addWidget(self.layer_file_preview)
         self.parent_widget_file_layer.setLayout(self.file_layer_vbox)
@@ -464,7 +470,7 @@ class SimulationPage(TabWithToolbar):
 
         # List of output files
         self.parent_widget_output_list = QWidget(self)
-        self.output_list_vbox = VBoxTitleLayout(self, 'List of files', Styles.title_style, 0, False)
+        self.output_list_vbox = VBoxTitleLayout(self, 'List of files', add_stretch=False)
         self.refresh_output_files_button = QPushButton(QIcon(':/icons/refresh.png'), '', self)
         self.refresh_output_files_button.setMaximumWidth(50)
         self.refresh_output_files_button.setToolTip('Refresh the list')
@@ -482,7 +488,7 @@ class SimulationPage(TabWithToolbar):
 
         # Preview of selected output file
         self.parent_widget_output_preview = QWidget(self)
-        self.output_preview_vbox = VBoxTitleLayout(self, 'Output file preview', Styles.title_style, 0, False)
+        self.output_preview_vbox = VBoxTitleLayout(self, 'Output file preview', add_stretch=False)
         self.outputFilePreview = FileEditor(self)
         self.output_preview_vbox.addWidget(self.outputFilePreview)
         self.output_preview_line_count = SpinBox(
@@ -516,7 +522,7 @@ class SimulationPage(TabWithToolbar):
 
         # Available data for plotting
         self.parent_widget_plot_list = QWidget(self)
-        self.plot_list_vbox = VBoxTitleLayout(self, 'Available data for plotting', Styles.title_style, 0, False)
+        self.plot_list_vbox = VBoxTitleLayout(self, 'Available data for plotting', add_stretch=False)
         self.refresh_output_parameters_button = QPushButton(QIcon(':/icons/refresh.png'), '', self)
         self.refresh_output_parameters_button.setMaximumWidth(50)
         self.refresh_output_parameters_button.setToolTip('Refresh the list')
@@ -534,8 +540,9 @@ class SimulationPage(TabWithToolbar):
 
         # Output and plots
         self.parent_widget_plot = QWidget(self)
-        self.plot_vbox = VBoxTitleLayout(self, 'Outputs & plots', Styles.title_style, 0, False)
+        # self.plot_vbox = VBoxTitleLayout(self, 'Outputs & plots', add_stretch=False)  # already defined at the top
         self.plot_vbox.title.setMaximumHeight(20)
+        # self.output_plot_view = MplCanvas()  # already set at the top
         self.output_plot_toolbar = NavigationToolbar2QT(self.output_plot_view, self)
         self.plot_vbox.addWidget(self.output_plot_view, stretch=1)
         self.plot_vbox.addWidget(self.output_plot_toolbar)

@@ -118,7 +118,7 @@ class ConfigurationPage(TabWithToolbar):
         # SIMULATION CONFIGURATION
         #
 
-        self.simulation_configuration_vbox = VBoxTitleLayout(self, 'Simulation Configuration', Styles.title_style, 0, False)
+        self.simulation_configuration_vbox = VBoxTitleLayout(self, 'Simulation Configuration', add_stretch=False)
         self.simulation_configuration_group = QVBoxLayout()
         self.simulation_configuration_group.setSpacing(5)
 
@@ -280,7 +280,7 @@ class ConfigurationPage(TabWithToolbar):
         # LIST OF SIMULATION CONFIGURATIONS
         #
 
-        self.simulation_configuration_list_vbox = VBoxTitleLayout(self, 'List of Simulation Configurations', Styles.title_style, 0, False)
+        self.simulation_configuration_list_vbox = VBoxTitleLayout(self, 'List of Simulation Configurations', add_stretch=False)
         self.simulation_configuration_list_group = QVBoxLayout()
 
         # Information
