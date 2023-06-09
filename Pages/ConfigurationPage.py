@@ -899,7 +899,7 @@ class ConfigurationPage(TabWithToolbar):
 
         one_checked = False
         for i in range(self.simulation_configuration_list.count()):
-            if self.simulation_configuration_list.item(i).checkState():
+            if self.simulation_configuration_list.item(i).checkState() == Qt.CheckState.Checked:
                 one_checked = True
                 break
         if not one_checked:
@@ -923,5 +923,5 @@ class ConfigurationPage(TabWithToolbar):
             return
 
         for i in range(self.simulation_configuration_list.count()):
-            if self.simulation_configuration_list.item(i).checkState() and (i - 1) in range(len(self.main_window.simulation_configs)):
+            if self.simulation_configuration_list.item(i).checkState() == Qt.CheckState.Checked and (i - 1) in range(len(self.main_window.simulation_configs)):
                 self.main_window.simulation_configs[i - 1].tab_widget.runSimulation(detached=detached)
