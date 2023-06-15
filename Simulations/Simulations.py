@@ -2018,7 +2018,7 @@ class SimulationsOutput(QObject):
 
     # signals
     hlChange = pyqtSignal(dict)
-    analyseFunc = pyqtSignal(str, dict, str)
+    analyseFunc = pyqtSignal(str, dict, int)
 
     # References to classes
     HlPlot = HlGeneralPlot
@@ -2030,7 +2030,9 @@ class SimulationsOutput(QObject):
         self.element_data = element_data
         self.title_label = title_label
 
-        self.waits = {}
+        self.analyse_queue = []
+        self.waiting = None
+        self.waits_counter = 0
 
         if not hasattr(self, 'analysis'):
             self.analysis = SimulationsAnalysis(element_data)
@@ -2039,7 +2041,6 @@ class SimulationsOutput(QObject):
         # connect signals
         self.analyseFunc.connect(self.analysis.analyse)
         self.analysis.returnSignal.connect(self.plotter)
-        self.analysis.gotSignal.connect(self.wait)
         self.analysis.hlChange.connect(self.emit)
 
         # move to thread and start
@@ -2074,9 +2075,6 @@ class SimulationsOutput(QObject):
     def clearPlotWindow(self):
         """Clears the plot window"""
 
-        # TODO: check when plot window really has to be cleared -> avoid flickering
-        # TODO: maybe also in Pages/ProgramPage.py
-
         self.plot.fig.clf()
         self.plot.axes = self.plot.fig.add_subplot(projection='rectilinear')
         self.plot.fig.canvas.draw_idle()
@@ -2097,11 +2095,33 @@ class SimulationsOutput(QObject):
         if plot_args is None:
             plot_args = {}
 
+        self.analyse_queue.append((self.waits_counter, plot, plot_args, hide, text))
+        self.waits_counter += 1
+
+        self.work_queue()
+
+    def work_queue(self):
+        """
+        Works on analyse_queue
+        """
+
+        if not self.analyse_queue:
+            self.waiting = None
+            return
+
+        if self.waiting is not None:
+            return
+
+        counter, plot, plot_args, hide, text = self.analyse_queue[-1]
+        self.waiting = counter
+        self.analyse_queue = []
+
         self.emit({
             'hide': hide
         })
 
-        self.analyseFunc.emit(plot, plot_args, text)
+        self.wait(counter, text=text, waiting=True)
+        self.analyseFunc.emit(plot, plot_args, counter)
 
     def plotter(self, mpl_setting: MplCanvasSettings, identifier: int):
         """
@@ -2126,21 +2146,17 @@ class SimulationsOutput(QObject):
         :param waiting: if identifier is awaited or done
         """
 
-        if waiting:
-            self.waits[identifier] = text
-        else:
-            try:
-                del self.waits[identifier]
-            except KeyError:
-                pass
-
         # wait cursor
-        if len(self.waits) == 0:
+        if waiting is False:
+            if not identifier == self.waiting:
+                print('Wrong plotting object returned')
+            self.waiting = None
             self.title_label.busy(False)
             QApplication.restoreOverrideCursor()
+            self.work_queue()
 
         else:
-            self.title_label.busy(True, list(self.waits.items())[-1][1])
+            self.title_label.busy(True, text)
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
     @staticmethod
@@ -2185,7 +2201,6 @@ class SimulationsAnalysis(QObject):
     """
 
     # signals
-    gotSignal = pyqtSignal(int, str)
     returnSignal = pyqtSignal(MplCanvasSettings, int)
     hlChange = pyqtSignal(dict)
 
@@ -2195,7 +2210,6 @@ class SimulationsAnalysis(QObject):
         self.data = None
         self.element_data = element_data
         self.save_folder = ''
-        self.counter = 0
 
         self.elements = ElementList()
         self.masses = np.array([])
@@ -2231,19 +2245,15 @@ class SimulationsAnalysis(QObject):
             return
         self.hlChange.emit(value_dict)
 
-    @pyqtSlot(str, dict, str)
-    def analyse(self, func: str, func_args: dict, text: str):
+    @pyqtSlot(str, dict, int)
+    def analyse(self, func: str, func_args: dict, identifier: int):
         """
         Executes analysis function if exists
 
         :param func: name of analysis function to be executed
         :param func_args: analysis function arguments
-        :param text: description of analysis function
+        :param identifier: identifier of analysis function for reference when finished
         """
-
-        # TODO: maybe a analyse queue
-
-        self.gotSignal.emit(self.counter, text)
 
         # check if func exists and is executable
         analyse_func = getattr(self, func, None)
@@ -2254,14 +2264,12 @@ class SimulationsAnalysis(QObject):
             if result is None:
                 mpl_settings = MplCanvasSettings()
                 mpl_settings.axes.set_title('No data')
-                self.returnSignal.emit(mpl_settings, self.counter)
+                self.returnSignal.emit(mpl_settings, identifier)
 
             # return data
             else:
                 self.data, mpl_settings = result
-                self.returnSignal.emit(mpl_settings, self.counter)
-
-            self.counter += 1
+                self.returnSignal.emit(mpl_settings, identifier)
 
         else:
             raise AttributeError(f'Analyse function "{func}" not implemented')

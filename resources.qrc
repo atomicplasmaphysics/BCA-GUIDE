@@ -31,6 +31,9 @@
         <file>icons/convert.png</file>
         <file>icons/up.png</file>
         <file>icons/down.png</file>
+        <file>icons/file.png</file>
+        <file>icons/server.png</file>
+        <file>icons/cloud.png</file>
     </qresource>
 </RCC>
 

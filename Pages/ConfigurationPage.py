@@ -178,9 +178,10 @@ class ConfigurationPage(TabWithToolbar):
         # Simulation path
         self.simulation_folder = FilePath(
             placeholder='Select the main folder of the simulation',
-            function=lambda: self.selectSimFolder(
+            function_loc=lambda: self.selectSimFolder(
                 simulation=self.program_names[self.program.currentIndex()]
             ),
+            icon_loc=QIcon(':/icons/open.png'),
             parent=self
         )
         self.layout_simulation_folder = InputHBoxLayout(
@@ -189,16 +190,16 @@ class ConfigurationPage(TabWithToolbar):
             tooltip='Path of the root folder of the simulation which contains all the content of the simulation program',
             split=split
         )
-        self.simulation_folder.path.textChanged.connect(self.unsavedConfigView)
+        self.simulation_folder.path_display.textChanged.connect(self.unsavedConfigView)
         self.simulation_configuration_group.addLayout(self.layout_simulation_folder)
 
         # Simulation binary path
         self.simulation_binary = FilePath(
             placeholder='Select simulation binary',
-            function=lambda: self.selectSimBinary(
+            function_loc=lambda: self.selectSimBinary(
                 simulation=self.program_names[self.program.currentIndex()]
             ),
-
+            icon_loc=QIcon(':/icons/open.png'),
             parent=self
         )
         self.layout_simulation_binary = InputHBoxLayout(
@@ -207,15 +208,16 @@ class ConfigurationPage(TabWithToolbar):
             tooltip='Path to the executable file of the simulation',
             split=split
         )
-        self.simulation_binary.path.textChanged.connect(self.unsavedConfigView)
+        self.simulation_binary.path_display.textChanged.connect(self.unsavedConfigView)
         self.simulation_configuration_group.addLayout(self.layout_simulation_binary)
 
         # Base save folder path
         self.base_save_folder = FilePath(
             placeholder='Select the main save folder for the simulation',
-            function=lambda: self.selectSaveFolder(
+            function_loc=lambda: self.selectSaveFolder(
                 simulation=self.program_names[self.program.currentIndex()]
             ),
+            icon_loc=QIcon(':/icons/open.png'),
             parent=self
         )
         self.layout_base_save_folder = InputHBoxLayout(
@@ -224,7 +226,7 @@ class ConfigurationPage(TabWithToolbar):
             tooltip='Path of the root folder for saves of this simulation. If left empty the folder will be chosen automatically',
             split=split
         )
-        self.base_save_folder.path.textChanged.connect(self.unsavedConfigView)
+        self.base_save_folder.path_display.textChanged.connect(self.unsavedConfigView)
         self.simulation_configuration_group.addLayout(self.layout_base_save_folder)
 
         # Simulation detected version
@@ -557,9 +559,9 @@ class ConfigurationPage(TabWithToolbar):
         if self.selected_configuration is not None:
             self.title.setText(self.selected_configuration.title)
             self.program.setCurrentIndex(self.selected_configuration.program)
-            self.simulation_folder.path.setText(self.selected_configuration.folder)
-            self.simulation_binary.path.setText(self.selected_configuration.binary)
-            self.base_save_folder.path.setText(self.selected_configuration.base_save_folder)
+            self.simulation_folder.setPath(self.selected_configuration.folder, ssh=False)
+            self.simulation_binary.setPath(self.selected_configuration.binary, ssh=False)
+            self.base_save_folder.setPath(self.selected_configuration.base_save_folder, ssh=False)
             self.getVersions()
             self.versions.setCurrentText(self.selected_configuration.version)
             # self.detected_simulation.setText(f'<b>{self.selected_configuration.version}</b>')
@@ -605,9 +607,9 @@ class ConfigurationPage(TabWithToolbar):
 
         title = self.title.text()
         program = self.program.currentIndex()
-        folder = self.simulation_folder.path.text()
-        binary = self.simulation_binary.path.text()
-        base_save_folder = self.base_save_folder.path.text()
+        folder = self.simulation_folder.path
+        binary = self.simulation_binary.path
+        base_save_folder = self.base_save_folder.path
         self.tryParseSimVersion()
         version = self.versions.itemText(self.versions.currentIndex())
         version_detected = self.detected_simulation.text()
@@ -736,8 +738,8 @@ class ConfigurationPage(TabWithToolbar):
 
         self.title.setText('')
         self.program.setCurrentIndex(0)
-        self.simulation_folder.path.setText('')
-        self.simulation_binary.path.setText('')
+        self.simulation_folder.setPath('', ssh=False)
+        self.simulation_binary.setPath('', ssh=False)
         self.saveFolderChanged()
         self.detected_simulation.setText('<b>unknown</b>')
         self.description_logo.hide()
@@ -828,10 +830,10 @@ class ConfigurationPage(TabWithToolbar):
         # Starting directory
         if self.selected_configuration is not None:
             start_dir = self.selected_configuration.binary
-        elif self.simulation_binary.path.text():
-            start_dir = self.simulation_binary.path.text()
-        elif self.simulation_folder.path.text():
-            start_dir = self.simulation_folder.path.text()
+        elif self.simulation_binary.path:
+            start_dir = self.simulation_binary.path
+        elif self.simulation_folder.path:
+            start_dir = self.simulation_folder.path
         else:
             start_dir = QDir.currentPath()
         allowed_filetypes = ''
@@ -851,7 +853,7 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         # Starting directory
-        start_dir = self.base_save_folder.path.text()
+        start_dir = self.base_save_folder.path
         if not start_dir:
             start_dir = GlobalConf.save_path
         if not start_dir:
@@ -870,13 +872,13 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         default_save_folder = SimulationsList().simulation_program_list[self.program.currentIndex()].SaveFolder
-        self.base_save_folder.path.setText(f'{GlobalConf.save_path}/{default_save_folder}')
+        self.base_save_folder.setPath(f'{GlobalConf.save_path}/{default_save_folder}', ssh=False)
 
     def tryParseSimVersion(self):
         """Try to get Simulation name and version"""
 
-        folder = self.simulation_folder.path.text()
-        binary = self.simulation_binary.path.text()
+        folder = self.simulation_folder.path
+        binary = self.simulation_binary.path
         simulation_programs = SimulationsList().simulation_program_list
         version = 'unknown'
         self.detected_program = 0

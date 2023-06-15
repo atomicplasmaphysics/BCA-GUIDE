@@ -928,7 +928,7 @@ class SimulationPage(TabWithToolbar):
                 cmd = f'start /wait cmd /k "{cmd}"'
                 Popen(cmd, shell=True)
 
-            elif system() in ['Linux', 'Darwin']:
+            elif system() == 'Linux':
                 terminal_cmds = [
                     f'gnome-terminal -t {self.simulation_configuration.title} -- bash -c \'{cmd}; exec bash\'',
                     f'xterm -T {self.simulation_configuration.title} -e bash -c \'{cmd}; exec bash\'',
@@ -951,6 +951,10 @@ class SimulationPage(TabWithToolbar):
 
                 else:
                     Popen(cmd, shell=True)
+
+            elif system() == 'Darwin':
+                cmd = f'osascript -e \'tell app "Terminal" to do script "{cmd}"\''
+                Popen(cmd, shell=True)
 
             else:
                 self.main_window.writeStatusBar(f'OS {system()} not supported in detached mode')

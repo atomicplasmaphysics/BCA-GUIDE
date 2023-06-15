@@ -2929,7 +2929,19 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         log_file = 'time_run.dat'
 
         if log_file not in files:
-            return -1
+            process_log_packages = process_log.split('%')
+            if len(process_log_packages) < 2:
+                return -1
+            percentage = ''
+            for char in process_log_packages[-2].strip()[::-1]:
+                if char.isnumeric():
+                    percentage += char
+                else:
+                    break
+            try:
+                return int(percentage[::-1])
+            except ValueError:
+                return -1
 
         percent = -1
         try:

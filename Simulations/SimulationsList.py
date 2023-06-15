@@ -95,7 +95,7 @@ class SimulationsList:
                     SimulationsList.simulation_evaluation_list.append(mod.SimulationOutput)
                     SimulationsList.simulation_program_names.append(mod.SimulationInput.Name)
                     SimulationsList.simulation_program_versions[mod.SimulationInput.Name] = mod.SimulationInput.Versions
-                    SimulationsList.simulation_program_description.append(mod.SimulationInput.Description)
+                    SimulationsList.simulation_program_description.append(mod.SimulationInput.Description.strip())
                     SimulationsList.simulation_program_logo.append(mod.SimulationInput.Logo)
                     SimulationsList.simulation_program_about.append(mod.SimulationInput.About)
                     SimulationsList.input_files.append(mod.SimulationInput.InputFilename)

@@ -3165,7 +3165,8 @@ The code allows to predict 1D compositional and damage profiles, surface
 erosion (when sputtering prevails) or surface extension (when deposition prevails),
 and provides detailed statistics on ion slowing down, recoil transport and
 ion mixing, sputtering and vacuum/solid transitions. It may also be run
-in static mode.'''
+in static mode.
+'''
     Logo = ':icons/aboutlogo_hzdr.png'
     About = '''
 Wolfhard Möller

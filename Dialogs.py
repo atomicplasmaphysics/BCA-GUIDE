@@ -18,14 +18,16 @@
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QDialog, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QComboBox,
-    QLineEdit, QWidget, QDialogButtonBox, QCheckBox, QPushButton, QFileDialog
+    QDialog, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget,
+    QWidget, QDialogButtonBox, QCheckBox, QFileDialog, QComboBox
 )
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QIcon
 
 from GlobalConf import GlobalConf
 
 from Simulations.SimulationsList import SimulationsList
+
+from Utility.Layouts import InputHBoxLayout, FilePath
 
 
 class ManualDialog(QDialog):
@@ -178,21 +180,20 @@ class PreferencesDialog(QDialog):
         self.setLayout(self.layout)
 
         # Path (relative)
-        self.save_path_hbox = QHBoxLayout()
-        self.save_path_hbox.addWidget(QLabel('Save folder:', self))
-        self.label_path = QLineEdit(self)
-        self.label_path.setPlaceholderText('Select path to the default save folder')
-        self.label_path.setReadOnly(True)
-        self.label_path.setMinimumWidth(300)
-        self.label_path.setText(GlobalConf.save_path)
-        self.label_path.setToolTip('The path to the default save folder, where all output data will be stored')
-        self.save_path_hbox.addWidget(self.label_path)
-        self.button_path = QPushButton('...', self)
-        self.button_path.setMinimumSize(40, 10)
-        self.button_path.setMaximumSize(40, 30)
-        self.save_path_hbox.addWidget(self.button_path)
-        self.button_path.clicked.connect(lambda: self.selectSaveFolder())
-        self.layout.addLayout(self.save_path_hbox)
+        self.save_path = FilePath(
+            placeholder='Select path to the default save folder',
+            function_loc=self.selectSaveFolder,
+            icon_loc=QIcon(':/icons/open.png'),
+            parent=self
+        )
+        self.layout_save_path = InputHBoxLayout(
+            'Simulation folder:',
+            self.save_path,
+            tooltip='The path to the default save folder, where all output data will be stored',
+            split=0
+        )
+        self.save_path.setPath(GlobalConf.save_path)
+        self.layout.addLayout(self.layout_save_path)
 
         # Default element table warning
         self.skip_element_info = QCheckBox('Skip the element table warning when the used simulation does not provide used element data', self)
@@ -235,16 +236,17 @@ class PreferencesDialog(QDialog):
 
     def selectSaveFolder(self):
         """Select a default save folder"""
+
         start_dir = GlobalConf.save_path
         folder_dir = QFileDialog.getExistingDirectory(self, 'Select the default save folder', start_dir)
 
         if folder_dir:
-            self.label_path.setText(folder_dir)
+            self.save_path.setPath(folder_dir)
 
     def updatePreferences(self):
         """Updates all preferences"""
 
-        GlobalConf.save_path = self.label_path.text()
+        GlobalConf.save_path = self.save_path.path
 
         GlobalConf.skip_element_info = self.skip_element_info.isChecked()
         GlobalConf.skip_delete_info = self.skip_delete_info.isChecked()

@@ -23,7 +23,7 @@ from enum import Enum, auto
 from Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect
-from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor
+from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
@@ -174,7 +174,7 @@ class SpinBox(QSpinBox):
     :param buttons: (optional) if buttons for increasing/decreasing should be displayed
     """
 
-    def __init__(self, default: float = 0, step_size: int = None, input_range: Tuple[float, float] = None,
+    def __init__(self, default: Union[float, int] = 0, step_size: int = None, input_range: Tuple[float, float] = None,
                  scroll: bool = False, buttons: bool = False, **kwargs):
         super().__init__(**kwargs)
 
@@ -285,6 +285,25 @@ class LineEdit(QLineEdit):
         self.setText(self.default)
 
 
+class PasswordLineEdit(QLineEdit):
+    """
+    Extension of QLineEdit
+
+    :param placeholder: (optional) placeholder text
+    """
+
+    def __init__(self, placeholder: str = None, **kwargs):
+        super().__init__(**kwargs)
+        self.setEchoMode(QLineEdit.EchoMode.Password)
+
+        if placeholder is not None:
+            self.setPlaceholderText(placeholder)
+
+    def reset(self):
+        """Resets itself to empty password"""
+        self.setText('')
+
+
 class ComboBox(QComboBox):
     """
     Extension of QComboBox
@@ -388,41 +407,101 @@ class ComboBox(QComboBox):
 
 class FilePath(QWidget):
     """
-    Extension of QLineEdit for selecting and displaying a file path
+    Extension of QLineEdit for selecting and displaying a file path local and remote
 
     :param placeholder: (optional) placeholder text
-    :param function: (optional) function that will be called when button is pressed.
-                                Return value of the function will be displayed.
+    :param function_loc: (optional) function that will be called when local button is pressed.
+                                    Return value of the function will be displayed.
+    :param icon_loc: (optional) icon of pushbutton for local file
+    :param function_ssh: (optional) function that will be called when ssh button is pressed.
+                                    Return value of the function will be displayed.
+    :param icon_ssh: (optional) icon of pushbutton for ssh file
     """
 
-    def __init__(self, placeholder: str = None, function: Callable = None, **kwargs):
+    def __init__(self, placeholder: str = None, function_loc: Callable = None, icon_loc: QIcon = None,
+                 function_ssh: Callable = None, icon_ssh: QIcon = None, **kwargs):
         super().__init__(**kwargs)
 
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
 
-        self.path = QLineEdit()
+        self.path = ''
+        self.ssh = False
+
+        self.path_display = QLineEdit()
         if placeholder is not None:
-            self.path.setPlaceholderText(placeholder)
-        self.path.setReadOnly(True)
-        self.path.setMinimumWidth(300)
-        self.layout.addWidget(self.path, Qt.AlignmentFlag.AlignLeft)
+            self.path_display.setPlaceholderText(placeholder)
+        self.path_display.setReadOnly(True)
+        self.path_display.setMinimumWidth(300)
+        self.layout.addWidget(self.path_display, Qt.AlignmentFlag.AlignLeft)
 
-        self.button = QPushButton('...')
-        self.button.setMinimumSize(40, 10)
-        self.button.setMaximumSize(40, 30)
-        self.layout.addWidget(self.button, Qt.AlignmentFlag.AlignRight)
+        self.function_loc = function_loc
+        self.button_loc = QPushButton()
+        if self.function_loc is not None:
+            if icon_loc is None:
+                self.button_loc.setText('...')
+            else:
+                self.button_loc.setIcon(icon_loc)
+            self.button_loc.setMinimumSize(40, 10)
+            self.button_loc.setMaximumSize(40, 30)
+            self.layout.addWidget(self.button_loc, Qt.AlignmentFlag.AlignRight)
 
-        self.function = function
-        if function is not None:
-            self.button.clicked.connect(self.select_path)
+            self.button_loc.clicked.connect(self.select_path_loc)
 
-    def select_path(self):
-        """Sets a new path"""
-        path = self.function()
+        self.function_ssh = function_ssh
+        self.button_ssh = QPushButton()
+        if self.function_ssh is not None:
+            if icon_loc is None:
+                self.button_ssh.setText('...')
+            else:
+                self.button_ssh.setIcon(icon_ssh)
+            self.button_ssh.setMinimumSize(40, 10)
+            self.button_ssh.setMaximumSize(40, 30)
+            self.layout.addWidget(self.button_ssh, Qt.AlignmentFlag.AlignRight)
+
+            self.button_ssh.clicked.connect(self.select_path_ssh)
+
+    def setPath(self, path: str, ssh: bool = False):
+        """Sets a path and whether it is ssh"""
+        self.path = path
+        self.ssh = ssh
+        self.displayPath()
+
+    def displayPath(self):
+        """Displays the path in QLineEdit"""
+        if not self.path:
+            self.path_display.setText('')
+            return
+
+        if self.function_ssh is None:
+            self.path_display.setText(self.path)
+        else:
+            prefix = 'ssh' if self.ssh else 'local'
+            self.path_display.setText(f'{prefix}: {self.path}')
+
+    def setToolTip(self, tooltip: str):
+        """Sets a tooltip"""
+        super().setToolTip(tooltip)
+        if self.function_ssh is not None:
+            self.button_loc.setToolTip('<i>Local directory</i>\n' + tooltip)
+            self.button_ssh.setToolTip('<i>SSH directory</i>\n' + tooltip)
+
+    def select_path_loc(self):
+        """Sets a new local path"""
+        path = self.function_loc()
         if path is not None:
-            self.path.setText(path)
+            self.path = path
+            self.ssh = False
+            self.displayPath()
+
+    def select_path_ssh(self):
+        """Sets a new ssh path"""
+        path = self.function_ssh()
+        if path is not None:
+            self.path = path
+            self.ssh = True
+            self.displayPath()
 
 
 # TODO: remove InputHLayout if no longer needed
