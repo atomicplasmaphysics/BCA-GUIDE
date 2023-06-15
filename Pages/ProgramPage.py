@@ -98,8 +98,6 @@ class SimulationPage(TabWithToolbar):
         self.simulation_class = self.simulation_configuration.program_class()
         if not isinstance(self.simulation_class, SimulationsInput):
             exit('Provided simulation class is not a <SimulationsInput> class')
-            # will never be reached, but useful for autocompletion in editor
-            self.simulation_class = SimulationsInput()
 
         # style elements needed in evaluation class
         self.plot_vbox = VBoxTitleLayout(self, 'Outputs & plots', add_stretch=False)
@@ -113,8 +111,6 @@ class SimulationPage(TabWithToolbar):
         )
         if not isinstance(self.evaluation_class, SimulationsOutput):
             exit('Provided evaluation class is not a <SimulationsOutput> class')
-            # will never be reached, but useful for autocompletion in editor
-            self.evaluation_class = SimulationsOutput(self.output_plot_view, self.simulation_class.element_data, self.plot_vbox)
 
         if not self.simulation_configuration.base_save_folder:
             self.simulation_configuration.base_save_folder = f'{GlobalConf.save_path}/{self.simulation_class.SaveFolder}'

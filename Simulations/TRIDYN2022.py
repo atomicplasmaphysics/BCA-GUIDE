@@ -3855,7 +3855,7 @@ fout {idfout} {iddout} {idqout}{output}
                 contents = [line.strip() for line in file.readlines() if line.strip()]
 
         except FileNotFoundError:
-            return
+            return False
 
         # obligatory input needs to be provided
         if len(contents) < 5:
@@ -5320,7 +5320,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         element, count = np.unique(data[:, 0], return_counts=True)
 
-        result = [None] * len(self.elements)
+        result: List[Optional[Tuple]] = [None] * len(self.elements)
 
         for e in element:
             i = int(e) - 1
@@ -5358,7 +5358,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         element, count = np.unique(data[:, 0], return_counts=True)
 
-        result = [None] * len(self.elements)
+        result: List[Optional[Tuple]] = [None] * len(self.elements)
 
         for e in element:
             i = int(e) - 1
@@ -5393,7 +5393,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         if len(self.scattered_data) != len(self.elements):
-            self.scattered_data = [None] * len(self.elements)
+            self.scattered_data: List[Optional[Tuple]] = [None] * len(self.elements)
 
         old_length = 0
         for sd in self.scattered_data:
@@ -5455,7 +5455,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         if len(self.sputtered_data) != len(self.elements):
-            self.sputtered_data = [None] * len(self.elements)
+            self.sputtered_data: List[Optional[Tuple]] = [None] * len(self.elements)
 
         old_length = 0
         for sd in self.sputtered_data:

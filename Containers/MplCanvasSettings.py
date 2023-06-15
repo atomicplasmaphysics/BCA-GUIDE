@@ -16,7 +16,7 @@
 # https://www.gnu.org/licenses/.
 
 
-from typing import Tuple
+from typing import Tuple, Union
 
 from Utility.Layouts import MplCanvas
 from matplotlib.figure import Figure
@@ -62,8 +62,8 @@ class MplCanvasSettings:
 
     def __init__(self):
         # Logger() has wrong data type, but the python editor will suggest hints for Figure and Axes
-        self.fig: Figure = Logger()
-        self.axes: Axes = Logger()
+        self.fig: Union[Figure, Logger] = Logger()
+        self.axes: Union[Axes, Logger] = Logger()
         pass
 
     def get_calls(self) -> Tuple[list, list]:

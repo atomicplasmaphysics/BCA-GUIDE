@@ -45,7 +45,7 @@ class HoverLabel(QLabel):
         super().__init__(parent)
         self.element = None
 
-    def enterEvent(self, event):
+    def enterEvent(self, event=None):
         """
         Mouse over
 
@@ -563,7 +563,7 @@ class PeriodicTableDialog(QDialog):
         for widget in self.element_widgets:
             if widget.isEnabled():
                 widget.borderForSelectedElement('#808080')
-                widget.enterEvent(None)
+                widget.enterEvent()
                 self.last_selected_element = widget
                 if len(self.element_data.getIsotopes(widget.element.atomic_nr)) > 1:
                     self.setChosenElement(widget)
