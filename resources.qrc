@@ -34,6 +34,7 @@
         <file>icons/file.png</file>
         <file>icons/server.png</file>
         <file>icons/cloud.png</file>
+        <file>icons/terminal.png</file>
     </qresource>
 </RCC>
 

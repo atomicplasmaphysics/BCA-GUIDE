@@ -27,7 +27,7 @@ from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem
+    QListWidget, QListWidgetItem, QFrame
 )
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
@@ -296,12 +296,31 @@ class PasswordLineEdit(QLineEdit):
         super().__init__(**kwargs)
         self.setEchoMode(QLineEdit.EchoMode.Password)
 
+        self.hbox = QHBoxLayout()
+        self.hbox.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.hbox.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.hbox)
+
+        self.clear_button = QPushButton('👁')
+        self.clear_button.setToolTip('Show or hide password')
+        self.clear_button.setMinimumSize(30, 20)
+        self.clear_button.setMaximumSize(30, 30)
+        self.clear_button.clicked.connect(self.toggleEchoMode)
+        self.hbox.addWidget(self.clear_button, alignment=Qt.AlignmentFlag.AlignRight)
+
         if placeholder is not None:
             self.setPlaceholderText(placeholder)
 
     def reset(self):
         """Resets itself to empty password"""
         self.setText('')
+
+    def toggleEchoMode(self):
+        """Toggles echo mode"""
+        if self.echoMode() == QLineEdit.EchoMode.Password:
+            self.setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            self.setEchoMode(QLineEdit.EchoMode.Password)
 
 
 class ComboBox(QComboBox):
@@ -875,6 +894,46 @@ class VBoxTitleLayout(QVBoxLayout):
         else:
             self.title.setText(self.title_str)
             self.title.setStyleSheet(self.title_style)
+
+
+class HBoxSeperatorLayout(QHBoxLayout):
+    """
+    Class providing a QHBoxLayout that acts as labeled
+
+    :param label: title of top line
+    :param sunken: (optional) sunken effect
+    :param raised: (optional) raised effect (overwrites sunken)
+    """
+
+    def __init__(self, label: str, sunken: bool = False, raised: bool = False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Add the separator before
+        self.separator_frame_before = QFrame()
+        self.separator_frame_before.setFrameShape(QFrame.Shape.HLine)
+        if sunken:
+            self.separator_frame_before.setFrameShadow(QFrame.Shadow.Sunken)
+        if raised:
+            self.separator_frame_before.setFrameShadow(QFrame.Shadow.Raised)
+        self.addWidget(self.separator_frame_before, stretch=100)
+
+        # No label
+        if not label:
+            return
+
+        # Add label
+        self.separator_label = QLabel(label)
+        self.separator_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.addWidget(self.separator_label, stretch=1)
+
+        # Add the separator after
+        self.separator_frame_after = QFrame()
+        self.separator_frame_after.setFrameShape(QFrame.Shape.HLine)
+        if sunken:
+            self.separator_frame_after.setFrameShadow(QFrame.Shadow.Sunken)
+        if raised:
+            self.separator_frame_after.setFrameShadow(QFrame.Shadow.Raised)
+        self.addWidget(self.separator_frame_after, stretch=100)
 
 
 class ListWidgetItem(QListWidgetItem):
