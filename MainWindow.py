@@ -60,7 +60,6 @@ class MainWindow(QMainWindow):
         QCoreApplication.setApplicationName(GlobalConf.title)
 
         super().__init__()
-        self.setWindowIcon(QIcon(':/icons/tu_logo.png'))
         self.window_title = GlobalConf.title
 
         #
@@ -460,7 +459,8 @@ class MainWindow(QMainWindow):
 
     def openUserManual(self):
         """Opens the user-manual of the GUI"""
-        url = QUrl(f'{self.manual_path}/BCA-GUIDE_manual.pdf')
+
+        url = QUrl.fromLocalFile(f'{self.manual_path}/BCA-GUIDE_manual.pdf')
         opened = QDesktopServices.openUrl(url)
 
         # if failed to open, try to download it

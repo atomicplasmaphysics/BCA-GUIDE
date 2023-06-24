@@ -4489,7 +4489,7 @@ fout {idfout} {iddout} {idqout}{output}
         """
 
         return (
-            f'"{binary}"',
+            binary,
             True,
             f'"{binary}" < "{save_folder}/{input_file}"'
         )

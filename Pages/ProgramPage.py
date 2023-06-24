@@ -27,7 +27,7 @@ from re import sub
 from subprocess import Popen, getstatusoutput
 
 from PyQt6.QtCore import Qt, QUrl, QDir, QFile, QFileInfo, QProcess, QTimer
-from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices
+from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices, QPalette, QColor
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox,
     QSizePolicy, QPushButton, QListWidget, QAbstractItemView, QProgressBar,
@@ -415,7 +415,15 @@ class SimulationPage(TabWithToolbar):
         self.settings_scroll_area = QScrollArea(self)
         self.settings_group_settings = QGroupBox(self)
         self.settings_group_settings.setLayout(self.settings_group_layout_settings)
-        self.settings_group_settings.setStyleSheet('QGroupBox { background-color: white; }')
+
+        self.settings_group_settings_palette = self.settings_group_settings.palette()
+        self.settings_group_settings_palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+        self.settings_group_settings.setPalette(self.settings_group_settings_palette)
+
+        self.settings_scroll_area_palette = self.settings_scroll_area.palette()
+        self.settings_scroll_area_palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+        self.settings_scroll_area.setPalette(self.settings_scroll_area_palette)
+
         self.settings_scroll_area.setWidgetResizable(True)
         self.settings_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.settings_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -917,7 +925,8 @@ class SimulationPage(TabWithToolbar):
             # pipe in file if needed
             if qpipe:
                 self.process.setStandardInputFile(f'{self.simulation_configuration.save_folder}/{input_file}')
-            self.process.start(qcmd)
+            self.process.setProgram(qcmd)
+            self.process.start()
 
         else:
             if system() == 'Windows':
@@ -949,7 +958,21 @@ class SimulationPage(TabWithToolbar):
                     Popen(cmd, shell=True)
 
             elif system() == 'Darwin':
-                cmd = f'osascript -e \'tell app "Terminal" to do script "{cmd}"\''
+                cmd = f'''
+dir='{self.simulation_configuration.save_folder}'
+cmd='{cmd}'
+osascript - "$dir" "$cmd" << EOF
+    on run argv
+        tell application "Terminal"
+            set newWindow to do script ""
+            activate
+            set custom title of newWindow to "{self.simulation_configuration.title}"
+            do script ("cd " & quoted form of item 1 of argv) in newWindow
+            do script (item 2 of argv) in newWindow
+        end tell
+    end run
+EOF
+'''.strip()
                 Popen(cmd, shell=True)
 
             else:
@@ -1482,15 +1505,16 @@ class SimulationPage(TabWithToolbar):
     def processError(self, error):
         """Called when process runs into an error"""
 
-        errors = {
-            0: 'QProcess::FailedToStart',
-            1: 'QProcess::Crashed',
-            2: 'QProcess::Timed out',
-            3: 'QProcess::WriteError',
-            4: 'QProcess::ReadError',
-            5: 'QProcess::UnknownError'
-        }
-        error = errors.get(error)
+        if isinstance(error, int):
+            errors = {
+                0: 'QProcess::FailedToStart',
+                1: 'QProcess::Crashed',
+                2: 'QProcess::Timed out',
+                3: 'QProcess::WriteError',
+                4: 'QProcess::ReadError',
+                5: 'QProcess::UnknownError'
+            }
+            error = errors.get(error)
 
         self.main_window.writeStatusBar(f'{self.simulation_configuration.program_name} ERROR: {error}')
         self.simulation_output.appendPlainText(f'\n\nAn error occurred: {error}')

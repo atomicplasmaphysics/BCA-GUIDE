@@ -1989,7 +1989,7 @@ class SimulationsInput:
         """
 
         return (
-            f'"{binary}"',
+            binary,
             False,
             f'"{binary}"'
         )
