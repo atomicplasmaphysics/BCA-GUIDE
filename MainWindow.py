@@ -25,9 +25,7 @@ from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
 import resources
 
 from GlobalConf import GlobalConf
-from Dialogs import AboutDialog, ManualDialog, PreferencesDialog
-
-from Utility.Dialogs import selectFileDialog, showMessageBox, DownloadDialog
+from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
 
 from Pages.ConfigurationPage import ConfigurationPage
 from Pages.ProgramPage import SimulationPage
