@@ -1007,7 +1007,7 @@ class FileEditor(QPlainTextEdit):
     def __init__(self, parent, line_numbering: bool = True, readonly: bool = True,
                  mono: bool = True, offset: int = 0, highlighting: bool = True,
                  color_line_number: QColor = QColor('#EEEEEE'), color_line_number_dark: QColor = QColor('#464646'),
-                 color_highlight: QColor = QColor('#FFFEC8'), color_highlight_dark: QColor = QColor('#919173')):
+                 color_highlight: QColor = QColor('#FFFEC8'), color_highlight_dark: QColor = QColor('#00003F')):
         super().__init__(parent)
         self.line_numbering = line_numbering
         self.offset = offset

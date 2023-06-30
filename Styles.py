@@ -61,6 +61,7 @@ class Styles:
             qproperty-alignment: AlignCenter;
             font-size: 25px;
             font-style: italic;
+            color: #000000;
             background-color: {lightblue_hex};
         }}
     '''

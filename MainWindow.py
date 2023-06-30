@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
             frame_geometry = self.frameGeometry()
             center_point = QPoint(x, y)
             if x == y == 0:
-                center_point = QGuiApplication.screens()[0].availableVirtualGeometry().center()
+                center_point = QGuiApplication.primaryScreen().availableVirtualGeometry().center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 

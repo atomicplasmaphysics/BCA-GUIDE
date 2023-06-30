@@ -73,9 +73,11 @@ system_name = system()
 if system_name == 'Windows':
     exe_name += '_windows.exe'
 elif system_name == 'Linux':
-    exe_name += '_linux.exe'
+    exe_name += '_linux'
+elif system_name == 'Darwin':
+    exe_name += '_mac.app'
 else:
-    exe_name += f'_{system_name}.exe'
+    exe_name += f'_{system_name.lower()}.exe'
 divider = ';' if system_name == 'Windows' else ':'
 pyinstaller_parameters = [
     f'{parent_dir}/main.py',

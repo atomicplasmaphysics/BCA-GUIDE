@@ -63,7 +63,7 @@ class TargetLayersRow(CustomRow):
 
         self.edit_button = QWidget()
         self.edit_button_hl = QHBoxLayout()
-        self.edit_button_hl.setSpacing(0)
+        self.edit_button_hl.setSpacing(2)
         self.edit_button_hl.setContentsMargins(0, 0, 0, 0)
         self.edit_button_hl.addStretch(1)
 
@@ -71,11 +71,9 @@ class TargetLayersRow(CustomRow):
         self.edit_button_hl.addStretch(1)
 
         self.move_top = QPushButton(QIcon(':/icons/up.png'), '')
-        self.move_top.setFixedSize(30, 15)
         self.move_top.setToolTip('Move this layer up')
 
         self.move_bottom = QPushButton(QIcon(':/icons/down.png'), '')
-        self.move_bottom.setFixedSize(30, 15)
         self.move_bottom.setToolTip('Move this layer down')
 
         self.move_top_bottom_button = QWidget()
@@ -83,12 +81,9 @@ class TargetLayersRow(CustomRow):
         self.move_top_bottom_button_vl = QVBoxLayout()
         self.move_top_bottom_button_vl.setSpacing(0)
         self.move_top_bottom_button_vl.setContentsMargins(0, 0, 0, 0)
-        self.move_top_bottom_button_vl.addWidget(self.move_top)
-        self.move_top_bottom_button_vl.addWidget(self.move_bottom)
+        self.move_top_bottom_button_vl.addWidget(self.move_top, 1)
+        self.move_top_bottom_button_vl.addWidget(self.move_bottom, 1)
         self.move_top_bottom_button.setLayout(self.move_top_bottom_button_vl)
-
-        self.edit_button_hl.addWidget(self.move_top_bottom_button)
-        self.edit_button_hl.addStretch(1)
 
         # Center the add-top-bottom button by surrounding it with two stretches inside a horizontal layout
         self.move_top_bottom_button_parent = QWidget()
@@ -100,6 +95,9 @@ class TargetLayersRow(CustomRow):
         self.move_top_bottom_button_parent_hl.addStretch(1)
         self.move_top_bottom_button_parent.setLayout(self.move_top_bottom_button_parent_hl)
         self.row_widgets.insert(-1, self.move_top_bottom_button_parent)
+
+        self.edit_button_hl.addWidget(self.move_top_bottom_button_parent)
+        self.edit_button_hl.addStretch(1)
 
         self.edit_button_hl.addStretch(1)
         self.edit_button.setLayout(self.edit_button_hl)

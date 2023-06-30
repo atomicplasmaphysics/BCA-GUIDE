@@ -34,7 +34,7 @@ class TargetPreview(QWidget):
         self.antialiased = True
         self.setBackgroundRole(QPalette.ColorRole.Base)
         self.setAutoFillBackground(True)
-        self.pen = QPen(QColor(0, 0, 0))
+        self.pen = QPen(self.palette().color(QPalette.ColorRole.Text))
 
         self.font = QFont()
         self.font_metrics = QFontMetrics(self.font)
