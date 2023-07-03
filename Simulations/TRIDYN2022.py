@@ -19,6 +19,7 @@
 from typing import List, Union, Tuple, Dict, Optional
 from os import path, listdir
 from re import findall
+import logging
 
 import numpy as np
 
@@ -3851,10 +3852,11 @@ fout {idfout} {iddout} {idqout}{output}
 
         # get all contents from input file
         try:
-            with open(f'{folder}/{input_file}', 'r') as file:
+            with open(f'{folder}/{input_file}', 'r', encoding='utf-8', errors='replace') as file:
                 contents = [line.strip() for line in file.readlines() if line.strip()]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{input_file}"!')
             return False
 
         # obligatory input needs to be provided
@@ -4165,7 +4167,7 @@ fout {idfout} {iddout} {idqout}{output}
 
             try:
                 # get all contents from layer file
-                with open(f'{folder}/{layer_file}', 'r') as file:
+                with open(f'{folder}/{layer_file}', 'r', encoding='utf-8', errors='replace') as file:
                     last_content = []
                     last_abundances = False
                     segment_count = 0
@@ -4463,6 +4465,7 @@ fout {idfout} {iddout} {idqout}{output}
             try:
                 float(content[1])
                 data_type = float
+
                 int(content[1])
                 data_type = int
             except (ValueError, IndexError):
@@ -4517,7 +4520,7 @@ fout {idfout} {iddout} {idqout}{output}
             return -1
 
         try:
-            with open(f'{save_folder}/{indat_file}', 'r') as file:
+            with open(f'{save_folder}/{indat_file}', 'r', encoding='utf-8', errors='replace') as file:
                 file.readline()
                 line_contents = [sp.strip() for sp in file.readline().split(' ') if sp.strip()]
                 try:
@@ -4526,6 +4529,7 @@ fout {idfout} {iddout} {idqout}{output}
                     return -1
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{indat_file}"!')
             return -1
 
         return round(100 * simulated / particles)
@@ -4898,7 +4902,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         result = {}
 
         try:
-            with open(f'{self.save_folder}/{protocol}', 'r') as file:
+            with open(f'{self.save_folder}/{protocol}', 'r', encoding='utf-8', errors='replace') as file:
                 # 'id'
                 result['id'] = file.readline()
 
@@ -4991,6 +4995,11 @@ class SimulationAnalysis(SimulationsAnalysis):
                 result['ir'] = ir
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{protocol}"!')
+            return
+
+        except (ValueError, IndexError):
+            logging.warning(f'Could not process file "{protocol}"!')
             return
 
         return result
@@ -5025,10 +5034,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         launched_total = 0
 
         try:
-            with open(f'{self.save_folder}/{protocol}', 'r') as file:
+            with open(f'{self.save_folder}/{protocol}', 'r', encoding='utf-8', errors='replace') as file:
                 lines = [line.strip() for line in file.readlines()]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{protocol}"!')
             return
 
         for i, line in enumerate(lines):
@@ -5145,12 +5155,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         new_profiles = len(profiles)
 
         try:
-            with open(f'{self.save_folder}/{profiles[0]}', 'r') as file:
+            with open(f'{self.save_folder}/{profiles[0]}', 'r', encoding='utf-8', errors='replace') as file:
                 lines = [line.strip() for line in file.readlines() if line.strip()]
                 columns = len(lines[5].split())
                 layers = len(lines) - 5
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{profiles[0]}"!')
             return self.depth_profile_data
 
         nirr = self.initial_protocol['nirr'] if isinstance(self.initial_protocol['nirr'], int) else 1
@@ -5174,7 +5185,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             profile = f'{self.save_folder}/{profile}'
 
             try:
-                with open(profile, 'r') as file:
+                with open(profile, 'r', encoding='utf-8', errors='replace') as file:
                     swelling_shrinking[i] = float(file.readline().strip().split()[0].replace('D', 'E'))
 
                     partial_fluence = [float(flcp.replace('D', 'E')) for flcp in file.readline().strip().split()]
@@ -5187,9 +5198,10 @@ class SimulationAnalysis(SimulationsAnalysis):
 
                     # numpy genfromtxt is very slow
                     # data = np.genfromtxt(profile, skip_header=5)
-                    data = fileToNpArray(profile, skip_header=5)
+                data = fileToNpArray(profile, skip_header=5)
 
             except FileNotFoundError:
+                logging.info(f'Could not open file "{profile}"!')
                 continue
 
             layer_depth[i] = data[:, 0]

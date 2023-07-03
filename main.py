@@ -18,9 +18,11 @@
 
 from sys import argv
 from platform import system
+import logging
+
 
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtWidgets import QApplication, QSplashScreen, QMainWindow
+from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QPixmap, QIcon
 
 import resources
@@ -28,11 +30,16 @@ import resources
 from GlobalConf import GlobalConf
 from MainWindow import MainWindow
 
+from Utility.Logger import setupLogging
+
 
 def main():
     """
     Execute the GUI
     """
+
+    # set up logging level
+    setupLogging(logging.WARNING)
 
     # ctypes.windll only works in Windows
     if system() == 'Windows':

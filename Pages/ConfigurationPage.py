@@ -21,6 +21,7 @@ from typing import Optional, TYPE_CHECKING
 from platform import system
 from json import dump, load
 from json.decoder import JSONDecodeError
+import logging
 
 from PyQt6.QtCore import Qt, QTimer, QDir, QFileInfo
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap
@@ -432,9 +433,10 @@ class ConfigurationPage(TabWithToolbar):
             return
 
         try:
-            with open(save_file, 'r') as conf_file:
+            with open(save_file, 'r', encoding='utf-8', errors='replace') as conf_file:
                 data = load(conf_file)
         except (FileNotFoundError, JSONDecodeError):
+            logging.info(f'Could not open file "{save_file}"!')
             return
 
         scs = [SimulationConfiguration.load(d) for d in data]
@@ -489,7 +491,7 @@ class ConfigurationPage(TabWithToolbar):
 
         config = [sc.save(no_config=no_config) for sc in self.main_window.simulation_configs]
 
-        with open(save_file, 'w') as config_file:
+        with open(save_file, 'w', encoding='utf-8') as config_file:
             dump(config, config_file, indent=4)
 
         self.main_window.writeStatusBar('Saving configuration file successful')

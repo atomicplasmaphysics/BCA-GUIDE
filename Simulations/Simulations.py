@@ -18,6 +18,7 @@
 
 from typing import Union, Tuple, Optional, List
 from os import listdir
+import logging
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -2312,6 +2313,7 @@ class SimulationsAnalysis(QObject):
             data = fileToNpArray(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{file}"!')
             return
 
         if not data.size:

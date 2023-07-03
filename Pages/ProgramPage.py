@@ -25,6 +25,8 @@ from sys import exit
 from locale import getpreferredencoding
 from re import sub
 from subprocess import Popen, getstatusoutput
+import logging
+
 
 from PyQt6.QtCore import Qt, QUrl, QDir, QFile, QFileInfo, QProcess, QTimer
 from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices, QPalette, QColor
@@ -1332,11 +1334,11 @@ EOF
         # save input and layer input (or remove if not needed)
         path_input = f'{self.simulation_configuration.save_folder}/{file_name_input}'
         path_layer = f'{self.simulation_configuration.save_folder}/{file_name_layer}'
-        with open(path_input, 'w') as file:
+        with open(path_input, 'w', encoding='utf-8') as file:
             file.write(input_text)
 
         if layer_text is not False:
-            with open(path_layer, 'w') as file:
+            with open(path_layer, 'w', encoding='utf-8') as file:
                 file.write(layer_text)
             filelist.append(file_name_layer)
 
@@ -1636,10 +1638,11 @@ EOF
 
         file_path = f'{self.simulation_configuration.save_folder}/{selected_items[0].text()}'
         try:
-            with open(file_path, 'r') as file:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
                 file_content = file.read()
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{file_path}"!')
             self.outputFilePreview.clear()
             self.main_window.writeStatusBar(f'Failed to preview file "{file_path}"')
             self.open_output_file_button.setEnabled(False)
@@ -1757,7 +1760,7 @@ EOF
             self.main_window.writeStatusBar('No file selected - aborted')
             return
 
-        with open(file_path, 'w') as file:
+        with open(file_path, 'w', encoding='utf-8') as file:
             file.write(plot_data)
 
         self.main_window.writeStatusBar(f'Plot data saved as "{file_path}"')

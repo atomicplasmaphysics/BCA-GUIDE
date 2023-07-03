@@ -19,6 +19,7 @@
 from typing import List, Union, Tuple
 from datetime import datetime
 from re import sub, findall
+import logging
 
 from numpy import array, ndarray
 
@@ -260,7 +261,7 @@ def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols:
     :return: numpy.array
     """
 
-    with open(filename, 'r') as file:
+    with open(filename, 'r', encoding='utf-8', errors='replace') as file:
         for _ in range(skip_header):
             file.readline()
         lines = file.readlines()
@@ -297,8 +298,9 @@ def intSafe(string: str, fallback: int = 0) -> int:
     """
 
     try:
-        return int(string)
+        return int(float(string))
     except ValueError:
+        logging.warning(f'Could not convert "{string}" to int, using {fallback} instead.')
         return fallback
 
 
@@ -313,6 +315,7 @@ def floatSafe(string: str, fallback: float = 0) -> float:
     try:
         return float(string)
     except ValueError:
+        logging.warning(f'Could not convert "{string}" to float, using {fallback} instead.')
         return fallback
 
 
