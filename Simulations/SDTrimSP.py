@@ -3838,7 +3838,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         try:
             line_content = content[2].split()
             ncp = int(line_content[0])
-            nr_of_projectiles = int(line_content[1])
+            nr_of_projectiles = int(float(line_content[1]))
 
             nr_of_depth_steps = np.zeros(ncp, dtype=int)
             data_start_line = np.zeros(ncp, dtype=int)
