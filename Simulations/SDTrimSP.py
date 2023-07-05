@@ -20,6 +20,7 @@ from typing import List, Union, Tuple, Optional
 from itertools import zip_longest
 from os import path, listdir
 from re import findall, sub
+import logging
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -1803,12 +1804,13 @@ Andreas Mutzke
         # checked on sourcecode or if 'src'-directory exists
         source_code = f'{folder}/src/SDTrimSP.F90'  # check sourcecode
         try:
-            with open(source_code, 'r') as f:
+            with open(source_code, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     if line.strip().startswith('avs0 ='):
                         version = [line.split('\'')[1]]  # save as array to we can ask its length
                         break
         except FileNotFoundError:
+            logging.info(f'Could not open file "{source_code}"!')
             pass
         if not version and path.exists(f'{folder}/src'):  # search path
             version = findall(r'\d+\.\d+', folder)
@@ -1889,7 +1891,7 @@ Andreas Mutzke
         if update_tooltips:
             output_variables_doc = f'{folder}/doc/output_files.txt'
             try:
-                with open(output_variables_doc, 'r') as file:
+                with open(output_variables_doc, 'r', encoding='utf-8', errors='replace') as file:
                     for line in file.readlines():
                         content = line.split('.dat')
                         if len(content) <= 1:
@@ -1898,12 +1900,13 @@ Andreas Mutzke
                         output_file_name = f'{content[0].strip()}.dat'
                         self.OutputTooltips[output_file_name] = content[1].strip()
             except FileNotFoundError:
+                logging.info(f'Could not open file "{output_variables_doc}"!')
                 pass
 
         # update possible input variables
         input_variables_doc = f'{folder}/doc/tri.inp.txt'
         try:
-            with open(input_variables_doc, 'r') as file:
+            with open(input_variables_doc, 'r', encoding='utf-8', errors='replace') as file:
                 while file.readline().strip() != 'variable in tri.inp:':
                     continue
                 file.readline()
@@ -1923,8 +1926,10 @@ Andreas Mutzke
                     try:
                         if content[1] in ['.true.', '.false.']:
                             data_type = bool
+
                         float(content[1])
                         data_type = float
+
                         int(content[1])
                         data_type = int
                     except (ValueError, IndexError):
@@ -1933,6 +1938,7 @@ Andreas Mutzke
                     self.InputParameters.update({variable: data_type})
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{input_variables_doc}"!')
             pass
 
     def updateElements(self, folder: str, version: str) -> bool:
@@ -1949,7 +1955,7 @@ Andreas Mutzke
         try:
             # get table contents
             table_str = []
-            with open(table_path, 'r', encoding='cp1250') as file:
+            with open(table_path, 'r', encoding='utf-8', errors='replace') as file:
                 for line in file.readlines():
                     line = line.strip()
 
@@ -2103,6 +2109,7 @@ Andreas Mutzke
                     element_list.append(element)
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{table_path}"!')
             pass
 
         if not element_list:
@@ -2547,7 +2554,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         # get all contents from input file
         try:
-            with open(input_file, 'r') as file:
+            with open(input_file, 'r', encoding='utf-8', errors='replace') as file:
                 contents['title'] = file.readline().strip()
                 for line in file.readlines():
                     content = [p.strip() for p in line.strip().split('=')]
@@ -2556,6 +2563,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                     contents[content[0]] = content[1]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{input_file}"!')
             return False
 
         assumed = DefaultAssumed()
@@ -2790,7 +2798,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
             try:
                 # get all contents from layer file
-                with open(layer_file, 'r') as file:
+                with open(layer_file, 'r', encoding='utf-8', errors='replace') as file:
                     for line in file.readlines():
                         line = line.strip()
                         if not line:
@@ -2945,7 +2953,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         percent = -1
         try:
-            with open(f'{save_folder}/{log_file}', 'r') as file:
+            with open(f'{save_folder}/{log_file}', 'r', encoding='utf-8', errors='replace') as file:
                 for line in reversed(file.readlines()):
                     data = line.split(' %')
                     if len(data) == 2 and data[0][0] not in ['I', 'W']:
@@ -2969,7 +2977,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                 return -1
             sweeps = DefaultValues(version).number_calc
             try:
-                with open(f'{save_folder}/{self.InputFilename}', 'r') as file:
+                with open(f'{save_folder}/{self.InputFilename}', 'r', encoding='utf-8', errors='replace') as file:
                     for line in file.readlines():
                         if not line.strip().startswith('number_calc'):
                             continue
@@ -3366,7 +3374,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         # data from target file
         self.save_folder = save_folder
         try:
-            with open(target, 'r') as file:
+            with open(target, 'r', encoding='utf-8', errors='replace') as file:
                 for i in range(4):
                     file.readline()
                 contents = file.readline().split()
@@ -3375,6 +3383,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                 elements = file.readline().split()
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{target}"!')
             return
 
         # check if both are equal
@@ -3419,10 +3428,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         output = f'{self.save_folder}/output.dat'
 
         try:
-            with open(output, 'r') as file:
+            with open(output, 'r', encoding='utf-8', errors='replace') as file:
                 content = [line.strip().lower() for line in file.readlines()]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{output}"!')
             return
 
         # simulation results
@@ -3637,7 +3647,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         serie = f'{self.save_folder}/serie.dat'
 
         try:
-            with open(serie, 'r') as file:
+            with open(serie, 'r', encoding='utf-8', errors='replace') as file:
                 file.readline()
 
                 # line 2: ncp and ncp_proj
@@ -3707,6 +3717,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                         energ_sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j + 1], 0)
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{serie}"!')
             return
 
         return (
@@ -3751,10 +3762,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         depth_file = f'{self.save_folder}/{filename}'
 
         try:
-            with open(depth_file, 'r') as file:
+            with open(depth_file, 'r', encoding='utf-8', errors='replace') as file:
                 content = [line.strip().lower() for line in file.readlines() if line.strip()]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{depth_file}"!')
             return
 
         # number of elements
@@ -3816,47 +3828,53 @@ class SimulationAnalysis(SimulationsAnalysis):
         damage_file = f'{self.save_folder}/{filename}'
 
         try:
-            with open(damage_file, 'r') as file:
+            with open(damage_file, 'r', encoding='utf-8', errors='replace') as file:
                 content = [line.strip().lower() for line in file.readlines()]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{filename}"!')
             return
 
-        line_content = content[2].split()
-        ncp = int(line_content[0])
-        nr_of_projectiles = int(float(line_content[1]))
+        try:
+            line_content = content[2].split()
+            ncp = int(line_content[0])
+            nr_of_projectiles = int(float(line_content[1]))
 
-        nr_of_depth_steps = np.zeros(ncp, dtype=int)
-        data_start_line = np.zeros(ncp, dtype=int)
+            nr_of_depth_steps = np.zeros(ncp, dtype=int)
+            data_start_line = np.zeros(ncp, dtype=int)
 
-        for i in range(ncp):
-            depth_step_index = 3 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
-            data_start_line[i] = depth_step_index + 3
-            nr_of_depth_steps[i] = int(content[depth_step_index].split()[0])
+            for i in range(ncp):
+                depth_step_index = 3 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
+                data_start_line[i] = depth_step_index + 3
+                nr_of_depth_steps[i] = int(content[depth_step_index].split()[0])
 
-        file_elements = []
-        for i in range(ncp):
-            element_line_index = 2 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
-            file_elements.append(content[element_line_index].split()[-1].capitalize())
+            file_elements = []
+            for i in range(ncp):
+                element_line_index = 2 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
+                file_elements.append(content[element_line_index].split()[-1].capitalize())
 
-        max_nr_depth_steps = np.max(nr_of_depth_steps)
-        nr_of_columns = len(content[data_start_line[0]].split())
-        depth_data = np.zeros((ncp, max_nr_depth_steps, nr_of_columns))
+            max_nr_depth_steps = np.max(nr_of_depth_steps)
+            nr_of_columns = len(content[data_start_line[0]].split())
+            depth_data = np.zeros((ncp, max_nr_depth_steps, nr_of_columns))
 
-        for i in range(ncp):
-            for j in range(nr_of_depth_steps[i]):
-                line_content = content[data_start_line[i] + j].split()
-                for k in range(nr_of_columns):
-                    depth_data[i, j, k] = float(line_content[k])
+            for i in range(ncp):
+                for j in range(nr_of_depth_steps[i]):
+                    line_content = content[data_start_line[i] + j].split()
+                    for k in range(nr_of_columns):
+                        depth_data[i, j, k] = float(line_content[k])
 
-        return (
-            ncp,
-            file_elements,
-            nr_of_depth_steps,
-            max_nr_depth_steps,
-            nr_of_projectiles,
-            depth_data
-        )
+            return (
+                ncp,
+                file_elements,
+                nr_of_depth_steps,
+                max_nr_depth_steps,
+                nr_of_projectiles,
+                depth_data
+            )
+
+        except (IndexError, ValueError):
+            logging.warning(f'Could not process file "{filename}"!')
+            return
 
     def getParticleData(self, projectile_or_recoil: str = 'p') -> Optional[List[np.ndarray]]:
         """
@@ -3873,7 +3891,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         file_path = f'{self.save_folder}/partic_back_{letter_file_name}.dat'
 
         try:
-            with open(file_path, 'r') as file:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
                 for _ in range(4):
                     file.readline()
                 line_content = file.readline().split()
@@ -3884,6 +3902,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                 end_energy_idx = line_content.index('end-energy')
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{file_path}"!')
             return
 
         old_data_len = len(self.particle_back_p_data) if is_projectile else len(self.particle_back_r_data)
@@ -3894,6 +3913,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                                                    skip_footer=2,
                                                    usecols=(0, cosp_idx, cosa_idx, end_energy_idx))
         except FileNotFoundError:
+            logging.info(f'Could not open file "{file_path}"!')
             return
 
         if new_particle_file_data.size:
@@ -3950,7 +3970,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             self.getOutputFileData()
 
         try:
-            with open(file_path, 'r') as file:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
                 # skip version header and name of simulation
                 for _ in range(2):
                     file.readline()
@@ -4047,6 +4067,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                             conc_array[hist_counter, j, i] = layer_line[j + 2]
 
         except FileNotFoundError:
+            logging.info(f'Could not open file "{file_path}"!')
             return
 
         # calculate yields

@@ -20,6 +20,7 @@ from typing import List, Union
 from enum import Enum, auto
 from json import dump, JSONEncoder, load
 from json.decoder import JSONDecodeError
+import logging
 
 from Utility.Indexing import RunningIndex, DefaultAssumed
 
@@ -409,7 +410,7 @@ def saveSimulationArguments(arguments: SimulationArguments, file: str):
         'additional': arguments.additional
     }
 
-    with open(file, 'w') as conf_file:
+    with open(file, 'w', encoding='utf-8') as conf_file:
         dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
 
 
@@ -466,9 +467,10 @@ def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
 
     # Try to read from json file
     try:
-        with open(file, 'r') as conf_file:
+        with open(file, 'r', encoding='utf-8', errors='replace') as conf_file:
             data = load(conf_file)
     except (FileNotFoundError, JSONDecodeError):
+        logging.info(f'Could not open file "{file}"!')
         return False
 
     # general data

@@ -18,21 +18,28 @@
 
 from sys import argv
 from platform import system
+import logging
+
 
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import QApplication, QSplashScreen
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QIcon
 
 import resources
 
 from GlobalConf import GlobalConf
 from MainWindow import MainWindow
 
+from Utility.Logger import setupLogging
+
 
 def main():
     """
     Execute the GUI
     """
+
+    # set up logging level
+    setupLogging(logging.WARNING)
 
     # ctypes.windll only works in Windows
     if system() == 'Windows':
@@ -42,11 +49,16 @@ def main():
         app_id = f'TUWIEN.IAP.{GlobalConf.title.upper().replace(" ", ".")}.v1'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
 
+    # start application
     app = QApplication(argv)
+    app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
 
-    pixmap = QPixmap(':/icons/splash.png')
-    screen = app.screens()[0].availableVirtualGeometry()
+    # get splash size
+    screen = app.primaryScreen().availableVirtualGeometry()
     splash_size = QSize(int(min(620, screen.width() * 0.5)), int(min(300, screen.height() * 0.5)))
+
+    # show splashscreen on startup
+    pixmap = QPixmap(':/icons/splash.png')
     pixmap = pixmap.scaled(splash_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
     splash = QSplashScreen(pixmap)
     splash.show()

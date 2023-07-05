@@ -25,9 +25,7 @@ from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
 import resources
 
 from GlobalConf import GlobalConf
-from Dialogs import AboutDialog, ManualDialog, PreferencesDialog
-
-from Utility.Dialogs import selectFileDialog, showMessageBox, DownloadDialog
+from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
 
 from Pages.ConfigurationPage import ConfigurationPage
 from Pages.ProgramPage import SimulationPage
@@ -61,7 +59,6 @@ class MainWindow(QMainWindow):
         QCoreApplication.setApplicationName(GlobalConf.title)
 
         super().__init__()
-        self.setWindowIcon(QIcon(':/icons/tu_logo.png'))
         self.window_title = GlobalConf.title
 
         #
@@ -215,7 +212,7 @@ class MainWindow(QMainWindow):
             frame_geometry = self.frameGeometry()
             center_point = QPoint(x, y)
             if x == y == 0:
-                center_point = QGuiApplication.screens()[0].availableVirtualGeometry().center()
+                center_point = QGuiApplication.primaryScreen().availableVirtualGeometry().center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 
@@ -475,7 +472,8 @@ class MainWindow(QMainWindow):
 
     def openUserManual(self):
         """Opens the user-manual of the GUI"""
-        url = QUrl(f'{self.manual_path}/BCA-GUIDE_manual.pdf')
+
+        url = QUrl.fromLocalFile(f'{self.manual_path}/BCA-GUIDE_manual.pdf')
         opened = QDesktopServices.openUrl(url)
 
         # if failed to open, try to download it

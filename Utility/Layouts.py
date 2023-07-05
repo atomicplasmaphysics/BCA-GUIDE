@@ -23,7 +23,7 @@ from enum import Enum, auto
 from Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect
-from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon
+from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
@@ -971,9 +971,9 @@ class ListWidgetItem(QListWidgetItem):
         if not selectable or function is None:
             self.setFlags(Qt.ItemFlag.NoItemFlags)
 
-        if not grey:
-            self.setForeground(QColor('#000000'))
-        else:
+        # if item should be greyed out
+        self.grey = grey
+        if grey:
             self.setForeground(QColor('#888888'))
 
         # bold
@@ -1007,6 +1007,7 @@ class ListWidget(QListWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.itemSelectionChanged.connect(self.executeFunction)
+        self.font_color = self.palette().color(QPalette.ColorRole.Text)
 
     def executeFunction(self):
         """Executes function from ListWidgetItem if set"""
@@ -1018,6 +1019,12 @@ class ListWidget(QListWidget):
     def addItemEmpty(self):
         """Adds an empty item"""
         super().addItem(ListWidgetItem('', selectable=False))
+
+    def addItem(self, item: ListWidgetItem):
+        """Adds an item"""
+        if not item.grey:
+            item.setForeground(self.font_color)
+        super().addItem(item)
 
 
 class LineNumberArea(QWidget):
@@ -1045,22 +1052,34 @@ class FileEditor(QPlainTextEdit):
     QPlainTextEdit with line numbers and marks current line when clicked
 
     :param parent: parent widget
-    :param line_numbering: if textbox should have line numbering
-    :param readonly: if textbox should be readonly
-    :param mono: if textbox should have mono font
-    :param offset: offset for line numbers
-    :param highlighting: enables highlighting of current selected line
-    :param color_line_number: color of line number area
-    :param color_highlight: color of highlighting line
+    :param line_numbering: (optional) if textbox should have line numbering
+    :param readonly: (optional) if textbox should be readonly
+    :param mono: (optional) if textbox should have mono font
+    :param offset: (optional) offset for line numbers
+    :param highlighting: (optional) enables highlighting of current selected line
+    :param color_line_number: (optional) color of line number area
+    :param color_line_number_dark: (optional) color of line number area in dark mode
+    :param color_highlight: (optional) color of highlighting line
+    :param color_highlight_dark: (optional) color of highlighting line in dark mode
     """
 
-    def __init__(self, parent, line_numbering: bool = True, readonly: bool = True, mono: bool = True, offset: int = 0,
-                 highlighting: bool = True, color_line_number: QColor = QColor('#EEEEEE'), color_highlight: QColor = QColor('#FFFEC8')):
+    def __init__(self, parent, line_numbering: bool = True, readonly: bool = True,
+                 mono: bool = True, offset: int = 0, highlighting: bool = True,
+                 color_line_number: QColor = QColor('#EEEEEE'), color_line_number_dark: QColor = QColor('#464646'),
+                 color_highlight: QColor = QColor('#FFFEC8'), color_highlight_dark: QColor = QColor('#00003F')):
         super().__init__(parent)
         self.line_numbering = line_numbering
         self.offset = offset
-        self.color_line_number = color_line_number
-        self.color_highlight = color_highlight
+
+        # check color palette and decide if dark or light mode
+        if self.palette().color(QPalette.ColorRole.Text).black() == 255:
+            self.color_line_number = color_line_number
+            self.color_highlight = color_highlight
+            self.pen_color = Qt.GlobalColor.black
+        else:
+            self.color_line_number = color_line_number_dark
+            self.color_highlight = color_highlight_dark
+            self.pen_color = Qt.GlobalColor.white
 
         self.line_number_area = LineNumberArea(self)
 
@@ -1075,7 +1094,7 @@ class FileEditor(QPlainTextEdit):
             self.setReadOnly(True)
 
         if mono:
-            mono_font = QFont('Monospace', 9)
+            mono_font = QFont('Courier New')
             mono_font.setStyleHint(QFont.StyleHint.TypeWriter)
             self.setFont(mono_font)
 
@@ -1130,7 +1149,7 @@ class FileEditor(QPlainTextEdit):
         height = self.fontMetrics().height()
         while block.isValid() and (top <= event.rect().bottom()):
             if block.isVisible() and (bottom >= event.rect().top()):
-                painter.setPen(Qt.GlobalColor.black)
+                painter.setPen(self.pen_color)
                 painter.drawText(
                     0,
                     int(top),
