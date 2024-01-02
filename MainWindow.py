@@ -20,7 +20,7 @@ from typing import List
 
 from PyQt6.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir, QPoint
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
 import resources
 
@@ -38,9 +38,10 @@ class MainWindow(QMainWindow):
     Class used for main layout
     """
 
-    def __init__(self):
+    def __init__(self, app: QApplication):
         super().__init__()
         GlobalConf()
+        self.app = app
 
         #
         # Global variables
@@ -57,7 +58,6 @@ class MainWindow(QMainWindow):
         QCoreApplication.setOrganizationDomain('www.tuwien.at')
         QCoreApplication.setApplicationName(GlobalConf.title)
 
-        super().__init__()
         self.window_title = GlobalConf.title
 
         #
@@ -149,11 +149,19 @@ class MainWindow(QMainWindow):
         # Manual
         self.manual_path = QDir.currentPath()
         self.action_manual = self.menu_help.addAction(QIcon(':/icons/book.png'), 'Manual')
-        self.action_manual.triggered.connect(self.openUserManual)
+        self.action_manual.triggered.connect(lambda: self.openUserManual())
 
         # Manual
         self.action_manual = self.menu_help.addAction(QIcon(':/icons/help.png'), 'Quick Manual')
         self.action_manual.triggered.connect(lambda: ManualDialog(self).show())
+
+        self.menu_help.addSeparator()
+
+        # SRIM Mode
+        self.action_srim = self.menu_help.addAction('Enable SRIM Mode')
+        self.action_srim.triggered.connect(lambda: self.enableSrimMode())
+
+        self.menu_help.addSeparator()
 
         # About
         self.action_about = self.menu_help.addAction('About')
@@ -471,6 +479,13 @@ class MainWindow(QMainWindow):
                 expected_file_size=818324
             )
             dialog.open()
+
+    def enableSrimMode(self):
+        """Toggles SRIM Mode"""
+        self.app.setWindowIcon(QIcon(':/icons/tu_logo_loco.png'))
+        self.setStyleSheet('background: url(:/icons/clouds.png) repeat center center fixed; background-color: #2db9ff;')
+        self.window_title = 'BCA-SRIM'
+        self.writeWindowTitleTab(self.tab_simulations.currentIndex())
 
     def closeEvent(self, event: QCloseEvent):
         """

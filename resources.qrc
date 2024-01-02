@@ -23,6 +23,7 @@
         <file>icons/save.png</file>
         <file>icons/save_as.png</file>
         <file>icons/tu_logo.png</file>
+        <file>icons/tu_logo_loco.png</file>
         <file>icons/warning.png</file>
         <file>icons/help.png</file>
         <file>icons/splash.png</file>
@@ -34,6 +35,7 @@
         <file>icons/file.png</file>
         <file>icons/server.png</file>
         <file>icons/cloud.png</file>
+        <file>icons/clouds.png</file>
     </qresource>
 </RCC>
 

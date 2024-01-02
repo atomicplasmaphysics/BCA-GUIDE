@@ -64,7 +64,7 @@ def main():
     splash.show()
     app.processEvents()
 
-    main_window = MainWindow()
+    main_window = MainWindow(app)
     main_window.show()
     splash.finish(main_window)
     app.exec()
