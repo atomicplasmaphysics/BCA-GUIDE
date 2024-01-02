@@ -2,18 +2,19 @@ from sys import argv
 
 from typing import List, Optional, Tuple
 
-from PyQt6.QtWidgets import (QDialog, QApplication, QLabel, QVBoxLayout,
-                             QHBoxLayout, QLineEdit, QPushButton, QListWidget,
-                             QListWidgetItem, QSplitter, QWidget, QGroupBox)
+from PyQt6.QtWidgets import (QDialog, QApplication, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
+                             QListWidget, QListWidgetItem, QSplitter, QWidget, QGroupBox, QMessageBox)
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon, QPainter, QColor, QGuiApplication
+from PyQt6.QtGui import QIcon, QPainter, QColor
 
 import resources
 
 from Styles import Styles
 
-from Utility.Layouts import VBoxTitleLayout, LineEdit, SpinBox, InputHBoxLayout, SpinBoxRange, PasswordLineEdit
-from Utility.SSH import SSH, SSHConnection
+from Utility.Layouts import VBoxTitleLayout, LineEdit, SpinBox, InputHBoxLayout, SpinBoxRange, PasswordLineEdit, \
+    TerminalEditor
+from Utility.Dialogs import showMessageBox
+from Utility.SSH import SSH, SSHConnection, InteractiveShell
 
 
 class SSHConnectionsDialog(QDialog):
@@ -558,24 +559,48 @@ class SSHTerminalWindow(QDialog):
         self.setWindowTitle(f'SSH Terminal for "{str(connection)}"')
         self.setWindowFlags(Qt.WindowType.Window)
 
-        # Set the dialog size
-        screen_rect = QGuiApplication.screens()[0].availableVirtualGeometry().size()
-        half_screen_width = screen_rect.width() // 2
-        half_screen_height = screen_rect.height() // 2
+        self.ssh_client = SSH.connectSSHConnection(connection)
+        self.interactive_shell = InteractiveShell(self.ssh_client)
+        self.interactive_shell.recv_ready.connect(self.updateOutput)
 
-        dialog_width = half_screen_width
-        dialog_height = half_screen_height
-        self.setGeometry(
-            screen_rect.width() + screen_rect.width() // 4,
-            screen_rect.height() + screen_rect.height() // 4,
-            dialog_width,
-            dialog_height
-        )
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
 
-        print(screen_rect.width() + screen_rect.width() // 4,
-            screen_rect.height() + screen_rect.height() // 4,
-            dialog_width,
-            dialog_height)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.terminal = TerminalEditor(self, border=False)
+        self.terminal.enterSignal.connect(self.execCommand)
+        self.layout.addWidget(self.terminal)
+
+        self.showMaximized()
+
+    def updateOutput(self):
+        """Updates terminal"""
+        self.terminal.insertPlainText(self.interactive_shell.readStdout().replace('\r', ''))
+
+    def execCommand(self, cmd: str):
+        """Executes a command"""
+        try:
+            self.interactive_shell.execCommand(cmd)
+            if cmd == 'exit':
+                self.close()
+
+        except OSError as error:
+            _, button = showMessageBox(
+                self,
+                QMessageBox.Icon.Warning,
+                'Terminal Error',
+                f'Warning: {error}',
+                info_message='Close terminal?',
+                standard_buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+
+            if button == QMessageBox.StandardButton.Yes:
+                self.close()
+
+    def closeEvent(self, event):
+        self.ssh_client.close()
+        event.accept()
 
 
 def filesDialogSSH(ssh_connection: SSHConnection, parent=None, title: str = 'Choose file',
@@ -640,7 +665,8 @@ def test_ssh_connection_selection():
 
 # TODO: remove this
 def test_ssh_terminal():
-    ssh_connections = [SSHConnection('128.131.53.79', 'ag-aumayr', '112sos911')]
+    ssh_connection = SSHConnection('128.131.53.79', 'ag-aumayr', '112sos911')
+    SSHTerminalWindow(None, ssh_connection).exec()
 
 
 # TODO: remove this
@@ -650,5 +676,7 @@ if __name__ == '__main__':
 
     # test_ssh_connection_manager()
     # test_ssh_files()
-    test_ssh_connection_selection()
-    # test_ssh_terminal()
+    # test_ssh_connection_selection()
+    test_ssh_terminal()
+
+    app.exec()

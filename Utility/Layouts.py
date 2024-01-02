@@ -22,8 +22,8 @@ from enum import Enum, auto
 
 from Styles import Styles
 
-from PyQt6.QtCore import Qt, QSize, QRect
-from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette
+from PyQt6.QtCore import Qt, QSize, QRect, pyqtSignal
+from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette, QTextCharFormat, QKeyEvent
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
@@ -1202,3 +1202,210 @@ class MplCanvas(FigureCanvasQTAgg):
         self.fig: Figure = Figure(figsize=(width, height), dpi=dpi)
         self.axes: Axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
+
+
+class TerminalEditor(QPlainTextEdit):
+    """
+    QPlainTextEdit that acts like a terminal
+
+    :param parent: parent widget
+    :param mono: (optional) if textbox should have mono font
+    :param light: (optional) if we have a light background
+    :param border: (optional) if border should be displayed
+    """
+
+    enterSignal = pyqtSignal(str)
+
+    def __init__(self, parent, mono=True, light=False, border=True):
+        super().__init__(parent)
+
+        self.before_plain_text = ''
+        self.before_cursor_position = 0
+        self.textChanged.connect(self.handle_text_changed)
+
+        if mono:
+            mono_font = QFont('Courier New')
+            mono_font.setStyleHint(QFont.StyleHint.TypeWriter)
+            self.setFont(mono_font)
+
+        if not light:
+            palette = self.palette()
+            palette.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0))
+            palette.setColor(QPalette.ColorRole.Text, QColor(255, 255, 255))
+            self.setPalette(palette)
+
+        if not border:
+            self.setStyleSheet('border: 0px;')
+
+    def insertPlainText(self, text):
+        """Inserting text is redirected to processEscapeSequences"""
+        self.processEscapeSequences(text)
+
+    def appendPlainText(self, text: str):
+        """Appending text is redirected to processEscapeSequences"""
+        self.processEscapeSequences(text)
+
+    def processEscapeSequences(self, text: str):
+        """Process all escape sequences and insert text"""
+        written_text = self.clearWrittenText()
+
+        cursor = self.textCursor()
+        format_stack = [QTextCharFormat()]
+
+        i = 0
+        while i < len(text):
+            char = text[i]
+
+            if char == '\033':
+                format_stack.append(QTextCharFormat())
+
+                # Found an escape sequence, start processing it
+                escape_sequence = ''
+                char = ''
+
+                # Keep reading characters until the escape sequence ends
+                while i < len(text) - 1 and char != 'm':
+                    i += 1
+                    char = text[i]
+                    escape_sequence += char
+
+                # Process the escape sequence and update the text format
+                self.processEscapeSequence(escape_sequence, format_stack)
+
+            else:
+                # Regular character, update the text format and insert it
+                current_format = format_stack[-1]
+                cursor.setCharFormat(current_format)
+                cursor.insertText(char)
+
+            i += 1
+
+        self.setTextCursor(cursor)
+        self.before_plain_text = self.toPlainText()
+        self.before_cursor_position = cursor.position()
+
+        cursor.insertText(written_text)
+
+    @staticmethod
+    def processEscapeSequence(escape_sequence: str, format_stack: List[QTextCharFormat]):
+        """Processes escape sequence and pushes new format to format_stack"""
+        fmt = format_stack[-1]
+
+        # Check for valid ANSI escape sequence
+        if not escape_sequence.startswith('[') or not escape_sequence.endswith('m'):
+            return
+
+        # Parse the ANSI escape sequence
+        params_str = escape_sequence[1:-1].split(';')
+        params = []
+        for param_str in params_str:
+            try:
+                params.append(int(param_str))
+            except ValueError:
+                pass
+
+        if not params:
+            return
+
+        # Reset all text attributes
+        if 0 in params:
+            fmt.setFontWeight(QFont.Weight.Normal)
+            fmt.setFontUnderline(False)
+
+        # Handle different ANSI escape sequence codes
+        # check out: https://en.wikipedia.org/wiki/ANSI_escape_code
+        else:
+            colors = {
+                0: QColor(0, 0, 0),       # black
+                1: QColor(187, 0, 0),     # red
+                2: QColor(0, 187, 0),     # green
+                3: QColor(187, 187, 0),   # yellow
+                4: QColor(0, 0, 187),     # blue
+                5: QColor(187, 0, 187),   # magenta
+                6: QColor(0, 187, 187),   # cyan
+                7: QColor(187, 187, 187)  # white
+            }
+
+            colors_bright = {
+                0: QColor(85, 85, 85),    # black
+                1: QColor(255, 85, 85),   # red
+                2: QColor(85, 255, 85),   # green
+                3: QColor(255, 255, 85),  # yellow
+                4: QColor(85, 85, 255),   # blue
+                5: QColor(255, 85, 255),  # magenta
+                6: QColor(85, 255, 255),  # cyan
+                7: QColor(255, 255, 255)  # white
+            }
+
+            for param in params:
+                # bold
+                if param == 1 or param == 2:
+                    fmt.setFontWeight(QFont.Weight.Bold)
+
+                # italic
+                if param == 3:
+                    fmt.setFontItalic(True)
+
+                # underline
+                elif param == 4:
+                    fmt.setFontUnderline(True)
+
+                # strike
+                elif param == 8:
+                    fmt.setFontStrikeOut(True)
+
+                # normal
+                elif param == 22:
+                    fmt.setFontWeight(QFont.Weight.Normal)
+
+                # foreground color
+                elif param in range(30, 38):
+                    fmt.setForeground(colors[param - 30])
+
+                # background color
+                elif param in range(40, 48):
+                    fmt.setBackground(colors[param - 40])
+
+                # foreground color bright
+                elif param in range(90, 98):
+                    fmt.setForeground(colors_bright[param - 90])
+
+                # background color bright
+                elif param in range(100, 108):
+                    fmt.setBackground(colors_bright[param - 100])
+
+        format_stack.append(fmt)
+
+    def getWrittenText(self, delete: bool = False):
+        """Gets written text"""
+        cursor = self.textCursor()
+        cursor.setPosition(self.before_cursor_position)
+        cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+        written_text = cursor.selectedText()
+
+        if delete:
+            cursor.removeSelectedText()
+
+        return written_text
+
+    def clearWrittenText(self):
+        """Clears written text"""
+        return self.getWrittenText(delete=True)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """On key press"""
+        if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+            written_text = self.clearWrittenText()
+            self.enterSignal.emit(written_text)
+
+        else:
+            super().keyPressEvent(event)
+
+    def handle_text_changed(self):
+        """Check if original text has changed"""
+        if not self.toPlainText().startswith(self.before_plain_text):
+            self.undo()
+            cursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.setTextCursor(cursor)
+

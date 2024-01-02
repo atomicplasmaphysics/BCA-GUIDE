@@ -16,7 +16,26 @@
 # https://www.gnu.org/licenses/.
 
 
+import logging
+
 from PyQt6.QtCore import QDir, QSettings, QLocale
+
+
+class LoggerSettings(QSettings):
+    """
+    Class that extends the QSettings with logging messages
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def value(self, key, **kwargs):
+        """Get value of key"""
+        if key not in self.allKeys():
+            default = kwargs.get('defaultValue')
+            default_text = '' if default is None else f', using "{default}" as default value'
+            logging.info(f'"{key}" not found in Settings{default_text}')
+        return super().value(key, **kwargs)
 
 
 class GlobalConf:
@@ -28,7 +47,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # settings object
-    settings = QSettings('TU Wien', title)
+    settings = LoggerSettings('TU Wien', title)
 
     # path of save folder
     save_path_name = 'save_path'

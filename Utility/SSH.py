@@ -9,7 +9,7 @@ from paramiko.ssh_exception import NoValidConnectionsError
 from paramiko.channel import ChannelStdinFile, ChannelFile, ChannelStderrFile
 
 
-from PyQt6.QtCore import QProcess, QTimer
+from PyQt6.QtCore import QProcess, QTimer, pyqtSignal, QObject
 
 
 class SSHConnection:
@@ -153,6 +153,47 @@ class SSH:
         if not self.hostname or not self.username or not self.port:
             return 'Not initialized'
         return f'{self.username}@{self.hostname}:{self.port}'
+
+
+class InteractiveShell(QObject):
+    """
+    Provides a basic interactive SSH shell.
+
+    :param ssh: SSH
+    """
+
+    recv_ready = pyqtSignal(bool)
+
+    def __init__(self, ssh: SSH):
+        super().__init__()
+
+        self.ssh_client = ssh.ssh
+        self.channel = self.ssh_client.get_transport().open_session()
+        self.channel.get_pty()
+        self.channel.invoke_shell()
+
+        # timer for checking if we have output
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.updateLoop)
+        self.update_timer.start(100)
+
+    def execCommand(self, cmd: str):
+        """Executes a given command"""
+        self.channel.send(f'{cmd}\n'.encode())
+
+    def readStdout(self) -> str:
+        """Returns current stdout"""
+        b_list = []
+        while self.channel.recv_ready():
+            b_list.append(self.channel.recv(1024))
+        b_array = b''.join(b_list)
+        std_out = b_array.decode()
+        return std_out
+
+    def updateLoop(self):
+        """Continuously called to check if we have output"""
+        if self.channel.recv_ready():
+            self.recv_ready.emit(True)
 
 
 class SSHProcess(QProcess):
