@@ -23,11 +23,11 @@ from enum import Enum, auto
 from Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect
-from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette
+from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem
+    QListWidget, QListWidgetItem, QApplication
 )
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
@@ -35,6 +35,39 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
 from Utility.ModifyWidget import setWidgetBackground
+
+
+class SplashPixmap(QPixmap):
+    """
+    Class that extends the QPixmap for generating Splash Screen Images
+
+    :param image: image path
+    :param text: text string
+    :param box: rectangular position for text
+    :param align: alignment for text
+    :param color: color for text
+    :param font_size: font size for text
+    """
+
+    def __init__(
+        self,
+        image: str,
+        text: str,
+        box: QRect,
+        align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignRight,
+        color: Qt.GlobalColor | QColor = Qt.GlobalColor.black,
+        font_size: int = 20
+    ):
+        super().__init__(image)
+
+        self.painter = QPainter(self)
+        self.painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.font = QApplication.font()
+        self.font.setPixelSize(font_size)
+        self.painter.setFont(self.font)
+        self.painter.setPen(color)
+        self.painter.drawText(box, align, text)
+        self.painter.end()
 
 
 class InputHBoxLayout(QHBoxLayout):
