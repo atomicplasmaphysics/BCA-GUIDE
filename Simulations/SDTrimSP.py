@@ -117,7 +117,8 @@ class DictLookup:
         ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON: 3,
         ArgumentValues.InelasticLossModel.HYDROGEN: 4,
         ArgumentValues.InelasticLossModel.HELIUM: 5,
-        ArgumentValues.InelasticLossModel.ZIEGLER: 6
+        ArgumentValues.InelasticLossModel.ZIEGLER: 6,
+        ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER: 7
     }
 
     idrel = {

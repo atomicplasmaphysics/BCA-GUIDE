@@ -307,7 +307,8 @@ class SimulationPage(TabWithToolbar):
             self,
             comp_count=self.component_count,
             row_fields=self.simulation_class.CompRowBeamSettings.rowFields,
-            custom_comp_row=self.simulation_class.CompRowBeamSettings
+            custom_comp_row=self.simulation_class.CompRowBeamSettings,
+            version=self.simulation_configuration.version
         )
         self.beam_composition_vbox.addWidget(self.table_beam)
 
@@ -339,7 +340,8 @@ class SimulationPage(TabWithToolbar):
             self,
             comp_count=self.component_count,
             row_fields=self.simulation_class.CompRowTargetSettings.rowFields,
-            custom_comp_row=self.simulation_class.CompRowTargetSettings
+            custom_comp_row=self.simulation_class.CompRowTargetSettings,
+            version=self.simulation_configuration.version
         )
         self.target_composition_vbox.addWidget(self.table_target)
 
