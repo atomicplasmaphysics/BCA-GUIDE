@@ -42,7 +42,7 @@ class CompRow(CustomRow):
     limitedObjectChanged = pyqtSignal(bool)
     selectElementText = '...'
 
-    def __init__(self, row_fields: List[CustomRowField], element=Element()):
+    def __init__(self, row_fields: List[CustomRowField], element=Element(), **kwargs):
         super().__init__()
         self.row_fields = row_fields
         self.element = element
@@ -233,6 +233,7 @@ class CompTable(CustomTable):
     :param comp_count: component counter
     :param row_fields: list of CustomRowField elements for unique id, label and tooltip
     :param custom_comp_row: type of custom CompRow (optional)
+    :param version: version string (optional)
     """
 
     rowRemoved = pyqtSignal(int)
@@ -254,7 +255,7 @@ class CompTable(CustomTable):
         )
     ]
 
-    def __init__(self, parent, comp_count, row_fields: List[CustomRowField] = None, custom_comp_row=CompRow):
+    def __init__(self, parent, comp_count, row_fields: List[CustomRowField] = None, custom_comp_row=CompRow, version: str = ''):
         if row_fields is None:
             row_fields = []
         self.row_fields: List[CustomRowField] = self.generalRowFields + row_fields
@@ -262,6 +263,7 @@ class CompTable(CustomTable):
         self.tooltips = [row_field.tooltip for row_field in self.row_fields]
         self.component_row = custom_comp_row
         self.component_count = comp_count
+        self.version = version
 
         super().__init__(0, self.labels, parent)
         self.rows: List[CompRow] = []
@@ -281,7 +283,7 @@ class CompTable(CustomTable):
         :param row_idx: index of row
         """
 
-        return self.component_row(self.row_fields)
+        return self.component_row(self.row_fields, version=self.version)
 
     def addRow(self, update: bool = True, connect: bool = True) -> Union[CompRow, bool]:
         """
