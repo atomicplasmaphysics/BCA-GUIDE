@@ -3430,7 +3430,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         try:
             with open(output, 'r', encoding='utf-8', errors='replace') as file:
-                content = [line.strip().lower() for line in file.readlines()]
+                content = [line.strip('# ').lower() for line in file.readlines()]
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{output}"!')
@@ -3764,7 +3764,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         try:
             with open(depth_file, 'r', encoding='utf-8', errors='replace') as file:
-                content = [line.strip().lower() for line in file.readlines() if line.strip()]
+                content = [line.strip('# ').lower() for line in file.readlines() if line.strip()]
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{depth_file}"!')
@@ -3830,11 +3830,15 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         try:
             with open(damage_file, 'r', encoding='utf-8', errors='replace') as file:
-                content = [line.strip().lower() for line in file.readlines()]
+                content = [line.strip('# ').lower() for line in file.readlines()]
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{filename}"!')
             return
+        #Versuch um die Plots hinzukriegen die erste
+        for z, line in enumerate(content):
+            if line.startswith('au') or line.startswith('ar'):
+                content.pop(z)
 
         try:
             line_content = content[2].split()
@@ -5323,7 +5327,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def plotSurfaceLevel(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
-        """ wasist lo oos  Plot and return surface levels"""
+        """Plot and return surface levels"""
 
         e031_data = self.getE031TargetData()
 
@@ -5357,7 +5361,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
             return
 
-        mpl_settings = hjkhkMplCanvasSettings()
+        mpl_settings = MplCanvasSettings()
 
         data = [self.depth_array]
         plot_labels = ['Depth [Angs]']
