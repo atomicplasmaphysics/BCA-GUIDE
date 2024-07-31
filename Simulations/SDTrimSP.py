@@ -5357,7 +5357,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
             return
 
-        mpl_settings = MplCanvasSettings()
+        mpl_settings = hjkhkMplCanvasSettings()
 
         data = [self.depth_array]
         plot_labels = ['Depth [Angs]']
