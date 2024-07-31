@@ -5352,7 +5352,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         return ([fluence_array[1:], surface[1:]], ['Fluence[10^20 ions/m^2]', 'Surface Erosion [Angs]']), mpl_settings
 
     def plotDepthConcentration(self, history_step: int = 0) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
-        """ppppPlot and return the depth concentration"""
+        """Plot and return the depth concentration"""
 
         if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
             return
