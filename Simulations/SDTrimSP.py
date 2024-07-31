@@ -5323,7 +5323,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def plotSurfaceLevel(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
-        """ wasist lo oos Plot and return surface levels"""
+        """ wasist lo oos  Plot and return surface levels"""
 
         e031_data = self.getE031TargetData()
 
