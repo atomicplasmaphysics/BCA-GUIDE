@@ -54,6 +54,8 @@ def main():
     app = QApplication(argv)
     app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
 
+
+
     # get splash size
     screen = app.primaryScreen().availableVirtualGeometry()
     splash_size = QSize(int(min(620, screen.width() * 0.5)), int(min(300, screen.height() * 0.5)))
@@ -71,7 +73,6 @@ def main():
     splash = QSplashScreen(pixmap)
     splash.show()
     app.processEvents()
-
     main_window = MainWindow(app)
     main_window.show()
     splash.finish(main_window)

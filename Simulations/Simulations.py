@@ -44,6 +44,7 @@ class GeneralSettings:
 
     settingsChanged = pyqtSignal(dict)
     contentChanged = pyqtSignal()
+    coordinateChanged = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -240,6 +241,60 @@ class CompRowTargetSettings(CompRow):
         return super().getArguments()
 
     def setArguments(self, arguments: RowArguments, general_arguments: SimulationArguments):
+        """
+        Sets <RowArguments> container of parameters for row
+
+        :param arguments: container of <RowArguments>
+        :param general_arguments: container of <GeneralArguments>
+        """
+
+        super().setArguments(arguments, general_arguments)
+
+
+class CompRowCrystalSettings(CompRow):
+    """
+    CompRow for beam
+
+    :param version: version of simulation
+    """
+
+    # list of CustomRowField() elements
+    """
+    Example:
+    rowFields = [
+        CustomRowField(                 # First Column
+            unique='unique_specifier',  # Unique specifier to link beam and target tables and for reference in input file
+            label='label_title',        # Title of column header
+            tooltip='tooltip'           # Tooltip for column header (optional)
+        ),
+        CustomRowField(...),            # Second Column
+        ...
+    ]
+    """
+    rowFields = []
+
+    def __init__(self, *args, version: str = '', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.version = version
+
+        # extend list of widgets
+        """
+        Example:
+        self.rowWidgets += [
+            QSpinBox(),
+            QDoubleSpinBox(),
+            QComboBox(),
+            ...
+        ]
+        """
+        self.row_widgets += []
+
+    def getArguments(self) -> RowArguments:
+        """Returns <RowArguments> container of parameters for row"""
+
+        return super().getArguments()
+
+    def setArguments(self, arguments: RowArguments, general_arguments: GeneralArguments):
         """
         Sets <RowArguments> container of parameters for row
 
@@ -1791,6 +1846,8 @@ class SimulationsInput:
     InputFilename = 'input'
     # layer file name
     LayerFilename = 'layer'
+    # layer file name
+    CrystalFilename = 'crystal'
     # example for additional settings
     ExampleAdditionalSetting = ''
     # list of skipped files for preview
@@ -1803,13 +1860,17 @@ class SimulationsInput:
     CompoundList = []
     # group elements in beam and target
     GroupElements = False
+    # simulation is crystal capable
+    CrystalCapable = False
 
     # Reference to classes
     HlBeamSettings = HlGeneralBeamSettings
     HlTargetSettings = HlGeneralTargetSettings
+    HlCrystalSettings = HlGeneralTargetSettings
     VlSimulationSettings = VlGeneralSimulationSettings
     CompRowBeamSettings = CompRowBeamSettings
     CompRowTargetSettings = CompRowTargetSettings
+    CompRowCrystalSettings = CompRowCrystalSettings
 
     # Maximum number of components
     MaxComponents = 10
@@ -1919,6 +1980,8 @@ class SimulationsInput:
 
         return ''
 
+
+
     def nameLayerFile(self, arguments: SimulationArguments, version: str) -> str:
         """
         Returns file-name of layer file
@@ -1944,6 +2007,34 @@ class SimulationsInput:
         """
 
         return ''
+
+
+    def nameCrystalFile(self, arguments: SimulationArguments, version: str) -> str:
+        """
+        Returns file-name of input file
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+
+        :return: file-name of input file
+        """
+
+        return self.CrystalFilename
+
+    @staticmethod
+    def makeCrystalFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+        """
+        Returns input file as string
+
+        :param arguments: <SimulationArguments> container
+        :param folder: folder of simulation
+        :param version: version of simulation
+
+        :return: input file for simulation as string
+        """
+
+        return ''
+
 
     @staticmethod
     def loadFiles(folder: str, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:

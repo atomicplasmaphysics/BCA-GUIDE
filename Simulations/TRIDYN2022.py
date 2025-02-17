@@ -39,6 +39,7 @@ from Utility.Indexing import DefaultAssumed, RunningIndex, ElementList
 
 from TableWidgets.CompTable import CompRow
 from TableWidgets.CustomTable import CustomRowField
+# from TableWidgets.CrystalTable import CrystalRow
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Arguments import (
@@ -103,6 +104,8 @@ class DefaultValues:
     sput = False
     vcin = False
     rrlv = False
+
+    crystal_capable = False
 
 
 class DictLookup:
@@ -1783,7 +1786,6 @@ class CompRowTargetSettings(CompRowBeamSettings):
             self.atomic_density.setValue(density)
             self.atomic_density.setEnabled(False)
 
-
 class ElementData(Elements):
     """
     Simulation supported elements and element specific data
@@ -3246,6 +3248,179 @@ Wolfhard Möller
         'sclm': str,
         'rand': int
     }
+    CompoundList = [
+        Compound(
+            'CHps',
+            elements={'C': 8, 'H': 8}
+        ),
+        Compound(
+            elements={'Fe': 1, 'B': 1}
+        ),
+        Compound(
+            elements={'Mg': 1, 'B': 2}
+        ),
+        Compound(
+            elements={'Ti': 1, 'B': 2}
+        ),
+        Compound(
+            elements={'Al': 4, 'C': 3}
+        ),
+        Compound(
+            elements={'Si': 1, 'C': 1}
+        ),
+        Compound(
+            elements={'Ta': 1, 'C': 1}
+        ),
+        Compound(
+            elements={'Ti': 1, 'C': 1}
+        ),
+        Compound(
+            elements={'W': 1, 'C': 1}
+        ),
+        Compound(
+            elements={'Al': 2, 'O': 3}
+        ),
+        Compound(
+            elements={'As': 2, 'O': 3}
+        ),
+        Compound(
+            elements={'B': 2, 'O': 3}
+        ),
+        Compound(
+            elements={'Co': 1, 'O': 1}
+        ),
+        Compound(
+            elements={'Cr': 2, 'O': 3}
+        ),
+        Compound(
+            elements={'Cs': 2, 'O': 1}
+        ),
+        Compound(
+            elements={'Cu': 2, 'O': 1}
+        ),
+        Compound(
+            elements={'Fe': 2, 'O': 3}
+        ),
+        Compound(
+            elements={'Ga': 2, 'O': 3}
+        ),
+        Compound(
+            elements={'Ge': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'Mg': 1, 'O': 1}
+        ),
+        Compound(
+            elements={'Mn': 3, 'O': 4}
+        ),
+        Compound(
+            elements={'P': 2, 'O': 5}
+        ),
+        Compound(
+            elements={'Ru': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'Se': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'Si': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'Sn': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'Ta': 2, 'O': 5}
+        ),
+        Compound(
+            elements={'Ti': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'U': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'W': 1, 'O': 3}
+        ),
+        Compound(
+            elements={'Zn': 1, 'O': 1}
+        ),
+        Compound(
+            elements={'Zr': 1, 'O': 2}
+        ),
+        Compound(
+            elements={'Al': 1, 'N': 1}
+        ),
+        Compound(
+            'cBN',
+            elements={'B': 1, 'N': 1}
+        ),
+        Compound(
+            'hBN',
+            elements={'B': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'Cr': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'Cu': 3, 'N': 1}
+        ),
+        Compound(
+            elements={'Ga': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'Hf': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'Mo': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'Si': 3, 'N': 4}
+        ),
+        Compound(
+            elements={'Ti': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'W': 2, 'N': 1}
+        ),
+        Compound(
+            elements={'Zr': 1, 'N': 1}
+        ),
+        Compound(
+            elements={'Mo': 1, 'S': 2}
+        ),
+        Compound(
+            elements={'Co': 1, 'Si': 2}
+        ),
+        Compound(
+            elements={'Fe': 1, 'Si': 2}
+        ),
+        Compound(
+            elements={'Fe': 1, 'Si': 1}
+        ),
+        Compound(
+            elements={'Mg': 1, 'Si': 2}
+        ),
+        Compound(
+            elements={'Pt': 1, 'Si': 1}
+        ),
+        Compound(
+            elements={'Ti': 1, 'Si': 2}
+        ),
+        Compound(
+            elements={'W': 1, 'Si': 2}
+        ),
+        Compound(
+            elements={'Al': 1, 'As': 1}
+        ),
+        Compound(
+            elements={'Ga': 1, 'As': 1}
+        ),
+        Compound(
+            elements={'In': 1, 'As': 1}
+        ),
+        Compound(
+            elements={'Ga': 1, 'Sb': 1}
+        )
+    ]
     CompoundList = [
         Compound(
             'CHps',

@@ -21,6 +21,9 @@ from PyQt6.QtGui import QPen, QPalette, QPainter, QColor, QFont, QFontMetrics
 from PyQt6.QtWidgets import QWidget
 
 
+from Utility.Functions import getElementColor
+
+
 class TargetPreview(QWidget):
     """
     QWidget for preview of target
@@ -118,7 +121,7 @@ class TargetPreview(QWidget):
                     int(self.element_widths[i] + 2 * self.legend_margin),
                     int(self.legend_size)
                 )
-                painter.fillRect(rect, QColor.fromHsv(int(i * 359 / len(self.elements)), 255, 255, 127))
+                painter.fillRect(rect, getElementColor(i, len(self.elements)))
                 rect.translate(self.legend_margin, 0)
                 rect.setSize(QSize(self.element_widths[i], self.legend_size))
                 painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f'{self.elements[i]}')

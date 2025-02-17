@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
 
         self.setMenuBar(self.menu)
 
+
         #
         # TABS FOR DIFFERENT SIMULATION PROGRAMS
         #
@@ -209,6 +210,7 @@ class MainWindow(QMainWindow):
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 
+
     def addSimulationTab(self, widget, title: str):
         """
         Add simulation tab
@@ -216,7 +218,6 @@ class MainWindow(QMainWindow):
         :param widget: widget to add in new tab
         :param title: title of tab
         """
-
         self.tab_simulations.addTab(widget, title)
         self.tab_simulations.setCurrentIndex(0)
         return widget
@@ -277,7 +278,6 @@ class MainWindow(QMainWindow):
 
         :param index: index of active tab
         """
-
         tab_widget = self.tab_simulations.widget(index)
         if hasattr(tab_widget, 'updateWidget'):
             tab_widget.updateWidget()
@@ -326,14 +326,15 @@ class MainWindow(QMainWindow):
 
     def updateTabs(self):
         """Updates tabs if simulation configuration changed"""
-
         for sc in self.simulation_configs:
             if sc not in self.old_simulation_configs:
                 self.old_simulation_configs.append(sc)
                 sc.tab_widget = self.addSimulationTab(SimulationPage(self, sc), sc.title)
+
             if sc.changed:
                 self.changeSimulationTab(sc.tab_widget, sc.title)
                 sc.changed = False
+
 
         for sc in self.old_simulation_configs:
             if sc not in self.simulation_configs:

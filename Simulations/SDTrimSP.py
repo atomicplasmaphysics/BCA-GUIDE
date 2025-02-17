@@ -39,18 +39,22 @@ from Utility.Dialogs import DownloadDialog
 
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
+from TableWidgets.CrystalTable import CrystalRow
+#from TableWidgets.CrystalEditor import CrystalEditorDialog
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Arguments import (
-    ArgumentValues, GeneralBeamArguments, GeneralTargetArguments,
-    GeneralArguments, RowArguments, SimulationArguments, StructureArguments
+    ArgumentValues, GeneralBeamArguments, GeneralTargetArguments, GeneralCrystalArguments,
+    GeneralArguments, RowArguments, CrystalRowArguments, SimulationArguments, StructureArguments
 )
 from Containers.Element import Element, Elements
+from Containers.Compound import Compound
 
 from Simulations.Simulations import (
     SimulationsInput, SimulationsOutput, SimulationsAnalysis, HlGeneralBeamSettings,
     HlGeneralTargetSettings, VlGeneralSimulationSettings, HlGeneralPlot
 )
+
 
 
 class DefaultValues:
@@ -98,10 +102,64 @@ class DefaultValues:
     lparticle_r = False
     lmatrices = False
 
+    # compounds
+
+    # general crystal settings
+    l_crystal = False
+    l_crystal_dyn = False
+    crystal_capable = False
+
+    miller_index_h = 1.
+    miller_index_k = 0.
+    miller_index_l = 0.
+
+    basis_vector_a1_x = 1.
+    basis_vector_a1_y = 0.
+    basis_vector_a1_z = 0.
+
+    basis_vector_a2_x = 0.
+    basis_vector_a2_y = 1.
+    basis_vector_a2_z = 0.
+
+    basis_vector_a3_x = 0.
+    basis_vector_a3_y = 0.
+    basis_vector_a3_z = 1.
+    
+    coordinate_a1 = 0.
+    coordinate_a2 = 0.
+    coordinate_a3 = 0.
+
+    p_max = 3.
+    beam_dy = 0.
+    beam_dz = 0.
+
+    matrix_3 = True
+    matrix_5 = False
+
+    lattice_constant = 10.
+
     def __init__(self, version: str):
         if version == '6.09':
             self.isbv = 8
             self.inel0 = 7
+
+        if version == '7.00':
+            self.isbv = 8
+            self.inel0 = 7
+            self.isbv = 8
+
+            # compounds
+            self.l_two_comp = False
+            self.l_two_comp2 = False
+            self.l_two_comp3 = False
+
+            crystal_capable = True     # crystal flag activates/deactivates crystal-Editor
+
+            # crystal orientation Settings
+            self.miller_k = 1
+            self.miller_h = 0
+            self.miller_l = 0
+
 
 
 class DictLookup:
@@ -180,6 +238,15 @@ class DictLookup:
                 ArgumentValues.SurfaceBindingModel.COMPOUNDS: 5,
                 ArgumentValues.SurfaceBindingModel.FILE: 6,
                 ArgumentValues.SurfaceBindingModel.ELECTRONEGATIVITY: 7,
+                ArgumentValues.SurfaceBindingModel.TABLE: 8
+            }
+        if version == '7.00':
+            self.isbv = {
+                ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC: 1,
+                ArgumentValues.SurfaceBindingModel.AVERAGE: 2,
+                ArgumentValues.SurfaceBindingModel.ELEMENT_PAIRS: 3,
+                ArgumentValues.SurfaceBindingModel.SOLID_SOLID: 4,
+                ArgumentValues.SurfaceBindingModel.FILE: 6,
                 ArgumentValues.SurfaceBindingModel.TABLE: 8
             }
 
@@ -558,11 +625,25 @@ class HlTargetSettings(HlGeneralTargetSettings):
             checkbox=False,
             disabled=True
         )
+
+
+
         self.layout_global_density.checkbox.stateChanged.connect(lambda _: self.changedGlobDens())
         self.global_density.valueChanged.connect(lambda _: self.changedGlobDens())
+
         self.layout_global_density.checkbox.stateChanged.connect(lambda _: self.edited())
         self.global_density.valueChanged.connect(lambda _: self.edited())
+
         self.addLayout(self.layout_global_density)
+        if version == '7.00':
+            self.layout_crystal_file = InputHBoxLayout('Crystal',
+                                                       None,
+                                                       checkbox=self.default_values.lmatrices,
+                                                       tooltip='<i>l_crystal</i><br> If checked the simulation uses the crystal structure of the target'
+                                                       )
+            self.layout_crystal_file.checkbox.stateChanged.connect(lambda _: self.edited())
+            self.addLayout(self.layout_crystal_file)
+
         self.addStretch(1)
 
         self.updateSegmentThickness()
@@ -590,6 +671,7 @@ class HlTargetSettings(HlGeneralTargetSettings):
             'enable_layer_table': not global_density_state
         })
 
+
     def reset(self):
         """Resets all input fields"""
 
@@ -600,18 +682,29 @@ class HlTargetSettings(HlGeneralTargetSettings):
         self.updateSegmentThickness()
         self.changedGlobDens()
 
-    def getArguments(self) -> GeneralTargetArguments:
+    def getArguments(self, miller_index_h=1., miller_index_k=0., miller_index_l =0.) -> GeneralTargetArguments:
         """Returns <GeneralTargetArguments> container of parameters for target settings"""
 
         global_density = False
         if self.layout_global_density.checkbox.isChecked():
             global_density = self.global_density.value()
 
-        return GeneralTargetArguments(
-            thickness=self.thickness.value(),  # ttarget
-            segments=self.segments.value(),  # nqx
-            global_density=global_density  # !globaldensity
-        )
+        if self.version == '7.00':
+            #miller
+            return GeneralTargetArguments(thickness=self.thickness.value(),  # ttarget
+                                          segments=self.segments.value(),  # nqx
+                                          global_density=global_density,  # !globaldensity
+                                          crystal_flag=self.layout_crystal_file.checkbox.isChecked(),  # l_crystal
+                                          miller_index_h=miller_index_h,
+                                          miller_index_k=miller_index_k,
+                                          miller_index_l=miller_index_l
+                                          # ToDo: add the miller Indices, maybe this has to be done on the ProgramPage
+                                          )
+        else:
+            return GeneralTargetArguments(thickness=self.thickness.value(),  # ttarget
+                                          segments=self.segments.value(),  # nqx
+                                          global_density=global_density,  # !globaldensity
+                                          )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
         """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
@@ -669,6 +762,7 @@ class HlTargetSettings(HlGeneralTargetSettings):
             self.layout_global_density.setEnabled(global_density)
             if global_density and not self.layout_global_density.checkbox.isChecked():
                 self.global_density.setEnabled(False)
+
 
 
 class VlSimulationSettings(VlGeneralSimulationSettings):
@@ -921,6 +1015,39 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             ]
             self.surface_binding_model_disabled_list = [4]
 
+        if self.version == '7.00':
+            self.surface_binding_model_entries = [
+                'element-specific',
+                'average for all elements',
+                'element-pair averages',
+                'compounds only',
+                '(not supported)',
+                'from mat_surfb.inp',
+                '(not supported)',
+                'from table1a'
+            ]
+            self.surface_binding_model_entries_save = [
+                ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC,
+                ArgumentValues.SurfaceBindingModel.AVERAGE,
+                ArgumentValues.SurfaceBindingModel.ELEMENT_PAIRS,
+                ArgumentValues.SurfaceBindingModel.COMPOUNDS,
+                -1,
+                ArgumentValues.SurfaceBindingModel.FILE,
+                -1,
+                ArgumentValues.SurfaceBindingModel.TABLE
+            ]
+            self.surface_binding_model_entries_tooltips = [
+                'sbv(ip,jp)=e_surfb(jp) for ip=jp',
+                'sbv(ip,jp)=e_surfb(jp) for all ip, jp',
+                'sbv(ip,jp)=0., if e_surfb(ip)=0 or e_surfb(jp)=0\nelse: sbv(ip,jp)=0.5*(e_surfb(ip)+e_surfb(jp))',
+                'e_bulkb(compound)=deltaH_f\nsbv(ip,jp)=e_surfb(jp) for ip=jp, =0 else',
+                '',
+                'input of given matrix of the surface-bindig-energy: "mat_surfb.inp"',
+                '',
+                'e_surfb=0, e_bulkb=Es, e_cutoff=Es/3\ne_bulkb(compound)=Es+deltaH_f'
+            ]
+            self.surface_binding_model_disabled_list = [4, 6]
+
         self.surface_binding_model = ComboBox(
             default=self.default_values.isbv,
             entries=self.surface_binding_model_entries,
@@ -980,8 +1107,13 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=self.default_values.lmatrices,
             tooltip='<i>lmatrices</i><br>Compute and write the pre-sorted secondary particle distributions to output files'
         )
+
+
         self.layout_matrix_files.checkbox.clicked.connect(lambda _: self.edited())
         self.addLayout(self.layout_matrix_files)
+
+
+
 
         self.changedPotential()
         self.changedMode()
@@ -1311,7 +1443,6 @@ class CompRowBeamSettings(CompRow):
         self.version = version
         self.default_values = DefaultValues(self.version)
         self.dict_lookup = DictLookup(self.version)
-
         self.max_concentration_field = self.rowFields[3]
 
         # abundances
@@ -1424,6 +1555,11 @@ class CompRowBeamSettings(CompRow):
             'Values are calculated for each element based on values taken from "table6a" and "table6b"'
         ]
         if self.version == '6.09':
+            self.inelastic_loss_model_entries.append('LZ7')
+            self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER)
+            self.inelastic_loss_model_tooltips.append('Combination of Lindhard-Scharff and Ziegler-Biersack with corretion')
+
+        if self.version == '7.00':
             self.inelastic_loss_model_entries.append('LZ7')
             self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER)
             self.inelastic_loss_model_tooltips.append('Combination of Lindhard-Scharff and Ziegler-Biersack with corretion')
@@ -1621,6 +1757,13 @@ class CompRowBeamSettings(CompRow):
         if angle is not None:
             self.angle.setEnabled(bool(angle))
 
+    def setAvailableElements(self, target_elements: List[str]):
+        """
+        Set row disabled or enabled
+
+        :param enabled: enable/disable
+        """
+
 
 class CompRowTargetSettings(CompRowBeamSettings):
     """
@@ -1647,6 +1790,315 @@ class CompRowTargetSettings(CompRowBeamSettings):
         elif isinstance(density, float):
             self.atomic_density.setValue(density)
             self.atomic_density.setEnabled(False)
+
+
+class CompRowCrystalSettings(CrystalRow):
+    """
+    CompRow for crystal
+
+    :param version: version of simulation
+    """
+
+    #syncHint = '<br>If the element occurs in both the beam and the target, the value is defined in the target table.'
+    #modifyHint = '<br>A red highlight indicates a modified value. A negative number resets it back to the default one.'
+    rowFields = [
+        CustomRowField(
+            unique='crystal_element',
+            label='Element',
+            tooltip='<i>species</i><br>Choose the element from available element list which sits on the coordinates (a1,a2,a3)'
+        ),
+        CustomRowField(
+            unique='a_1',
+            label='a\u2081',
+            tooltip='<i>a\u2081</i><br>Atom position in unit cell in a\u2081 direction value is between 0 and 1',
+            synced=False,
+
+        ),
+        CustomRowField(
+            unique='a_2',
+            label='a₂',
+            tooltip='<i>a₂</i><br>Atom position in unit cell in a₂ direction value is between 0 and 1',
+            synced=False
+        ),
+        CustomRowField(
+            unique='a_3',
+            label='a\u2083',
+            tooltip='<i>a\u2083</i><br>Atom position in unit cell in a\u2083 direction value is between 0 and 1',
+            synced=False
+        )
+
+    ]
+
+    def __init__(self, *args,  version: str = '', available_elements=None,  **kwargs):
+        super().__init__(*args, **kwargs)
+        self.version = version
+        self.default_values = DefaultValues(self.version)
+        self.dict_lookup = DictLookup(self.version)
+        self.element_combobox_entries = ['No element chosen', *available_elements]
+
+        if not self.element_combobox_entries:
+            self.element_combobox_entries = ['No element chosen']
+
+
+        self.element_combobox = ComboBox(
+            entries=self.element_combobox_entries,
+            label_default=False
+        )
+
+        self.element_combobox.currentIndexChanged.connect(self.coordinateChanged.emit)
+        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetBackground(self.element_combobox, False)
+
+        # coordinates a_1
+        self.coordinate_a1 = DoubleSpinBox(
+            default=0.,
+            input_range=SpinBoxRange.ZERO_ONE,
+            step_size=0.01,
+            decimals=7
+        )
+
+        # coordinates a_2
+        self.coordinate_a2 = DoubleSpinBox(
+            default=0.,
+            input_range=SpinBoxRange.ZERO_ONE,
+            step_size=0.01,
+            decimals=7
+        )
+
+        # coordinates a_3
+        self.coordinate_a3 = DoubleSpinBox(
+            default=0.,
+            input_range=SpinBoxRange.ZERO_ONE,
+            step_size=0.01,
+            decimals=7
+        )
+
+        self.element_precision = 6
+
+        self.row_widgets += [
+            self.element_combobox,
+            self.coordinate_a1,
+            self.coordinate_a2,
+            self.coordinate_a3,
+        ]
+
+        # Lattice point init start
+        self.crystal_symmetry = 'none'
+        self.symmetry_points = []
+        self.corners = [
+            [0., 0., 0.],
+            [1., 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.],
+            [1., 1., 0.],
+            [0., 1., 1.],
+            [1., 0., 1.],
+            [1., 1., 1.]
+        ]
+
+        self.plane = [
+            [0., 0., 0.],
+            [1., 0., 0.],
+            [0., 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 0.],
+            [0., 0., 0.]
+        ]
+
+        self.edge_combo = [
+            [0., 0.],
+            [1., 1.],
+            [0., 1.],
+            [1., 0.]
+        ]
+
+        self.crystal_coordinates = [self.coordinate_a1.value(), self.coordinate_a2.value(), self.coordinate_a3.value()]
+
+        self.edge_flag = False
+        self.plane_flag = False
+        self.corner_flag = False
+        self.volume_flag = False
+
+        self.clearSpinboxButtons()
+
+        # DoubleSpinBox Connections
+        self.coordinate_a1.valueChanged.connect(self.updateCrystalCoordinates)
+        self.coordinate_a1.valueChanged.connect(self.coordinateChanged.emit)
+        self.coordinate_a2.valueChanged.connect(self.updateCrystalCoordinates)
+        self.coordinate_a2.valueChanged.connect(self.coordinateChanged.emit)
+        self.coordinate_a3.valueChanged.connect(self.updateCrystalCoordinates)
+        self.coordinate_a3.valueChanged.connect(self.coordinateChanged.emit)
+
+    def setElement(self, target_elements: List[str]):
+        """Sets rows element to element"""
+
+        self.element_combobox_entries = target_elements
+
+    def adaptElement(self, element: Element):
+        """Adapts element specific parameters"""
+
+    def getArguments(self) -> CrystalRowArguments:
+        """Returns <CrystalRowArguments> container of parameters for row"""
+
+        return CrystalRowArguments(
+            index=self.element_index.value(),
+            symbol=self.element_combobox.currentText(),  # symbol
+            coordinate_a1=self.coordinate_a1.value(),  # a1
+            coordinate_a2=self.coordinate_a2.value(),  # a2
+            coordinate_a3=self.coordinate_a3.value(),  # a3
+
+        )
+
+    def setArguments(self, arguments: CrystalRowArguments, general_arguments: SimulationArguments):
+        """Sets <RowArguments> container of parameters for row"""
+
+        assumed = arguments.get('assumed')
+        if not isinstance(assumed, list):
+            assumed = []
+
+        # coordinates
+        # ToDo add loading from default
+        a1 = arguments.get('coordinate_a1')
+        if 'coordinate_a1' in assumed:
+            a1 = self.default_values.coordinate_a1
+        self.coordinate_a1.setValue(a1)
+
+        a2 = arguments.get('coordinate_a2')
+        if 'coordinate_a1' in assumed:
+            a2 = self.default_values.coordinate_a2
+        self.coordinate_a2.setValue(a2)
+
+        a3 = arguments.get('coordinate_a3')
+        if 'coordinate_a1' in assumed:
+            a3 = self.default_values.coordinate_a3
+        self.coordinate_a3.setValue(a3)
+
+        symbol = arguments.get('symbol')
+        if 'symbol' in assumed:
+            symbol = 'No element chosen'
+        self.element_combobox.setCurrentText(symbol)
+
+
+    def receive(self, value_dict: dict):
+        # ToDo: adapt for crystal
+        """Receives other settingsChanged pyqtSignal -> dict"""
+
+        energy = value_dict.get('energy')
+        if energy is not None:
+            self.coordinate_a2.setEnabled(bool(energy))
+
+        angle = value_dict.get('angle')
+        if angle is not None:
+            self.coordinate_a3.setEnabled(bool(angle))
+
+    def setAvailableElements(self, available_element_list: List[str]):
+
+        if self.element_combobox.currentText() in available_element_list:
+            index = available_element_list.index(self.element_combobox.currentText()) + 1
+        else:
+            index = 0
+
+        self.element_combobox_entries = available_element_list
+        self.element_combobox_entries.insert(0, 'No element chosen')
+        self.element_combobox.clear()
+        self.element_combobox.addItems(self.element_combobox_entries)
+        self.element_combobox.setCurrentIndex(index)
+
+    def crystalSymmetry(self):
+        for corners in self.corners:
+            if self.crystal_coordinates == corners:
+                self.crystal_symmetry = f'Corner({self.crystal_coordinates})'
+                self.setSymmetryFlags()
+                return
+
+        # check if the coordinates lie on one of the planes
+        combinations = [[1, 2, 'X'], [0, 2, 'Y'], [0, 1, 'Z']]
+
+        for i, combination in enumerate(combinations):
+            if self.crystal_coordinates[i] == 0 or self.crystal_coordinates[i] == 1:
+                if ((self.crystal_coordinates[combination[0]] != 0 and self.crystal_coordinates[combination[1]] != 0) and
+                        (self.crystal_coordinates[combination[0]] != 1 and self.crystal_coordinates[
+                            combination[1]] != 1)):
+                    self.crystal_symmetry = f'{combination[2]}-Plane({self.crystal_coordinates[i]})'
+                    self.setSymmetryFlags()
+                    return
+
+        # Check if the coordinates lie on an edge
+        xy = [[self.crystal_coordinates[0], self.crystal_coordinates[1]], 'XY']
+        xz = [[self.crystal_coordinates[0], self.crystal_coordinates[2]], 'XZ']
+        yz = [[self.crystal_coordinates[1], self.crystal_coordinates[2]], 'YZ']
+        edge_names = [xy, xz, yz]
+        i = 2
+        for edge_name in edge_names:
+            for edge_combo in self.edge_combo:
+                if edge_name[0] == edge_combo and (
+                        self.crystal_coordinates[i] != 0 and self.crystal_coordinates[i] != 1):
+                    self.crystal_symmetry = f'{edge_name[1]}-Edge({edge_combo})'
+                    self.setSymmetryFlags()
+                    return
+            i -= 1
+
+        self.crystal_symmetry = f'Volume({self.crystal_coordinates})'
+        self.setSymmetryFlags()
+
+    def setSymmetryFlags(self):
+        self.edge_flag = False
+        self.plane_flag = False
+        self.corner_flag = False
+        self.volume_flag = False
+
+        if 'Corner' in self.crystal_symmetry:
+            self.corner_flag = True
+
+        if 'Plane' in self.crystal_symmetry:
+            self.plane_flag = True
+
+        if 'Edge' in self.crystal_symmetry:
+            self.edge_flag = True
+
+        if 'Volume' in self.crystal_symmetry:
+            self.volume_flag = True
+
+    def getCoordinates(self):
+        # Corner coordinates
+        if self.corner_flag:
+            return self.corners
+
+        # Edge Coordinates
+        if self.edge_flag:
+            edge_names = ['XY', 'XZ', 'YZ']
+            i = 2
+            for edge_name in edge_names:
+                if edge_name in self.crystal_symmetry:
+                    edges = []
+                    for edge_combo in self.edge_combo:
+                        templist = edge_combo.copy()
+                        templist.insert(i, self.crystal_coordinates[i])
+                        edges.append(templist)
+                    return edges
+                i -= 1
+
+        # Plane coordinates
+        if self.plane_flag:
+            plane_names = ['X-Plane', 'Y-Plane', 'Z-Plane']
+            for z in range(len(plane_names)):
+                if plane_names[z] in self.crystal_symmetry:
+                    planes = [[self.crystal_coordinates[0], self.crystal_coordinates[1], self.crystal_coordinates[2]],
+                              [self.crystal_coordinates[0], self.crystal_coordinates[1], self.crystal_coordinates[2]]]
+                    for i in range(2):
+                        planes[i][z] = i
+                    return planes
+        # Volume coordinates
+        if self.volume_flag:
+            volume_cord = []
+            volume_cord.append(self.crystal_coordinates)
+            return volume_cord
+
+    def updateCrystalCoordinates(self):
+        self.crystal_coordinates = [self.coordinate_a1.value(),
+                                    self.coordinate_a2.value(),
+                                    self.coordinate_a3.value()
+                                    ]
+
 
 
 class HlPlot(HlGeneralPlot):
@@ -1717,7 +2169,7 @@ class SimulationInput(SimulationsInput):
     Name = 'SDTrimSP'
     Versions = [
         '6.01, 6.06',
-        '6.09'
+        '6.09', '7.00'
     ]
     Description = '''
 SDTrimSP is designed for atomic collisions in amorphous
@@ -1740,6 +2192,7 @@ Andreas Mutzke
     '''
     SaveFolder = 'SDTrimSP'
     InputFilename = 'tri.inp'
+    CrystalFilename = 'crystal.inp'
     LayerFilename = 'layer.inp'
     ExampleAdditionalSetting = 'e.g. ienergy_distr = .true.'
     SkipList = [InputFilename, LayerFilename, 'ausdat.dat']
@@ -1785,6 +2238,7 @@ Andreas Mutzke
     VlSimulationSettings = VlSimulationSettings
     CompRowBeamSettings = CompRowBeamSettings
     CompRowTargetSettings = CompRowTargetSettings
+    CompRowCrystalSettings = CompRowCrystalSettings
 
     # Maximum number of components
     MaxComponents = 8
@@ -1881,8 +2335,32 @@ Andreas Mutzke
         :param version: version of simulation
         """
 
+        # get compounds
+        # open compound file and read contents
+        self.CompoundList = []
+        if version == '7.00':
+            compound_table = f'{folder}/tables/table.compound'
+            try:
+                with open(compound_table, 'r', encoding='utf-8', errors='replace') as file:
+                    while file.readline().strip() != '!234567890!234567890!234567890':
+                        continue
+
+                    while True:
+                        line = file.readline().strip()
+
+                        if not line.strip():
+                            break
+
+                        content = line.split()
+
+                        if not content[0].startswith('!'):
+                            self.CompoundList.append(Compound(content[0], {content[1]: content[-3], content[2]: content[-2]}))
+
+            except FileNotFoundError:
+                pass
+
         # update number of components
-        if version == '6.09':
+        if version in ['6.09', '7.00']:
             self.MaxComponents = 11
 
         # update OutputTooltips
@@ -1941,6 +2419,7 @@ Andreas Mutzke
         except FileNotFoundError:
             logging.info(f'Could not open file "{input_variables_doc}"!')
             pass
+
 
     def updateElements(self, folder: str, version: str) -> bool:
         """
@@ -2109,6 +2588,8 @@ Andreas Mutzke
                 else:
                     element_list.append(element)
 
+
+
         except FileNotFoundError:
             logging.info(f'Could not open file "{table_path}"!')
             pass
@@ -2267,7 +2748,6 @@ Andreas Mutzke
             modifications += '    a_mass = ' + ', '.join(a_mass) + '\n'
 
         # --- general ---
-
         idrel = arguments.settings.mode
         idrel = dict_lookup.idrel.get(idrel)
         if idrel is None:
@@ -2386,6 +2866,75 @@ Andreas Mutzke
 
         nqx = arguments.target_args.segments
 
+        if version == '7.00':
+            l_crystal = f'l_crystal = {arguments.target_args.get('crystal_flag')}'
+            if l_crystal is None:
+                l_crystal = f'l_crystal = {default_values.l_crystal}'
+
+            miller_ind = f'miller_ind = {arguments.target_args.get('miller_index_h')}, {arguments.target_args.get('miller_index_k')}, {arguments.target_args.get('miller_index_l')}'
+            crystal_settings = f'''
+text = "--- crystal ---"
+{l_crystal}
+{miller_ind}
+'''
+        else:
+            l_crystal = ''
+            miller_ind = ''
+            crystal_settings = f'text = "--- version is not crystal capable ---"'
+
+        # two-compound options
+        cmpd = []
+
+        for compound in arguments.settings.compounds:
+            cmpd.append(compound.name_save)
+
+        try:
+            if len(cmpd) == 1:
+                l_two_comp_name = 'l_two_comp'
+                l_two_comp = True
+                l_two_comp_str = f'{l_two_comp_name} = .{str(l_two_comp).lower()}.'
+                two_comp = f'two_comp = "{cmpd[0]}"'
+                comp_output = 'text = "--- compound ---" \n'
+                comp_output += '    ' + l_two_comp_str + '\n'
+                comp_output += '    ' + two_comp
+
+            if len(cmpd) == 2:
+                l_two_comp_name = 'l_two_comp2'
+                l_two_comp = True
+                l_two_comp_str = f'{l_two_comp_name} = .{str(l_two_comp).lower()}.'
+                two_comp = f'two_comp = "{cmpd[0]}"'
+                two_comp2 = f'two_comp2 = "{cmpd[1]}"'
+                comp_output = 'text = "--- compound ---" \n'
+                comp_output += '    ' + l_two_comp_str + '\n'
+                comp_output += '    ' + two_comp + '\n'
+                comp_output += '    ' + two_comp2
+
+            if len(cmpd) == 3:
+                l_two_comp_name = 'l_two_comp3'
+                l_two_comp = True
+                l_two_comp_str = f'{l_two_comp_name} = .{str(l_two_comp).lower()}.'
+                two_comp = f'two_comp = "{cmpd[0]}"'
+                two_comp2 = f'two_comp2 = "{cmpd[1]}"'
+                two_comp3 = f'two_comp3 = "{cmpd[2]}"'
+                comp_output = 'text = "--- compound ---" \n'
+                comp_output += '    ' + l_two_comp_str + '\n'
+                comp_output += '    ' + two_comp + '\n'
+                comp_output += '    ' + two_comp2 + '\n'
+                comp_output += '    ' + two_comp3
+
+            if len(cmpd) == 0:
+                comp_output = 'text = "--- compound no compounds found ---"'
+
+            if len(cmpd) > 3:
+                comp_output = 'text = "--- compound not more than 3 possible ---" '
+
+        except:
+            l_two_comp_name = 'l_two_comp'
+            l_two_comp = False
+            l_two_comp_str = f'.{str(l_two_comp).lower()}.'
+            pass
+
+
         # --- output options ---
 
         lparticle_p = arguments.settings.get('log_reflected')
@@ -2412,7 +2961,6 @@ Andreas Mutzke
 
         tableinp = f'{folder}/tables'
         additional = '\n    '.join(arguments.additional)
-
         out = f'''
 {title}
 &TRI_INP
@@ -2445,6 +2993,9 @@ text = "--- target ---"
     ttarget = {ttarget}
     nqx = {nqx}
     iq0 = {iq0}
+ 
+{str(comp_output)}
+{crystal_settings}
 
 text = "--- output options ---"
     lparticle_p = {lparticle_p_str}
@@ -2533,6 +3084,103 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 '''
         return f'{out.strip()}\n'
 
+    @staticmethod
+    def makeCrystalFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+        # ToDo Check for missing Arguments and fill potential missing Args with default args
+        """
+        Returns input file as string
+
+        :param arguments: <SimulationArguments> container
+        :param folder: folder of simulation
+        :param version: version of simulation
+        """
+
+        default_values = DefaultValues(version)
+        dict_lookup = DictLookup(version)
+
+        title = arguments.settings.title
+        # Create crystal file for realzis
+        name = arguments.crystal_args.name
+        lattice_id = arguments.crystal_args.lattice_id
+        species_str = 'No elements in species list'
+        number_of_species = arguments.crystal_args.get('number_of_species')
+        species = arguments.crystal_args.optional.get('species')
+        if species:
+            species_str = ''
+            for element in species:
+                species_str += f'"{element}"\n'
+            species_str.strip()
+
+        a1_x = arguments.crystal_args.basis_vector_a1_x
+        a1_y = arguments.crystal_args.basis_vector_a1_y
+        a1_z = arguments.crystal_args.basis_vector_a1_z
+
+        a2_x = arguments.crystal_args.basis_vector_a2_x
+        a2_y = arguments.crystal_args.basis_vector_a2_y
+        a2_z = arguments.crystal_args.basis_vector_a2_z
+
+        a3_x = arguments.crystal_args.basis_vector_a3_x
+        a3_y = arguments.crystal_args.basis_vector_a3_y
+        a3_z = arguments.crystal_args.basis_vector_a3_z
+
+        lattice_constant = arguments.crystal_args.get('lattice_constant')
+        p_max = arguments.crystal_args.get('p_max')
+        beam_dy = arguments.crystal_args.get('beam_dy')
+        beam_dz = arguments.crystal_args.get('beam_dz')
+        if arguments.crystal_args.get('matrix_5') and not arguments.crystal_args.get('matrix_3'):
+            matrix_id = 5
+        else:
+            matrix_id = 3
+        crystal_rows = arguments.crystal_rows
+        if not crystal_rows:
+            number_of_atoms = 0
+        else:
+            number_of_atoms = len(crystal_rows)
+        if crystal_rows and species:
+            coordinate_str = ''
+            for element in crystal_rows:
+                (species.index(element.get('symbol')) + 1)
+                coordinate_str += f'{element.get('coordinate_a1')} {element.get('coordinate_a2')} {element.get('coordinate_a3')} {(species.index(element.get('symbol'))+1)}  x,y,z Number of species \n'
+            coordinate_str.strip()
+        else:
+            coordinate_str = 'No coordinates defined'
+
+        out = f'''
+#{title}
+#&Crystal_INP
+# name of Cristal(surface: dy,dz) (text)
+# lattice_id (integer)
+# number of spezies (integer)
+# species_1 (element name: character, len(2))
+# species_2 (element name: character, len(2))
+# a1 : first basis vector of lattice cell (x1,y1,z1) :real, dimension(3)
+# a2 : second basis vector of lattice cell (x2,y2,z2):real, dimension(3)
+# a3 : third basis vector of lattice cell (x3,y3,z3) :real, dimension(3)
+# number of atoms (integer)
+# x(depth), y(back), z(right) position and number(=type) of species : real, dimension(3), integer
+# p_max of crystal if known (default 0.0)
+# dy_beam dz_beam  surface of beam
+# matrix_id 3x3x3 ...3 
+# matrix_id 5x5x5 ...5
+#--------------crystal hou/robinson 1 crystal ffc
+        
+{name}                  name
+{lattice_id}            lattice_id
+{number_of_species}     number of species
+{species_str}
+{a1_x * lattice_constant} {a1_y * lattice_constant} {a1_z * lattice_constant}    a1: dx, dy, dz [Å]
+{a2_x * lattice_constant} {a2_y * lattice_constant} {a2_z * lattice_constant}    a2: dx, dy, dz [Å]
+{a3_x * lattice_constant} {a3_y * lattice_constant} {a3_z * lattice_constant}    a3: dx, dy, dz [Å]
+{number_of_atoms}           number of atoms in cell
+{coordinate_str} 
+{p_max}                 p_max (Impact parameter)
+{beam_dy} {beam_dz}     surface of beam ( beam_dy beam_dz)
+{matrix_id}             matrix_id = 5 => 5x5x5 , matrix_id = 3 => 3x3x3
+    
+    '''
+        return f'{out.strip()}\n'
+
+
     def loadFiles(self, folder: str, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
@@ -2550,6 +3198,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         input_file = f'{folder}/{self.InputFilename}'
         layer_file = f'{folder}/{self.LayerFilename}'
+        crystal_file = f'{folder}/{self.CrystalFilename}'
 
         contents = DeleteDict()
 
@@ -2593,6 +3242,8 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         def getValueBoolInt(value: str) -> Union[bool, float]:
             """Returns the integer of value or False"""
 
+            if value is None:
+                return False
             if 'False' in value:
                 return False
             try:
@@ -2607,7 +3258,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                 assumed_cls = []
             try:
                 return [k for k, v in lookup_dict.items() if v == int(value)][0]
-            except (ValueError, IndexError):
+            except (ValueError, IndexError, TypeError):
                 if item is not None:
                     assumed_cls.assumed(item)
                 return [k for k, v in lookup_dict.items() if v == default_value][0]
@@ -2672,6 +3323,8 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         e_displ = getValueList(contents.get('e_displ'), float, -1.0, assumed_cls=assumed)
         dns0 = getValueList(contents.get('dns0'), float, -1.0, assumed_cls=assumed)
         a_mass = getValueList(contents.get('a_mass'), float, -1.0, assumed_cls=assumed)
+
+
 
         # get rid of 'tableinp' since it is not used
         contents.get('tableinp')
@@ -2854,19 +3507,93 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                 abundances=abundances
             )]
 
-        simulation = SimulationArguments(
-            simulation=self.Name,
-            beam_args=beam_args,
-            beam_rows=beam_rows,
-            target_args=target_args,
-            target_rows=target_rows,
-            structure=structure,
-            settings=settings,
-            additional=additional,
-            assumed=assumed
-        )
+        if version == '7.00':
+            try:
+                with open(crystal_file, 'r', encoding='utf-8', errors='replace') as file:
+                    content_list = []
+                    for i, line in enumerate(file.readlines()):
+                        if i > 17:
+                            content = [p.strip() for p in line.strip().split()]
+                            content_list.append(content)
+            except FileNotFoundError:
+                logging.info(f'Could not open file "{crystal_file}"!')
+                return False
 
-        return simulation, error_list
+            if content_list:
+                crystal_name = content_list[0][0]
+                lattice_id = content_list[1][0]
+                number_of_species = int(content_list[2][0])
+                species = []
+                for i in range(number_of_species):
+                    species.append(content_list[3 + i][0].strip('"'))
+
+                new_index = len(species) + 3 + 1
+                # ToDo read basis vectors and miller indices as float otherwise make Arguments wont work
+                basis_vec_1 = content_list[new_index][0:3]
+                basis_vec_2 = content_list[new_index + 1][0:3]
+                basis_vec_3 = content_list[new_index + 2][0:3]
+                number_atoms_in_cell = int(content_list[new_index + 3][0])
+                new_index = new_index + 4
+                row_list = []
+                for i in range(int(number_atoms_in_cell)):
+                    row_list.append(content_list[new_index + i][0:4])
+
+                new_index = new_index + number_atoms_in_cell + 1
+                impact_parameter = content_list[new_index][0]
+                dy = float(content_list[new_index + 1][0])
+                dz = float(content_list[new_index + 1][1])
+                matrix_id = int(content_list[new_index + 2][0])
+
+            # crystal_args data (<GeneralTargetArguments>)
+            crystal_args = GeneralCrystalArguments(
+                name=crystal_name,
+                lattice_id=lattice_id,
+                # number_of_species=number_of_species,
+                # species=species_list,
+                # lattice_constant=lattice_constant,
+            )
+            crystal_rows = []
+            for i, rows in enumerate(row_list):
+                row = CrystalRowArguments(
+                    index=i,
+                    symbol=species[int(rows[3]) - 1],
+                    coordinate_a1=float(rows[0]),
+                    coordinate_a2=float(rows[1]),
+                    coordinate_a3=float(rows[2])
+                )
+                crystal_rows.append(row)
+
+            simulation = SimulationArguments(
+                simulation=self.Name,
+                beam_args=beam_args,
+                beam_rows=beam_rows,
+                target_args=target_args,
+                target_rows=target_rows,
+                structure=structure,
+                settings=settings,
+                additional=additional,
+                assumed=assumed,
+                crystal_args=crystal_args,
+                crystal_rows=crystal_rows
+            )
+
+            return simulation, error_list
+
+        else:
+            simulation = SimulationArguments(
+                simulation=self.Name,
+                beam_args=beam_args,
+                beam_rows=beam_rows,
+                target_args=target_args,
+                target_rows=target_rows,
+                structure=structure,
+                settings=settings,
+                additional=additional,
+                assumed=assumed
+            )
+
+            return simulation, error_list
+
 
     def checkAdditional(self, settings: str, version: str) -> List[str]:
         """
@@ -3381,23 +4108,30 @@ class SimulationAnalysis(SimulationsAnalysis):
                 contents = file.readline().split()
                 ncp = int(contents[2])
                 self.is_dynamic = int(contents[-1]) == 0
-                elements = file.readline().split()
+                elements_raw = file.readline().split()
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{target}"!')
             return
 
         # check if both are equal
-        if ncp != len(elements):
+        if ncp != len(elements_raw):
             return
+
+        elements = []
+        for element in elements_raw:
+            split = element.split('_')
+            if len(split) == 1 or not split[-1].isnumeric():
+                elements.append(element)
+                continue
+            elements.append('_'.join(element.split('_')[:-1]))
 
         self.elements = ElementList()
         for element in elements:
             self.elements.append(element)
 
-        # get masses
         self.masses = np.array([self.element_data.elementFromSymbol(element).atomic_mass for element in elements])
-        
+
     def getElementIndex(self, element: str) -> int:
         """Returns index of element"""
         if element not in self.elements:
@@ -3652,14 +4386,14 @@ class SimulationAnalysis(SimulationsAnalysis):
                 file.readline()
 
                 # line 2: ncp and ncp_proj
-                line_content = file.readline().split()
+                line_content = file.readline().strip('#').split()
                 ncp = int(line_content[0])
                 ncp_proj = int(line_content[1])
 
                 file.readline()
 
                 # line 4: elements
-                elements = file.readline().split()[-ncp:]
+                elements = file.readline().strip('#').split()[-ncp:]
 
                 file.readline()
 
@@ -3670,7 +4404,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
                 # skip lines starting with '!'
                 line = file.readline()
-                while line.strip().startswith('!'):
+                while line.strip().startswith('!') or line.strip().startswith('#'):
                     line = file.readline()
 
                 # line (6+ncp+offset)+0 / +1: number energies / number angles
@@ -3683,7 +4417,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
                 # line (6+ncp+offset)+6: elements list
                 elements_projectiles = []
-                line_elements = file.readline().split()
+                line_elements = file.readline().strip('#').split()
                 for i in range(ncp_proj):
                     elements_projectiles.append(line_elements[2 * i])
 
@@ -3830,15 +4564,18 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         try:
             with open(damage_file, 'r', encoding='utf-8', errors='replace') as file:
-                content = [line.strip('# ').lower() for line in file.readlines()]
+                content = []
+                depth_step_index = []
+                for i, line in enumerate(file.readlines()):
+                    content.append(line.strip('# ').lower())
+                    if content[i].endswith('number of depth\n'):
+                        depth_step_index.append(i)
+
+
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{filename}"!')
             return
-        #Versuch um die Plots hinzukriegen die erste
-        for z, line in enumerate(content):
-            if line.startswith('au') or line.startswith('ar'):
-                content.pop(z)
 
         try:
             line_content = content[2].split()
@@ -3849,13 +4586,17 @@ class SimulationAnalysis(SimulationsAnalysis):
             data_start_line = np.zeros(ncp, dtype=int)
 
             for i in range(ncp):
-                depth_step_index = 3 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
-                data_start_line[i] = depth_step_index + 3
-                nr_of_depth_steps[i] = int(content[depth_step_index].split()[0])
+                data_start_line[i] = depth_step_index[i] + 3
+
+                if '->' in content[data_start_line[i]]:
+                    data_start_line[i] = data_start_line[i] + 1
+
+                nr_of_depth_steps[i] = int(content[depth_step_index[i]].split()[0])
 
             file_elements = []
             for i in range(ncp):
-                element_line_index = 2 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
+                element_line_index = data_start_line[i] + nr_of_depth_steps[i] + 2
+                #element_line_index = 2 + i * (4 + 1 + 5) + int(np.sum(nr_of_depth_steps[:i])) + 1
                 file_elements.append(content[element_line_index].split()[-1].capitalize())
 
             max_nr_depth_steps = np.max(nr_of_depth_steps)
@@ -3899,7 +4640,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
                 for _ in range(4):
                     file.readline()
-                line_content = file.readline().split()
+                line_content = file.readline().strip('#').split()
                 if not all(column in line_content for column in ['cosp', 'cosa', 'end-energy']):
                     return
                 cosp_idx = line_content.index('cosp')

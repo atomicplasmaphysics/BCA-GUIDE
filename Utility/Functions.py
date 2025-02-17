@@ -24,6 +24,9 @@ import logging
 from numpy import array, ndarray
 
 
+from PyQt6.QtGui import QColor
+
+
 def limitSum(objects: list, maximum: float):
     """
     Limits the sum of the values held by the object.value() method to the given maximum.
@@ -332,3 +335,7 @@ def splitSafe(string: str, seperator: str = None, length: int = -1) -> Union[lis
     if length == -1 or length == len(result):
         return result
     return False
+
+
+def getElementColor(index: int, number_of_elements: int):
+    return QColor.fromHsv(int(index * 359 / number_of_elements), 255, 255, 127)

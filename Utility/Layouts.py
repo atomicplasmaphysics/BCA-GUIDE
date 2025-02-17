@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from matplotlib.pyplot import cm
 
 from Utility.ModifyWidget import setWidgetBackground
 
@@ -195,6 +196,7 @@ class SpinBoxRange:
     ONE_INF = (1, INF)
     NEG_INF_ZERO = (NEG_INF, 0)
     NEG_ONE_INF = (-1, INF)
+    ZERO_ONE = (0, 1)
 
 
 class SpinBox(QSpinBox):
@@ -1170,9 +1172,15 @@ class MplCanvas(FigureCanvasQTAgg):
     :param width: width of figure
     :param height: height of figure
     :param dpi: dpi for figure
+    :param enable_3d: enables 3D projection
     """
 
-    def __init__(self, width: int = 4, height: int = 8, dpi: float = 100):
+    def __init__(self, width: int = 4, height: int = 8, dpi: float = 100, enable_3d: bool = False):
         self.fig: Figure = Figure(figsize=(width, height), dpi=dpi)
-        self.axes: Axes = self.fig.add_subplot(111)
+        axes_kwargs = {}
+        if enable_3d:
+            axes_kwargs.update({
+                'projection': '3d'
+            })
+        self.axes: Axes = self.fig.add_subplot(111, **axes_kwargs)
         super().__init__(self.fig)

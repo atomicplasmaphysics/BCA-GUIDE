@@ -456,10 +456,8 @@ class ConfigurationPage(TabWithToolbar):
                 'Errors occurred while loading configuration. Effected configurations will not be loaded.',
                 detailed_message=error_msg
             )
-
         self.clearConfigView()
         self.listConfigView()
-
         self.main_window.writeStatusBar('Loading configuration file successful')
 
     def save(self, autosave: bool = False, no_config: bool = False):
@@ -498,13 +496,13 @@ class ConfigurationPage(TabWithToolbar):
 
     def listConfigView(self):
         """List configuration from self.mainWindow.simConfigs dictionary"""
-
         self.simulation_configuration_list.clear()
         self.simulation_configuration_list.addItem(self.new_configuration_text)
         for sc in self.main_window.simulation_configs:
             item = QListWidgetItem(sc.title)
             item.setCheckState(Qt.CheckState.Unchecked)
             self.simulation_configuration_list.addItem(item)
+
         self.main_window.updateTabs()
         self.simulation_configuration_list.setCurrentRow(0)
 

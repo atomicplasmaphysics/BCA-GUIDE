@@ -57,7 +57,7 @@ class CustomRow(QObject):
     """
     Class for custom QObject row
     """
-
+    # coordinateChanged = pyqtSignal()
     contentChanged = pyqtSignal()
 
     def __init__(self):
@@ -114,6 +114,7 @@ class CustomTable(QTableWidget):
 
     settingsChanged = pyqtSignal(dict)
     contentChanged = pyqtSignal()
+    #coordinateChanged = pyqtSignal()
 
     def __init__(self, row_count: int, header_labels, parent):
         self.header_labels = [''] + header_labels

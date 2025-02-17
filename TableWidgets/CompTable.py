@@ -559,3 +559,6 @@ class CompTableTarget(CompTable):
         if row.element.symbol == '':
             return
         self.syncableValueChanged.emit(row.element.symbol, field.unique_id, new_value)
+
+
+

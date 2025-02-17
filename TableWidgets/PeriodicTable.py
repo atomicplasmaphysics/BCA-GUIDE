@@ -612,3 +612,4 @@ class PeriodicTableDialog(QDialog):
             self.previous_chosen_element = element_widget
             break
         self.done(QDialog.DialogCode.Accepted)
+
