@@ -1916,6 +1916,9 @@ Andreas Mutzke
                     line = file.readline().strip()
                     if not line:
                         break
+                        
+                    if line.startswith('!'):
+                        continue
 
                     content = [sp.strip() for sp in line.split(' ') if sp.strip()]
                     if not content:
@@ -2017,7 +2020,7 @@ Andreas Mutzke
             for element in table:
 
                 symbol = element[0]
-                atomic_nr = intSafe(element[1])
+                atomic_nr = intSafe(element[1], log_warning=False)
 
                 # skip the weird elements
                 if atomic_nr > last_atomic_nr + 1:
@@ -2084,11 +2087,11 @@ Andreas Mutzke
 
                 periodic_table_symbol = element[0].split('_')[0][:2]
                 # charge = element[1]
-                atomic_mass = floatSafe(element[2])
-                atomic_density = floatSafe(element[4])
+                atomic_mass = floatSafe(element[2], log_warning=False)
+                atomic_density = floatSafe(element[4], log_warning=False)
 
-                energy_surfb = floatSafe(element[5])
-                energy_disp = floatSafe(element[6])
+                energy_surfb = floatSafe(element[5], log_warning=False)
+                energy_disp = floatSafe(element[6], log_warning=False)
 
                 element = Element(
                     symbol=symbol,

@@ -27,9 +27,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:document-units="mm"
      showgrid="false"
-     inkscape:zoom="0.64052329"
-     inkscape:cx="391.08648"
-     inkscape:cy="14.831623"
+     inkscape:zoom="0.90583672"
+     inkscape:cx="356.02443"
+     inkscape:cy="106.53134"
      inkscape:window-width="1920"
      inkscape:window-height="1001"
      inkscape:window-x="-9"
@@ -627,34 +627,16 @@
       <text
          transform="scale(1,-1)"
          style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:24.2188px;font-family:'Myriad Pro';-inkscape-font-specification:MyriadPro-Regular;writing-mode:lr-tb;fill:#2678bd;fill-opacity:1;fill-rule:nonzero;stroke:none"
-         id="text1074"
-         x="9.0195999"
-         y="-48.369541"><tspan
-           x="9.0195999"
-           sodipodi:role="line"
-           id="tspan1068"
-           y="-48.369541" /><tspan
-           x="9.0195999"
-           sodipodi:role="line"
-           id="tspan1070"
-           y="-18.096041">www.tuwien.at</tspan><tspan
-           sodipodi:role="line"
-           id="tspan1072"
-           x="9.0195999"
-           y="12.177458" /></text>
-      <text
-         transform="scale(1,-1)"
-         style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:24.2188px;font-family:'Myriad Pro';-inkscape-font-specification:MyriadPro-Regular;writing-mode:lr-tb;fill:#2678bd;fill-opacity:1;fill-rule:nonzero;stroke:none"
          id="text1074-5"
-         x="348.6633"
+         x="140.16093"
          y="-20.348816"><tspan
-           x="348.6633"
+           x="140.16093"
            sodipodi:role="line"
            id="tspan1070-2"
-           y="-20.348816">www.iap.tuwien.ac.at</tspan><tspan
+           y="-20.348816">www.tuwien.at/phy/iap/app</tspan><tspan
            sodipodi:role="line"
            id="tspan1072-3"
-           x="348.6633"
+           x="140.16093"
            y="9.9246836" /></text>
       <text
          xml:space="preserve"
