@@ -1079,11 +1079,14 @@ EOF
         self.table_beam.resetTable()
         self.table_target.resetTable()
 
+        #self.crystal_editor_dialog.resetTable()
+
         # add first rows
         self.table_beam.addRow()
         self.table_target.addRow()
         self.target_layers.addRow()
         if self.simulation_configuration.version == '7.00':
+            self.crystal_editor_dialog.reset()
             self.crystal_editor_dialog.addRow()
 
         # somehow the resize of the target layer table does not work, therefore this fix is needed
@@ -1094,6 +1097,8 @@ EOF
         self.general_target_settings.reset()
         self.settings_group_layout_settings.reset()
         self.additional_settings.setPlainText('')
+
+        # Reset Crystal settings
 
         # set run status
         self.setRunStatus(SimulationPage.RunStatus.READY)

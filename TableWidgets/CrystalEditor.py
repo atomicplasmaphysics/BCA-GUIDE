@@ -31,6 +31,7 @@ from TableWidgets.CompTable import CompTable
 from TableWidgets.CrystalTable import CrystalTable
 
 from Utility.Layouts import SpinBoxRange
+from Utility.ModifyWidget import setWidgetHighlight
 
 from Utility.Layouts import InputHBoxLayout,  VBoxTitleLayout, MplCanvas, DoubleSpinBox
 from Utility.Indexing import Counter
@@ -251,7 +252,7 @@ class CrystalEditorDialog(QDialog):
 
 
         self.impact_parameter = DoubleSpinBox(3., input_range=SpinBoxRange.INF_INF, decimals=7)
-        self.lattice_constant = DoubleSpinBox(1., input_range=SpinBoxRange.INF_INF, decimals=7)
+        self.lattice_constant = DoubleSpinBox(3., input_range=SpinBoxRange.INF_INF, decimals=7)
         self.impact_parameter.setToolTip('<i>p_max </i> <br> impact_parameter')
         self.lattice_constant.setToolTip('<i>lattice_constant</i> <br> is used to scale the basis-vectors in [Å]')
 
@@ -399,7 +400,7 @@ class CrystalEditorDialog(QDialog):
         )
 
         self.table_crystal.coordinateChanged.connect(lambda: self.crystalCoordinatesChanged())
-        self.crystal_table_vbox.addWidget(self.table_crystal)
+        self.crystal_table_hbox.addWidget(self.table_crystal)
 
         #
         # Crystal orientation preview
@@ -419,7 +420,6 @@ class CrystalEditorDialog(QDialog):
         self.crystal_preview.axes.view_init(self.elev_prev, self.azim_prev)
         self.orientation_preview.axes.view_init(self.elev_orien, self.azim_orien)
         self.beam_vector = np.array([0., 0., 1])
-
 
         # Toolbar
 
@@ -634,11 +634,11 @@ class CrystalEditorDialog(QDialog):
                                                   s=100
                                                   )
 
-            self.crystal_preview.axes.set_axis_off()
-            self.orientation_preview.axes.set_axis_off()
-
             self.crystal_preview.axes.set_position([0.05, 0.05, 0.9, 0.9])  # [left, bottom, width, height]
             self.orientation_preview.axes.set_position([0.05, 0.05, 0.9, 0.9])  # [left, bottom, width, height]
+
+        self.crystal_preview.axes.set_axis_off()
+        self.orientation_preview.axes.set_axis_off()
 
         xx, yy = np.meshgrid(range(-2, 2), range(-1, 3))
         z = 0*(xx + yy)
@@ -650,8 +650,45 @@ class CrystalEditorDialog(QDialog):
         self.crystal_preview.axes.view_init(self.elev_prev, self.azim_prev)
         self.orientation_preview.axes.view_init(self.elev_orien, self.azim_orien)
 
+    def reset(self):
+        """Resets the crystal parameters and table"""
+
+        # Reset miller indices
+        self.miller_index_h.setValue(1.)
+        self.miller_index_k.setValue(0.)
+        self.miller_index_l.setValue(0.)
+
+        # Reset Basis vectors
+        self.basis_vector_a1_x.setValue(1.)
+        self.basis_vector_a1_y.setValue(0.)
+        self.basis_vector_a1_z.setValue(0.)
+
+        self.basis_vector_a2_x.setValue(0.)
+        self.basis_vector_a2_y.setValue(1.)
+        self.basis_vector_a2_z.setValue(0.)
+
+        self.basis_vector_a3_x.setValue(0.)
+        self.basis_vector_a3_y.setValue(0.)
+        self.basis_vector_a3_z.setValue(1.)
+
+        # Reset Beam Settings
+        self.beam_dy.setValue(0.)
+        self.beam_dz.setValue(0.)
+        self.impact_parameter.setValue(3.)
+        self.lattice_constant.setValue(3.)
+        self.matrix_3.checkbox.setChecked(True)
+        self.matrixParametersChanged(self.matrix_3.checkbox, self.matrix_5.checkbox)
+
+        # Reset Crystal orientation settings
+        self.show_coordinate_system.checkbox.setChecked(False)
+        self.show_miller_vector.checkbox.setChecked(False)
+        self.show_unrotated_cell.checkbox.setChecked(False)
+
+        # Reset crystal table
+        self.table_crystal.resetTable()
 
     def addRow(self):
+        """Adds a Row to the table"""
         self.table_crystal.addRow()
 
     def openDialog(self):
@@ -670,7 +707,8 @@ class CrystalEditorDialog(QDialog):
         self.available_elements = []
         for row in self.table_target.rows:
             row.blockSignals(True)
-            self.available_elements.append(row.element.symbol)
+            if row.element.symbol != "":
+                self.available_elements.append(row.element.symbol)
             row.blockSignals(False)
 
         self.table_crystal.blockSignals(True)
@@ -703,21 +741,22 @@ class CrystalEditorDialog(QDialog):
                     all_coordinates = [coord for coords_list in self.crystal_coordinates_dict.values() for coord in coords_list]
 
                     if coordinates in all_coordinates:
-                        row.coordinate_a1.setStyleSheet('background-color: red')
-                        row.coordinate_a2.setStyleSheet('background-color: red')
-                        row.coordinate_a3.setStyleSheet('background-color: red')
+                        setWidgetHighlight(row.coordinate_a1, True)
+                        setWidgetHighlight(row.coordinate_a2, True)
+                        setWidgetHighlight(row.coordinate_a3, True)
                         break
                     if row.element_combobox.currentText() not in self.species_list:
                         self.species_list.append(row.element_combobox.currentText())
                     if row.element_combobox.currentText() in self.crystal_coordinates_dict.keys():
                         self.crystal_coordinates_dict[row.element_combobox.currentText()].append(coordinates)
-                    row.coordinate_a1.setStyleSheet('background-color: white')
-                    row.coordinate_a2.setStyleSheet('background-color: white')
-                    row.coordinate_a3.setStyleSheet('background-color: white')
+                    setWidgetHighlight(row.coordinate_a1, False)
+                    setWidgetHighlight(row.coordinate_a2, False)
+                    setWidgetHighlight(row.coordinate_a3, False)
 
-            row.element_combobox.setStyleSheet('background-color: white')
+            setWidgetHighlight(row.element_combobox, False)
+
             if row.element_combobox.currentText() == 'No element chosen':
-                row.element_combobox.setStyleSheet('background-color: red')
+                setWidgetHighlight(row.element_combobox, True)
 
         self.updatePlot()
 
@@ -728,7 +767,7 @@ class CrystalEditorDialog(QDialog):
             checkbox_2.setChecked(True)
 
     def getArguments(self) -> GeneralCrystalArguments:
-        "get CrystalArgument"
+        """" get CrystalArgument """
 
         return GeneralCrystalArguments(
             name='MyLittleCrystal',

@@ -296,8 +296,6 @@ class CrystalTable(CustomTable):
         row.coordinateChanged.connect(self.coordinateChanged.emit)
 
         row.elementChanged.connect(lambda element: self.elementChanged.emit(row, element))
-        # if connect:
-            # row.contentChanged.connect(self.limitColumns)
         next_rank.rankChanged.connect(lambda rank, r=row: r.element_index.setValue(rank))
         row.element_index.setValue(next_rank.value)
         # if connect:
@@ -325,10 +323,6 @@ class CrystalTable(CustomTable):
 
     def connectRows(self):
         """Connect all rows"""
-
-        # for row in self.rows:
-            #row.contentChanged.connect(self.limitColumns)
-            # row.coordinateChanged.connect(self.coordinateChanged.emit)
         super().connectRows()
 
     def resetTable(self):
@@ -346,8 +340,6 @@ class CrystalTable(CustomTable):
 
         self.component_count.delItem(self.rows[row_idx].element_index.value())
         super().removeCustomRow(row_idx)
-        # if update:
-            # self.limitColumns()
         self.rowRemoved.emit(row_idx)
         if row_idx >0:
             self.coordinateChanged.emit()
@@ -398,7 +390,7 @@ class CrystalTable(CustomTable):
 
         if connect:
             self.connectRows()
-            # self.limitColumns()
+
         return not_loadable
 
     def receive(self, value_dict: dict):

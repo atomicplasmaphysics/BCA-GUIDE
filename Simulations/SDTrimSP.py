@@ -679,6 +679,9 @@ class HlTargetSettings(HlGeneralTargetSettings):
         self.layout_segments.reset()
         self.layout_global_density.reset()
 
+        if self.version == '7.00':
+            self.layout_crystal_file.reset()
+
         self.updateSegmentThickness()
         self.changedGlobDens()
 
@@ -2195,7 +2198,7 @@ Andreas Mutzke
     CrystalFilename = 'crystal.inp'
     LayerFilename = 'layer.inp'
     ExampleAdditionalSetting = 'e.g. ienergy_distr = .true.'
-    SkipList = [InputFilename, LayerFilename, 'ausdat.dat']
+    SkipList = [InputFilename, LayerFilename, CrystalFilename, 'ausdat.dat']
     OutputTooltips = {
         'output.dat': 'general standard output',
         'energy_analyse.dat': 'sum of all energy',
@@ -3145,7 +3148,8 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         else:
             coordinate_str = 'No coordinates defined'
 
-        out = f'''
+        if arguments.target_args.get('crystal_flag'):
+            out = f'''
 #{title}
 #&Crystal_INP
 # name of Cristal(surface: dy,dz) (text)
@@ -3178,6 +3182,10 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 {matrix_id}             matrix_id = 5 => 5x5x5 , matrix_id = 3 => 3x3x3
     
     '''
+
+        else:
+            out = '(-- FILE WILL NOT BE CREATED --)'
+
         return f'{out.strip()}\n'
 
 
