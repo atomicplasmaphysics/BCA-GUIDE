@@ -945,6 +945,7 @@ class CrystalEditorDialog(QDialog):
 
         self.matrixParametersChanged(self.matrix_5.checkbox, self.matrix_3.checkbox)
 
+
         lattice_constant = crystal_args.lattice_constant
 
         if 'lattice_constant' in assumed:
