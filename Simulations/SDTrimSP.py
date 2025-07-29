@@ -105,9 +105,15 @@ class DefaultValues:
     # compounds
 
     # general crystal settings
+    crystal_name = 'MyLittleCrystal'
+    lattice_id = 1
+
     l_crystal = False
     l_crystal_dyn = False
     crystal_capable = False
+
+    number_of_species = 0
+    species = []
 
     miller_index_h = 1.
     miller_index_k = 0.
@@ -3543,91 +3549,68 @@ lattice_constant = {lattice_constant}
                                 content_list.append(line.strip().split())
 
             except FileNotFoundError:
-                '''
+
                 crystal_args = GeneralCrystalArguments(
-                    name=crystal_name,
-                    lattice_id=lattice_id,
-                    number_of_species=number_of_species,
-                    species=species,
-                    lattice_constant=3.0,
-                    basis_vector_a1_x=float(basis_vec_1[0]),
-                    basis_vector_a1_y=float(basis_vec_1[1]),
-                    basis_vector_a1_z=float(basis_vec_1[2]),
-                    basis_vector_a2_x=float(basis_vec_2[0]),
-                    basis_vector_a2_y=float(basis_vec_2[1]),
-                    basis_vector_a2_z=float(basis_vec_2[2]),
-                    basis_vector_a3_x=float(basis_vec_3[0]),
-                    basis_vector_a3_y=float(basis_vec_3[1]),
-                    basis_vector_a3_z=float(basis_vec_3[2]),
-                    miller_index_h=miller_ind[0],
-                    miller_index_k=miller_ind[1],
-                    miller_index_l=miller_ind[2],
-                    p_max=impact_parameter,
-                    beam_dy=dy,
-                    beam_dz=dz,
-                    matrix_3=matrix_3,
-                    matrix_5=matrix_5
+                    name=default_values.crystal_name,
+                    lattice_id=default_values.lattice_id,
+                    number_of_species=default_values.number_of_species,
+                    species=default_values.species,
+                    lattice_constant=default_values.lattice_constant,
+                    basis_vector_a1_x=default_values.basis_vec_a1[0],
+                    basis_vector_a1_y=default_values.basis_vec_a1[1],
+                    basis_vector_a1_z=default_values.basis_vec_a1[2],
+                    basis_vector_a2_x=default_values.basis_vec_a2[0],
+                    basis_vector_a2_y=default_values.basis_vec_a2[1],
+                    basis_vector_a2_z=default_values.basis_vec_a2[2],
+                    basis_vector_a3_x=default_values.basis_vec_a3[0],
+                    basis_vector_a3_y=default_values.basis_vec_a3[1],
+                    basis_vector_a3_z=default_values.basis_vec_a3[2],
+                    miller_index_h=default_values.miller_ind[0],
+                    miller_index_k=default_values.miller_ind[1],
+                    miller_index_l=default_values.miller_ind[2],
+                    p_max=default_values.p_max,
+                    beam_dy=default_values.beam_dy,
+                    beam_dz=default_values.beam_dz,
+                    matrix_3=default_values.matrix_3,
+                    matrix_5=default_values.matrix_5
                 )
-                '''
+
                 logging.info(f'Could not open file "{crystal_file}"!')
                 return False
 
             for i in content_list:
+
                 if 'name' in i:
                     contents[i[1]] = i[0]
+
                 if 'lattice_id' in i:
                     contents[i[1]] = i[0]
+
                 if 'a1:' in i:
                     contents[i[3]] = f'{i[0]},{i[1]},{i[2]}'
+
                 if 'a2:' in i:
                     contents[i[3]] = f'{i[0]},{i[1]},{i[2]}'
+
                 if 'a3:' in i:
                     contents[i[3]] = f'{i[0]},{i[1]},{i[2]}'
+
                 if 'number' in i and 'atoms' in i:
                     contents['number_of_atoms'] = i[0]
+
                 if 'number' in i and 'species' in i:
                     contents['number_of_species'] = i[0]
+
                 if 'p_max' in i:
                     contents[i[1]] = i[0]
+
                 if 'surface' in i:
                     contents['dy'] = i[0]
                     contents['dz'] = i[1]
-                if 'matrix_id' in i:
 
+                if 'matrix_id' in i:
                     contents[i[1]] = i[0]
 
-            '''
-            if content_list:
-                crystal_name = content_list[0][0]
-                lattice_id = content_list[1][0]
-                number_of_species = int(content_list[2][0])
-                species = []
-                for i in range(number_of_species):
-                    species.append(content_list[3 + i][0].strip('"'))
-
-                new_index = len(species) + 3 + 1
-                # ToDo read basis vectors and miller indices as float otherwise make Arguments wont work
-                basis_vec_1 = content_list[new_index][0:3]
-                basis_vec_2 = content_list[new_index + 1][0:3]
-                basis_vec_3 = content_list[new_index + 2][0:3]
-                number_atoms_in_cell = int(content_list[new_index + 3][0])
-                new_index = new_index + 4
-                row_list = []
-                for i in range(int(number_atoms_in_cell)):
-                    row_list.append(content_list[new_index + i][0:4])
-
-                new_index = new_index + number_atoms_in_cell + 1
-                impact_parameter = float(content_list[new_index][0])
-                dy = float(content_list[new_index + 1][0])
-                dz = float(content_list[new_index + 1][1])
-                matrix_id = int(content_list[new_index + 2][0])
-                if matrix_id == 3:
-                    matrix_3 = True
-                    matrix_5 = False
-                else:
-                    matrix_3 = False
-                    matrix_5 = True
-            '''
 
             crystal_name = getValue(contents.get('name'), str, 'MyLittelCrystal', 'name', assumed_cls=assumed)
             lattice_id = getValue(contents.get('lattice_id'), str, '1', 'lattice_id', assumed_cls=assumed)

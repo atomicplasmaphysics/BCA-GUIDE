@@ -767,7 +767,7 @@ class CrystalEditorDialog(QDialog):
             checkbox_2.setChecked(True)
 
     def getArguments(self) -> GeneralCrystalArguments:
-        """" get CrystalArgument """
+        """" get <GeneralCrystalArgument> """
 
         return GeneralCrystalArguments(
             name='MyLittleCrystal',
@@ -803,7 +803,7 @@ class CrystalEditorDialog(QDialog):
         """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
 
         crystal_args = arguments.crystal_args
-        assumed = arguments.get('assumed')
+        assumed = arguments.optional.get('assumed')
         if not isinstance(assumed, list):
             assumed = []
         not_loadable = []
@@ -901,7 +901,8 @@ class CrystalEditorDialog(QDialog):
         self.miller_index_h.setValue(miller_index_h)
         self.miller_index_k.setValue(miller_index_k)
         self.miller_index_l.setValue(miller_index_l)
-
+        # Funktioniert wahrscheinlich nicht da diese Parameter nicht in loadSimulationArguments geladen werden die Frage wäre welche geladen werden müssen und warum das mit den assumed nicht so funktioniert wie gedacht
+        '''
         p_max = crystal_args.optional.get('p_max')
 
         if 'p_max' in assumed:
@@ -910,7 +911,7 @@ class CrystalEditorDialog(QDialog):
             not_loadable.append('p_max')
 
         self.impact_parameter.setValue(p_max)
-
+        
         beam_dy = crystal_args.optional.get('beam_dy')
         if 'beam_dy' in assumed:
             beam_dy = DefaultValues.beam_dy
@@ -926,7 +927,7 @@ class CrystalEditorDialog(QDialog):
             not_loadable.append('beam_dz')
 
         self.beam_dz.setValue(beam_dz)
-
+        
         matrix_3 = crystal_args.optional.get('matrix_3')
         if 'matrix_3' in assumed:
             matrix_3 = DefaultValues.matrix_3
@@ -954,6 +955,8 @@ class CrystalEditorDialog(QDialog):
             not_loadable.append('lattice_constant')
 
         self.lattice_constant.setValue(lattice_constant)
+        
+        '''
 
         return not_loadable
 
