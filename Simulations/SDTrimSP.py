@@ -112,7 +112,8 @@ class DefaultValues:
     l_crystal_dyn = False
     crystal_capable = False
 
-    number_of_species = 0
+    number_of_species = 1
+    number_of_atoms = 1
     species = []
 
     miller_index_h = 1.
@@ -3545,7 +3546,6 @@ lattice_constant = {lattice_constant}
                                     continue
                                 contents[content[0]] = content[1]
                             else:
-                                #content = [p.strip for p in line.strip().split()]
                                 content_list.append(line.strip().split())
 
             except FileNotFoundError:
@@ -3611,7 +3611,6 @@ lattice_constant = {lattice_constant}
                 if 'matrix_id' in i:
                     contents[i[1]] = i[0]
 
-
             crystal_name = getValue(contents.get('name'), str, 'MyLittelCrystal', 'name', assumed_cls=assumed)
             lattice_id = getValue(contents.get('lattice_id'), str, '1', 'lattice_id', assumed_cls=assumed)
             number_of_species = getValue(contents.get('number_of_species'), int, 1, 'number_of_species', assumed_cls=assumed)
@@ -3627,6 +3626,7 @@ lattice_constant = {lattice_constant}
             dy = getValue(contents.get('dy'), float, default_values.beam_dy, 'beam_dy',assumed_cls=assumed)
             dz = getValue(contents.get('dz'), float, default_values.beam_dz, 'beam_dz', assumed_cls=assumed)
             matrix_id = getValue(contents.get('matrix_id'), int, 3, 'matrix_id', assumed_cls=assumed)
+            number_of_atoms = getValue(contents.get('number_of_atoms'), float, default_values.number_of_atoms, 'number_of_atoms', assumed_cls=assumed)
             if matrix_id == 3:
                 matrix_3 = True
                 matrix_5 = False
@@ -3640,13 +3640,25 @@ lattice_constant = {lattice_constant}
 
             if len(species) == 0 or len(species) == 1:
                 offset = 0
+
             else:
                 offset = len(species) - 1
-            number_atoms_in_cell = int(content_list[8 + offset][0])
 
             row_list = []
-            for i in range(int(number_atoms_in_cell)):
-                row_list.append(content_list[9 + offset + i][0:4])
+            for i in range(int(number_of_atoms)):
+                row_list.append(content_list[10 + offset + i][0:4])
+
+            if lattice_constant != 1.0:
+
+                for i in range(len(basis_vec_1)):
+                    basis_vec_1[i] = basis_vec_1[i]/lattice_constant
+
+                for i in range(len(basis_vec_2)):
+                    basis_vec_2[i] = basis_vec_2[i] / lattice_constant
+
+                for i in range(len(basis_vec_3)):
+                    basis_vec_3[i] = basis_vec_3[i] / lattice_constant
+
 
             # crystal_args data (<GeneralTargetArguments>)
             crystal_args = GeneralCrystalArguments(

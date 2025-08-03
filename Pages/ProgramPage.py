@@ -1884,11 +1884,13 @@ EOF
         Opens simulation specific crystal editor
 
         """
-
+        self.setEdited(True)
         self.crystal_editor_dialog.elementChanged()
         self.crystal_editor_dialog.openDialog()
 
     def crystalEditorDialogClosed(self, return_element):
+
+        self.setEdited(True)
         """
         Function called when periodic table is closed. Sets element in row where select element button was pressed
 
