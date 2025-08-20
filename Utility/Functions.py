@@ -292,7 +292,7 @@ def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols:
     return data
 
 
-def intSafe(string: str, fallback: int = 0) -> int:
+def intSafe(string: str, fallback: int = 0, log_warning: bool = False) -> int:
     """
     Tries to convert the string to an integer and returns it, if it fails, it will return the fallback value
 
@@ -303,11 +303,13 @@ def intSafe(string: str, fallback: int = 0) -> int:
     try:
         return int(float(string))
     except ValueError:
-        logging.warning(f'Could not convert "{string}" to int, using {fallback} instead.')
+        if log_warning:
+            logging.warning(f'Could not convert "{string}" to int, using {fallback} instead.')
         return fallback
 
 
-def floatSafe(string: str, fallback: float = 0) -> float:
+def floatSafe(string: str, fallback: float = 0, log_warning: bool = False) -> float:
+
     """
     Tries to convert the string to a float and returns it, if it fails, it will return the fallback value
 
@@ -318,7 +320,8 @@ def floatSafe(string: str, fallback: float = 0) -> float:
     try:
         return float(string)
     except ValueError:
-        logging.warning(f'Could not convert "{string}" to float, using {fallback} instead.')
+        if log_warning:
+            logging.warning(f'Could not convert "{string}" to float, using {fallback} instead.')
         return fallback
 
 
