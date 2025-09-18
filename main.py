@@ -1,8 +1,8 @@
 # BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
 # dynamic effects of ion irradiation
 #
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
+# Copyright(C) 2025, Alexander Redl, Simon Osanger, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak,
+# Andreas Mutzke, Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
 #
 # This program implements libraries of the Qt framework (https://www.qt.io/).
 #
@@ -47,23 +47,21 @@ def main():
         import ctypes
         # create unique app-id to show taskbar icon (Windows only)
         # in Linux this is not needed, the taskbar icon is set correctly
-        app_id = f'TUWIEN.IAP.{GlobalConf.title.upper().replace(" ", ".")}.v1'
+        app_id = f'TUWIEN.IAP.{GlobalConf.title.upper().replace(" ", ".")}'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
 
     # start application
     app = QApplication(argv)
     app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
 
-
-
     # get splash size
     screen = app.primaryScreen().availableVirtualGeometry()
-    splash_size = QSize(int(min(620, screen.width() * 0.5)), int(min(300, screen.height() * 0.5)))
+    splash_size = QSize(min(620, int(screen.width() * 0.5)), min(300, int(screen.height() * 0.5)))
 
     # show splashscreen on startup
     pixmap = SplashPixmap(
         image=':/icons/splash.png',
-        text='v. 1.4.19',
+        text='v. 1.5.00',
         box=QRect(530, 65, 90, 25),
         align=Qt.AlignmentFlag.AlignLeft,
         color=QColor('#154167'),

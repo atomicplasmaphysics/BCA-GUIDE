@@ -1,41 +1,27 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from __future__ import annotations
-from typing import Union, Optional, Tuple, List, Callable
-from enum import Enum, auto
+from typing import Union, Optional, Tuple, List, Callable, Dict
 
 from Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect
-from PyQt6.QtGui import QFont, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette, QPixmap
+from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
     QListWidget, QListWidgetItem, QApplication
 )
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+import numpy as np
+
+from matplotlib import rc_context
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from matplotlib.pyplot import cm
 
 from Utility.ModifyWidget import setWidgetBackground
+from Utility.Functions import getUniqueColor
+
+from Containers.Element import Element
 
 
 class SplashPixmap(QPixmap):
@@ -71,12 +57,15 @@ class SplashPixmap(QPixmap):
         self.painter.end()
 
 
-class InputHBoxLayout(QHBoxLayout):
+class InputHBoxLayouts(QHBoxLayout):
     """
-    Quick horizontal layout for checkbox, label and input. Extends the QHBoxLayout.
+    Quick horizontal layout for checkbox, label and inputs. Extends the QHBoxLayout.
 
     :param label: text of label for widget
-    :param widget: widget to be displayed
+    :param widgets: list of widgets to be displayed
+    :param tooltip: (optional) tooltip to be displayed
+    :param widgets_labels: (optional) list of labels in front of widgets
+    :param widgets_tooltips: (optional) tooltip to be displayed for every widget
     :param split: (optional) percentage split between label and widget
     :param disabled: (optional) enable/disable input
     :param hidden: (optional) hide input and label
@@ -84,19 +73,32 @@ class InputHBoxLayout(QHBoxLayout):
     :param checkbox_connected: (optional) determines if the widget should be enabled/disabled depending on the checkbox state
     """
 
-    def __init__(self, label: str, widget: Optional[QWidget], tooltip: str = None, split: int = 50,
-                 disabled: bool = False, hidden: bool = False,
-                 checkbox: bool = None, checkbox_connected: bool = True, **kwargs):
+    def __init__(
+        self,
+        label: str,
+        widgets: Optional[List[QWidget]],
+        tooltip: str = None,
+        widgets_labels: Optional[List[str]] = None,
+        widgets_tooltips: Optional[List[str]] = None,
+        split: int = 50,
+        disabled: bool = False,
+        hidden: bool = False,
+        checkbox: bool = None,
+        checkbox_connected: bool = True,
+        **kwargs
+    ):
         super().__init__(**kwargs)
 
         self.checkbox = None
         self.default_checkbox = checkbox
         self.label = None
-        self.widget = widget
+        self.widgets = widgets
+        self.widgets_hbox = QHBoxLayout()
+        self.widgets_list = []
 
         # Label without checkbox
         if not isinstance(checkbox, bool):
-            if widget is None:
+            if widgets is None or not len(widgets):
                 label = f'<b>{label}</b>'
             self.label = QLabel(label)
             if hidden:
@@ -106,15 +108,16 @@ class InputHBoxLayout(QHBoxLayout):
             self.label.mouseReleaseEvent = lambda _: self.mark(False)
 
             self.addWidget(self.label, stretch=split)
-            if widget is None:
+            if widgets is None or not len(widgets):
                 return
 
         # Label with checkbox
         else:
             self.checkbox = QCheckBox(label)
             self.checkbox.setChecked(checkbox)
-            if checkbox_connected and widget is not None:
-                self.checkbox.toggled.connect(lambda state: self.widget.setEnabled(state))
+            if checkbox_connected and widgets is not None and len(widgets):
+                for widget in widgets:
+                    self.checkbox.toggled.connect(lambda state: widget.setEnabled(state))
             if hidden:
                 self.checkbox.hide()
             if tooltip is not None:
@@ -122,66 +125,151 @@ class InputHBoxLayout(QHBoxLayout):
             self.checkbox.clicked.connect(lambda _: self.mark(False))
 
             self.addWidget(self.checkbox, stretch=split)
-            if widget is None:
+            if widgets is None or not len(widgets):
                 return
 
         # Widget
-        self.widget = widget
         if tooltip is not None:
-            self.widget.setToolTip(tooltip)
+            for widget in self.widgets:
+                widget.setToolTip(tooltip)
         if checkbox is False or disabled:
-            self.widget.setEnabled(False)
+            for widget in self.widgets:
+                widget.setEnabled(False)
         if hidden:
-            self.widget.hide()
-        self.addWidget(self.widget, stretch=100 - split)
+            for widget in self.widgets:
+                widget.hide()
 
-        self.widget.mouseReleaseEvent = lambda _: self.mark(False)
+        if self.widgets is not None and len(self.widgets):
+            if widgets_tooltips is not None:
+                if len(widgets_tooltips) == len(self.widgets):
+                    for widget, tooltip in zip(self.widgets, widgets_tooltips):
+                        widget.setToolTip(tooltip)
+                else:
+                    raise ValueError(f'Length of widgets_tooltips ({len(widgets_tooltips)}) does not match length of widgets ({len(self.widgets)})')
 
-        if isinstance(self.widget, QSpinBox) or isinstance(self.widget, QDoubleSpinBox):
-            self.widget.valueChanged.connect(lambda _: self.mark(False))
+        stretch_widgets_hbox = 100 - split
+        self.addLayout(self.widgets_hbox, stretch=stretch_widgets_hbox)
+
+        if self.widgets is not None and len(self.widgets):
+            stretch_widget = 100 // len(self.widgets)
+            if widgets_labels is not None:
+                if len(widgets_labels) == len(self.widgets):
+                    for widget, label_str in zip(self.widgets, widgets_labels):
+                        label = QLabel(label_str)
+                        hbox = QHBoxLayout()
+                        hbox.addWidget(label, alignment=Qt.AlignmentFlag.AlignRight)
+                        hbox.addWidget(widget, stretch=stretch_widget)
+                        self.widgets_hbox.addLayout(hbox)
+                        self.widgets_list.extend([label, widget])
+                else:
+                    raise ValueError(f'Length of widgets_labels ({len(widgets_labels)}) does not match length of widgets ({len(self.widgets)})')
+            else:
+                for widget in self.widgets:
+                    self.widgets_hbox.addWidget(widget, stretch=stretch_widget)
+                    self.widgets_list.append(widget)
+
+
+        if self.widgets is not None:
+            for widget in self.widgets:
+                widget.mouseReleaseEvent = lambda _: self.mark(False)
+
+                if isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
+                    widget.valueChanged.connect(lambda _: self.mark(False))
 
     def setEnabled(self, state: bool):
         """
-        Enables widget and checkbox
+        Enables widgets and checkbox
 
         :param state: True - enable; False - disable
         """
 
-        if self.widget is not None:
-            self.widget.setEnabled(state)
+        if len(self.widgets_list):
+            for widget in self.widgets_list:
+                widget.setEnabled(state)
+
         if self.checkbox is not None:
             self.checkbox.setEnabled(state)
 
     def setHidden(self, state: bool = True):
         """
-        Hides/Shows widget
+        Hides/Shows widgets
 
         :param state: True - hide; False - show
         """
 
         self.label.setHidden(state)
-        if self.widget is not None:
-            self.widget.setHidden(state)
+
+        if len(self.widgets_list):
+            for widget in self.widgets_list:
+                widget.setHidden(state)
+
         if self.checkbox is not None:
             self.checkbox.setHidden(state)
 
     def mark(self, enable: bool = True):
         """
-        Enables/disables widget background color
+        Enables/disables widgets background color
 
         :param enable: True - show background; False - no background
         """
 
-        if self.widget is not None:
-            setWidgetBackground(self.widget, enable)
+        if len(self.widgets_list):
+            for widget in self.widgets_list:
+                setWidgetBackground(widget, enable)
 
     def reset(self):
-        """Resets the widget and clears mark"""
+        """Resets the widgets and clears mark"""
         self.mark(False)
-        if hasattr(self.widget, 'reset'):
-            self.widget.reset()
+
+        if len(self.widgets_list):
+            for widget in self.widgets_list:
+                if hasattr(widget, 'reset'):
+                    widget.reset()
+
         if self.checkbox is not None:
             self.checkbox.setChecked(self.default_checkbox)
+
+
+class InputHBoxLayout(InputHBoxLayouts):
+    """
+    Quick horizontal layout for checkbox, label and input. Extends the QHBoxLayout.
+
+    :param label: text of label for widget
+    :param widget: widget to be displayed
+    :param tooltip: (optional) tooltip to be displayed
+    :param split: (optional) percentage split between label and widget
+    :param disabled: (optional) enable/disable input
+    :param hidden: (optional) hide input and label
+    :param checkbox: (optional) add checkbox before label. set to True/False if it should be checked on startup
+    :param checkbox_connected: (optional) determines if the widget should be enabled/disabled depending on the checkbox state
+    """
+
+    def __init__(
+        self,
+        label: str,
+        widget: Optional[QWidget],
+        tooltip: str = None,
+        split: int = 50,
+        disabled: bool = False,
+        hidden: bool = False,
+        checkbox: bool = None,
+        checkbox_connected: bool = True,
+        **kwargs
+    ):
+        if widget is not None:
+            widget = [widget]
+
+        super().__init__(
+            label=label,
+            widgets=widget,
+            tooltip=tooltip,
+            split=split,
+            disabled=disabled,
+            hidden=hidden,
+            checkbox=checkbox,
+            checkbox_connected=checkbox_connected,
+            **kwargs
+        )
 
 
 class SpinBoxRange:
@@ -209,8 +297,15 @@ class SpinBox(QSpinBox):
     :param buttons: (optional) if buttons for increasing/decreasing should be displayed
     """
 
-    def __init__(self, default: Union[float, int] = 0, step_size: int = None, input_range: Tuple[float, float] = None,
-                 scroll: bool = False, buttons: bool = False, **kwargs):
+    def __init__(
+        self,
+        default: Union[float, int] = 0,
+        step_size: int = None,
+        input_range: Tuple[float, float] = None,
+        scroll: bool = False,
+        buttons: bool = False,
+        **kwargs
+    ):
         super().__init__(**kwargs)
 
         self.setMinimumSize(50, 20)
@@ -236,6 +331,11 @@ class SpinBox(QSpinBox):
         """Resets itself to its default value"""
         self.setValue(self.default)
 
+    def setAndDefault(self, default: int):
+        """Sets default and value"""
+        self.default = default
+        self.setValue(default)
+
 
 class DoubleSpinBox(QDoubleSpinBox):
     """
@@ -248,8 +348,16 @@ class DoubleSpinBox(QDoubleSpinBox):
     :param buttons: (optional) if buttons for increasing/decreasing should be displayed
     """
 
-    def __init__(self, default: float = 0, step_size: float = None, input_range: Tuple[float, float] = None,
-                 scroll: bool = False, decimals: int = None, buttons: bool = False, **kwargs):
+    def __init__(
+        self,
+        default: float = 0,
+        step_size: float = None,
+        input_range: Tuple[float, float] = None,
+        scroll: bool = False,
+        decimals: int = None,
+        buttons: bool = False,
+        **kwargs
+    ):
         super().__init__(**kwargs)
 
         self.setMinimumSize(50, 20)
@@ -278,6 +386,11 @@ class DoubleSpinBox(QDoubleSpinBox):
         """Resets itself to its default value"""
         self.setValue(self.default)
 
+    def setAndDefault(self, default: float):
+        """Sets default and value"""
+        self.default = default
+        self.setValue(default)
+
     def textFromValue(self, value: float) -> str:
         """Removes unnecessary long tailing zeros in input field"""
         decimals_total = decimals = self.decimals()
@@ -303,7 +416,13 @@ class LineEdit(QLineEdit):
     :param max_length: (optional) maximum input length
     """
 
-    def __init__(self, default: str = '', placeholder: str = None, max_length: int = None, **kwargs):
+    def __init__(
+        self,
+        default: str = '',
+        placeholder: str = None,
+        max_length: int = None,
+        **kwargs
+    ):
         super().__init__(**kwargs)
 
         self.default = default
@@ -352,9 +471,18 @@ class ComboBox(QComboBox):
     :param disabled_list: (optional) enable/disable choices
     """
 
-    def __init__(self, default: int = 0, entries: List[str] = None, tooltips: List[str] = None,
-                 entries_save: list = None, numbering: int = None, label_default: bool = False,
-                 disabled_list: List[int] = None, scroll: bool = False, **kwargs):
+    def __init__(
+        self,
+        default: int = 0,
+        entries: List[str] = None,
+        tooltips: List[str] = None,
+        entries_save: list = None,
+        numbering: int = None,
+        label_default: bool = False,
+        disabled_list: List[int] = None,
+        scroll: bool = False,
+        **kwargs
+    ):
         super().__init__(**kwargs)
 
         self.default = default
@@ -405,17 +533,28 @@ class ComboBox(QComboBox):
             return self.entries_save[current_index]
         return current_index
 
-    def setValue(self, value, from_entries_save: bool = False):
+    def setValue(self, value, from_entries: bool = False, from_entries_save: bool = False):
         """
         Sets value of widget
 
         :param value: value to be set
+        :param from_entries: value is element of entries list
         :param from_entries_save: value is element of entries_save list
         """
 
-        if from_entries_save:
-            value = self.entries_save.index(value)
-        return self.setCurrentIndex(value)
+        if from_entries:
+            if value not in self.entries:
+                value = self.default
+            else:
+                value = self.entries.index(value)
+
+        elif from_entries_save:
+            if self.entries_save is None or value not in self.entries_save:
+                value = self.default
+            else:
+                value = self.entries_save.index(value)
+
+        self.setCurrentIndex(value)
 
     def getDefaultSave(self):
         """Returns default from entry_save"""
@@ -453,8 +592,15 @@ class FilePath(QWidget):
     :param icon_ssh: (optional) icon of pushbutton for ssh file
     """
 
-    def __init__(self, placeholder: str = None, function_loc: Callable = None, icon_loc: QIcon = None,
-                 function_ssh: Callable = None, icon_ssh: QIcon = None, **kwargs):
+    def __init__(
+        self,
+        placeholder: str = None,
+        function_loc: Callable = None,
+        icon_loc: QIcon = None,
+        function_ssh: Callable = None,
+        icon_ssh: QIcon = None,
+        **kwargs
+    ):
         super().__init__(**kwargs)
 
         self.layout = QHBoxLayout()
@@ -539,297 +685,6 @@ class FilePath(QWidget):
             self.displayPath()
 
 
-# TODO: remove InputHLayout if no longer needed
-class InputHLayout(QHBoxLayout):
-    """
-    WARNING: deprecated, use InputHBoxLayout instead
-
-    Quick Layout for Label and Input
-
-    :param parent: parent widget
-    :param label: displayed title of widget
-    :param input_type: type of supported inputs
-    :param default_value: value assigned by default / placeholder for LINEEDIT and FILEPATH,
-                          for COMBOBOX (default_value - numbering) is the default selected index
-    :param input_range: (optional) valid input range (only used for SPINBOX or DOUBLESPINBOX)
-    :param input_length: (optional) max input length (only used for LINEEDIT)
-    :param tooltip: (optional) tooltip when hovered over
-    :param tooltips: (optional) list of tooltips when hovered over one choice (only used for COMBOBOX)
-    :param default_text: (optional) string of text in LINEEDIT
-    :param split: (optional) percentage split between Label and Input
-    :param decimals: (optional) decimals digits used for DOUBLESPINBOX
-    :param step_size: (optional) step_size used for SPINBOX and DOUBLESPINBOX
-    :param entries: (optional) possible choices (only used for COMBOBOX)
-    :param entries_save: (optional) save value for possible choices (only used for COMBOBOX)
-    :param numbering: (optional) integer - numbers entries (starting from this index) and labels the default selected
-    :param checkbox: (optional) add checkbox before label. set to True/False if it should be checked on startup
-    :param disabled: (optional) enable/disable input
-    :param disabled_list: (optional) enable/disable choices (only used for COMBOBOX)
-    :param hidden: (optional) hide input and label
-    """
-
-    class InputRange:
-        """
-        Special input ranges
-        """
-
-        INF = 2147483647
-        NEG_INF = -2147483648
-        INF_INF = (NEG_INF, INF)
-        ZERO_INF = (0, INF)
-        ONE_INF = (1, INF)
-        NEG_INF_ZERO = (NEG_INF, 0)
-        NEG_ONE_INF = (-1, INF)
-
-    class InputType(Enum):
-        """
-        Types of supported Inputs
-        """
-
-        SPINBOX = auto()
-        COMBOBOX = auto()
-        LINEEDIT = auto()
-        DOUBLESPINBOX = auto()
-        FILEPATH = auto()
-        LABEL = auto()
-
-    def __init__(self, parent, label, input_type, default_value, input_range=(0, 1e8), input_length=100,
-                 tooltip='', tooltips=None, default_text='', split=50, decimals=2, step_size=1, entries=None, entries_save=None,
-                 numbering=None, checkbox=None, disabled=False, disabled_list=None, hidden=False):
-        if tooltips is None:
-            tooltips = []
-        if entries is None:
-            entries = []
-        if disabled_list is None:
-            disabled_list = []
-
-        super().__init__()
-        assert isinstance(input_type, InputHLayout.InputType)
-        self.checkbox = checkbox
-        self.label: Union[QLabel, QCheckBox, None] = None
-        if self.checkbox is not None:
-            self.label = QCheckBox(label, parent)
-            self.label.clicked.connect(lambda _: self.mark(False))
-        else:
-            self.label = QLabel(label, parent)
-            self.label.mouseReleaseEvent = lambda _: self.mark(False)
-        self.addWidget(self.label, split)
-
-        self.tooltip = tooltip
-        self.input_type = input_type
-        self.entries = entries
-        self.entries_save = entries_save
-        self.default_value = default_value
-        self.numbering = numbering
-        self.input: Union[QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit, QWidget, QLabel, None] = None
-
-        # QSpinBox or QDoubleSpinBox
-        if self.input_type in [InputHLayout.InputType.SPINBOX, InputHLayout.InputType.DOUBLESPINBOX]:
-            if self.input_type == InputHLayout.InputType.SPINBOX:
-                self.input = QSpinBox(parent)
-                self.default_value = int(self.default_value)
-                input_range = (int(input_range[0]), int(input_range[1]))
-            else:
-                self.input = QDoubleSpinBox(parent)
-                self.input.setDecimals(decimals)
-            self.input.setSingleStep(step_size)
-            self.input.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-            self.input.setMinimumSize(50, 20)
-            self.input.setRange(input_range[0], input_range[1])
-            self.input.setValue(self.default_value)
-            self.input.valueChanged.connect(lambda _: self.mark(False))
-
-        # QComboBox
-        elif self.input_type == InputHLayout.InputType.COMBOBOX:
-            self.input = QComboBox(parent)
-
-            if not isinstance(self.default_value, int):
-                self.default_value = 0
-
-            if self.numbering is not None:
-                if not isinstance(self.numbering, int):
-                    self.numbering = 0
-                self.default_value -= self.numbering
-                entries = [f'{i + self.numbering}: {entry}' for i, entry in enumerate(entries)]
-                entries[self.default_value] = f'{entries[self.default_value]} (default)'
-
-            self.input.addItems(entries)
-            self.input.setCurrentIndex(self.default_value)
-
-            if len(tooltips) == len(entries):
-                for i, tip in enumerate(tooltips):
-                    self.input.setItemData(i, tip, Qt.ItemDataRole.ToolTipRole)
-
-            if len(disabled_list):
-                for i in disabled_list:
-                    self.input.model().item(i, 0).setEnabled(False)
-
-        # QLineEdit
-        elif self.input_type == InputHLayout.InputType.LINEEDIT:
-            self.input = QLineEdit(parent)
-            self.input.setPlaceholderText(str(self.default_value))
-            self.input.setMaxLength(int(input_length))
-            if default_text:
-                self.input.setText(default_text)
-
-        # Select File (= QLineEdit + QPushButton)
-        elif self.input_type == InputHLayout.InputType.FILEPATH:
-            self.input = QWidget()
-            self.fileSelectLayout = QHBoxLayout()
-            self.fileSelectLayout.setContentsMargins(0, 0, 0, 0)
-            self.input.setLayout(self.fileSelectLayout)
-
-            self.path = QLineEdit(parent)
-            self.path.setPlaceholderText(str(self.default_value))
-            self.path.setReadOnly(True)
-            self.path.setMinimumWidth(300)
-            self.fileSelectLayout.addWidget(self.path, Qt.AlignmentFlag.AlignLeft)
-
-            self.fileBtn = QPushButton('...', parent)
-            self.fileBtn.setMinimumSize(40, 10)
-            self.fileBtn.setMaximumSize(40, 30)
-            self.fileSelectLayout.addWidget(self.fileBtn, Qt.AlignmentFlag.AlignRight)
-
-        # QLabel
-        elif self.input_type == InputHLayout.InputType.LABEL:
-            self.input = QLabel(f'<b>{self.default_value}</b>')
-
-        self.addWidget(self.input, 100 - split)
-
-        self.input.setDisabled(disabled)
-
-        if hidden:
-            self.label.hide()
-            self.input.hide()
-
-        if self.tooltip:
-            self.label.setToolTip(tooltip)
-            self.input.setToolTip(tooltip)
-
-        if self.checkbox is not None:
-            self.label.toggled.connect(lambda state: self.input.setEnabled(state))
-            self.label.setChecked(checkbox)
-
-        self.input.mouseReleaseEvent = lambda _: self.mark(False)
-
-    def setDefault(self):
-        """Resets to default value"""
-        # QSpinBox or QDoubleSpinBox
-        if self.input_type in [InputHLayout.InputType.SPINBOX, InputHLayout.InputType.DOUBLESPINBOX]:
-            self.input.setValue(self.default_value)
-
-        # QComboBox
-        elif self.input_type == InputHLayout.InputType.COMBOBOX:
-            self.input.setCurrentIndex(self.default_value)
-
-    def getDefault(self, from_entries_save=False):
-        """Returns to default value"""
-        if not from_entries_save:
-            return self.default_value
-        return self.entries_save[self.default_value]
-
-    def setEnabled(self, state: bool):
-        """Enable/Disable widget"""
-        if self.checkbox is None:
-            self.input.setEnabled(state)
-        else:
-            self.label.setEnabled(state)
-            self.input.setEnabled(self.label.isChecked())
-        super().setEnabled(state)
-
-    def setHidden(self, state: bool):
-        """Hides/Shows widget"""
-        if state:
-            self.label.hide()
-            self.input.hide()
-            return
-        self.label.show()
-        self.input.show()
-
-    def updateStepSize(self, step_size: Union[float, int]):
-        """Updates the step size for DOUBLESPINBOX and SPINBOX only"""
-        if self.input_type not in [InputHLayout.InputType.SPINBOX, InputHLayout.InputType.DOUBLESPINBOX]:
-            return
-        self.input.setSingleStep(step_size)
-
-    def getValue(self, text=False, save=False):
-        """Returns value of widget"""
-        # Check if checkbox is not selected
-        if self.checkbox is not None:
-            if not self.label.isChecked():
-                return False
-
-        # QSpinBox or QDoubleSpinBox
-        if self.input_type in [InputHLayout.InputType.SPINBOX, InputHLayout.InputType.DOUBLESPINBOX]:
-            return self.input.value()
-
-        # QComboBox
-        elif self.input_type == InputHLayout.InputType.COMBOBOX:
-            current_index = self.input.currentIndex()
-            if text:
-                return self.entries[current_index]
-            if save and self.entries_save is not None:
-                return self.entries_save[current_index]
-            return current_index
-
-        # QLineEdit
-        elif self.input_type == InputHLayout.InputType.LINEEDIT:
-            return self.input.text()
-
-        # Select File (= QLineEdit + QPushButton)
-        elif self.input_type == InputHLayout.InputType.FILEPATH:
-            return self.path.text()
-
-        # QLabel
-        elif self.input_type == InputHLayout.InputType.LABEL:
-            return True
-
-    def setValue(self, value, from_entries_save=False):
-        """Sets value of widget"""
-        # Check if checkbox is not selected
-        if self.checkbox is not None:
-            if value is False:
-                return self.label.setChecked(False)
-            else:
-                self.label.setChecked(True)
-
-        # QSpinBox or QDoubleSpinBox
-        if self.input_type in [InputHLayout.InputType.SPINBOX, InputHLayout.InputType.DOUBLESPINBOX]:
-            return self.input.setValue(value)
-
-        # QComboBox
-        elif self.input_type == InputHLayout.InputType.COMBOBOX:
-            if from_entries_save:
-                value = self.entries_save.index(value)
-            return self.input.setCurrentIndex(value)
-
-        # QLineEdit
-        elif self.input_type == InputHLayout.InputType.LINEEDIT:
-            return self.input.setText(value)
-
-        # Select File (= QLineEdit + QPushButton)
-        elif self.input_type == InputHLayout.InputType.FILEPATH:
-            return self.path.setText(value)
-
-    def mark(self, enable=True):
-        """Enables/disables widget background color"""
-        setWidgetBackground(self.input, enable)
-
-    def updateDisabledList(self, disabled_list: list = None):
-        """Update the disabled list (only for COMBOBOX)"""
-        if disabled_list is None:
-            disabled_list = []
-
-        if not self.input_type == InputHLayout.InputType.COMBOBOX:
-            return
-
-        for i in range(len(self.entries)):
-            enable = True
-            if i in disabled_list:
-                enable = False
-            self.input.model().item(i, 0).setEnabled(enable)
-
-
 class TabWithToolbar(QWidget):
     """
     QWidget with toolbar
@@ -868,9 +723,18 @@ class VBoxTitleLayout(QVBoxLayout):
                         if integer: addSpacing(addStretch) after title
     """
 
-    def __init__(self, parent, title: str, title_style: str = Styles.title_style,
-                 title_style_busy: str = Styles.title_style, busy_symbol: str = '⧖',
-                 spacing: int = 0, add_stretch: Union[bool, int] = 0, *args, **kwargs):
+    def __init__(
+        self,
+        parent,
+        title: str,
+        title_style: str = Styles.title_style,
+        title_style_busy: str = Styles.title_style,
+        busy_symbol: str = '⧖',
+        spacing: int = 0,
+        add_stretch: Union[bool, int] = 0,
+        *args,
+        **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.parent = parent
         self.title_str = title
@@ -925,8 +789,18 @@ class ListWidgetItem(QListWidgetItem):
     :param function_args: (optional) function arguments passed to function
     """
 
-    def __init__(self, *args, indent: int = 0, bold: bool = False, grey: bool = False, selectable: bool = True,
-                 tooltip: str = '', function: Callable = None, function_args: dict = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        indent: int = 0,
+        bold: bool = False,
+        grey: bool = False,
+        selectable: bool = True,
+        tooltip: str = '',
+        function: Callable = None,
+        function_args: dict = None,
+        **kwargs
+    ):
         if indent > 0 and args and isinstance(args[0], str):
             args = list(args)
             args[0] = '    ' * indent + args[0]
@@ -1039,10 +913,19 @@ class FileEditor(QPlainTextEdit):
     :param color_highlight_dark: (optional) color of highlighting line in dark mode
     """
 
-    def __init__(self, parent, line_numbering: bool = True, readonly: bool = True,
-                 mono: bool = True, offset: int = 0, highlighting: bool = True,
-                 color_line_number: QColor = QColor('#EEEEEE'), color_line_number_dark: QColor = QColor('#464646'),
-                 color_highlight: QColor = QColor('#FFFEC8'), color_highlight_dark: QColor = QColor('#00003F')):
+    def __init__(
+        self,
+        parent,
+        line_numbering: bool = True,
+        readonly: bool = True,
+        mono: bool = True,
+        offset: int = 0,
+        highlighting: bool = True,
+        color_line_number: QColor = QColor('#EEEEEE'),
+        color_line_number_dark: QColor = QColor('#464646'),
+        color_highlight: QColor = QColor('#FFFEC8'),
+        color_highlight_dark: QColor = QColor('#00003F')
+    ):
         super().__init__(parent)
         self.line_numbering = line_numbering
         self.offset = offset
@@ -1169,18 +1052,596 @@ class MplCanvas(FigureCanvasQTAgg):
     """
     Canvas for matplotlib
 
-    :param width: width of figure
-    :param height: height of figure
-    :param dpi: dpi for figure
-    :param enable_3d: enables 3D projection
+    :param parent: parent widget
+    :param width: (optional) width of figure
+    :param height: (optional) height of figure
+    :param dpi: (optional) dpi for figure
+    :param enable_3d: (optional) enables 3D projection
+    :param use_device_palette: (optional) uses device palette
+    :param disable_interaction: (optional) disables user interaction
     """
 
-    def __init__(self, width: int = 4, height: int = 8, dpi: float = 100, enable_3d: bool = False):
-        self.fig: Figure = Figure(figsize=(width, height), dpi=dpi)
-        axes_kwargs = {}
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        width: int = 4,
+        height: int = 8,
+        dpi: float = 100,
+        enable_3d: bool = False,
+        use_device_palette: bool = True,
+        disable_interaction: bool = False
+    ):
+        self.disable_interaction = disable_interaction
+        self.pal = parent.palette() if parent is not None else QApplication.instance().palette()
+
+        # get QT colors
+        self.bg_color = self.pal.color(QPalette.ColorRole.Window).name()
+        self.fg_color = self.pal.color(QPalette.ColorRole.WindowText).name()
+
+        self.palette_kwargs = {}
+        if use_device_palette:
+            self.palette_kwargs['facecolor'] = self.bg_color
+
+        self.axes_kwargs = {}
         if enable_3d:
-            axes_kwargs.update({
-                'projection': '3d'
-            })
-        self.axes: Axes = self.fig.add_subplot(111, **axes_kwargs)
+            self.axes_kwargs['projection'] = '3d'
+
+        with rc_context(self.get_rc_context()):
+            self.fig: Figure = Figure(figsize=(width, height), dpi=dpi, **self.palette_kwargs)
+            self.axes: Axes = self.fig.add_subplot(**self.palette_kwargs, **self.axes_kwargs)
+
         super().__init__(self.fig)
+
+    def get_rc_context(self):
+        """Returns matplotlib rc parameter dictionary"""
+
+        return {
+            'lines.color': self.fg_color,
+            'patch.edgecolor': self.fg_color,
+            'text.color': self.fg_color,
+            'axes.facecolor': self.bg_color,
+            'axes.edgecolor': self.fg_color,
+            'axes.labelcolor': self.fg_color,
+            'xtick.color': self.fg_color,
+            'xtick.labelcolor': self.fg_color,
+            'ytick.color': self.fg_color,
+            'ytick.labelcolor': self.fg_color,
+            'xtick.top': True,
+            'ytick.right': True,
+            'xtick.direction': 'in',
+            'ytick.direction': 'in',
+            'figure.facecolor': self.bg_color,
+            'figure.edgecolor': self.bg_color,
+            'legend.frameon': False,
+        }
+
+    def clear(self):
+        """Clears fig and resets axes"""
+        with rc_context(self.get_rc_context()):
+            self.fig.clf()
+            self.axes = self.fig.add_subplot(**self.palette_kwargs, **self.axes_kwargs)
+
+    def mousePressEvent(self, e):
+        if not self.disable_interaction:
+            super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if not self.disable_interaction:
+            super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if not self.disable_interaction:
+            super().mouseReleaseEvent(e)
+
+    def wheelEvent(self, e):
+        if not self.disable_interaction:
+            super().wheelEvent(e)
+
+    def keyPressEvent(self, e):
+        if not self.disable_interaction:
+            super().keyPressEvent(e)
+
+
+class NoMessageToolbar(NavigationToolbar2QT):
+    """
+    Custum NavigationToolbar2QT that does not show messages
+    """
+
+    def __init__(self, canvas: MplCanvas, parent, **kwargs):
+        super().__init__(canvas, parent, **kwargs)
+        self.canvas = canvas
+
+    def set_message(self, s):
+        """Message is set"""
+        pass
+
+    def home(self, *args):
+        """Home button press"""
+
+        if not isinstance(self.canvas, CrystalPreview):
+            return super().home(*args)
+
+        self.canvas.axes.view_init(self.canvas.elev, self.canvas.azim, self.canvas.roll)
+        self.canvas.draw_idle()
+
+
+
+class TargetPreview(QWidget):
+    """
+    QWidget for preview of target
+
+    :param parent: parent widget
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.antialiased = True
+        self.setBackgroundRole(QPalette.ColorRole.Base)
+        self.setAutoFillBackground(True)
+        self.pen = QPen(self.palette().color(QPalette.ColorRole.Text))
+
+        self.font = QFont()
+        self.font_metrics = QFontMetrics(self.font)
+
+        self.layers = []
+        self.elements = []
+        self.total_segments = 0
+        self.element_widths = []
+
+        self.legend_size = 15
+        self.legend_margin = 2
+        self.legend_spacing_x = 7
+        self.legend_spacing_y = 5
+
+        self.target_width = 120
+        self.x_margin = 15
+        self.y_margin = 15
+
+    def minimumSizeHint(self):
+        """Returns minimum size"""
+
+        return QSize(150, 100)
+
+    def setTargetInfo(self, elements: list, layers: list):
+        """
+        Sets elements in layers
+
+        :param elements: list of elements
+        :param layers: list of layers
+        """
+
+        self.elements = elements
+        self.element_widths = []
+        for element in self.elements:
+            self.element_widths.append(self.font_metrics.horizontalAdvance(element))
+
+        self.layers = []
+        self.total_segments = 0
+        for row in layers:
+            self.layers.append([row.segment_count, row.layer_name, row.abundances])
+            self.total_segments += row.segment_count
+        self.update()
+
+    def resizeEvent(self, event):
+        """
+        When widget is resized
+
+        :param event: resize event
+        """
+
+        self.target_width = self.width() * 0.9
+        self.x_margin = (self.width() - self.target_width) / 2
+        self.y_margin = (self.height() * 0.05) / 2
+
+    def paintEvent(self, event):
+        """
+        When widget is painted
+
+        :param event: paint event
+        """
+
+        painter = QPainter(self)
+        painter.setPen(self.pen)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialiased)
+
+        x_coord = self.x_margin
+        y_coord = self.y_margin
+
+        # Draw elements legend
+        if len(self.elements) > 0:
+            for i in range(len(self.elements)):
+                x_coord_new = x_coord + self.element_widths[i] + 2 * self.legend_margin + self.legend_spacing_x
+                if x_coord + self.x_margin > self.target_width:
+                    x_coord = self.x_margin
+                    x_coord_new = x_coord + self.element_widths[i] + 2 * self.legend_margin + self.legend_spacing_x
+                    y_coord = y_coord + self.legend_size + self.legend_spacing_y
+
+                rect = QRect(
+                    int(x_coord),
+                    int(y_coord),
+                    int(self.element_widths[i] + 2 * self.legend_margin),
+                    int(self.legend_size)
+                )
+                painter.fillRect(rect, getUniqueColor(i, len(self.elements)))
+                rect.translate(self.legend_margin, 0)
+                rect.setSize(QSize(self.element_widths[i], self.legend_size))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f'{self.elements[i]}')
+
+                x_coord = x_coord_new
+
+        if not self.total_segments:
+            return
+
+        # Draw the target layers
+        last_layer_y = int(y_coord + self.legend_size + self.legend_spacing_y)
+        target_height = self.height() - last_layer_y - self.y_margin
+        for i, layer in enumerate(self.layers):
+            layer_height = round(target_height * layer[0] / self.total_segments)
+            rect = QRect(
+                int(self.x_margin),
+                last_layer_y,
+                int(self.target_width),
+                layer_height
+            )
+            painter.drawRect(rect)
+
+            # Color the layer depending on composition
+            last_x = self.x_margin
+            for j in range(len(self.elements)):
+                w = self.target_width * layer[2][j]
+                rect2 = QRect(
+                    round(last_x),
+                    last_layer_y,
+                    round(last_x + w) - round(last_x),
+                    layer_height
+                )
+                painter.fillRect(rect2, QColor.fromHsv(int(j * 359 / len(self.elements)), 255, 255, 127))
+                last_x += w
+
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f'{layer[1]}')
+            last_layer_y += layer_height
+
+
+class CrystalPreview(MplCanvas):
+    """
+    QWidget for preview of crystal
+
+    :param parent: parent widget
+    :param miller_ind: (optional) miller index
+    :param basis_vecs: (optional) basis vectors
+    :param crystal_coords: (optional) crystal coordinates
+    :param show_beam: (optional) show the beam
+    :param show_basis_vecs: (optional) show the basis vectors
+    :param show_unrotated_cell: (optional) show the unrotated cell
+    :param show_coordinate_system: (optional) show the coordinate system
+    :param show_surface: (optional) show the surface
+    :param show_legend: (optional) show legend
+    :param atom_size: (optional) size of atoms
+    :param line_width: (optional) line width
+    :param axes_equal_radius: (optional) radius of equal axis
+    :param elev: (optional) camera elevation
+    :param azim: (optional) camera azimuthal
+    :param roll: (optional) camera roll
+
+    :param width: (optional) width of figure
+    :param height: (optional) height of figure
+    :param dpi: (optional) dpi for figure
+    :param use_device_palette: (optional) uses device palette
+    :param disable_interaction: (optional) disables user interaction
+
+    :param size_hint: (optional): size hint for widget
+    """
+
+    def __init__(
+        self,
+        parent,
+        miller_ind: np.ndarray = np.array([1, 0, 0]),
+        basis_vecs: np.ndarray = np.identity(3),
+        crystal_coords: Optional[Dict[Element, np.ndarray]] = None,
+        show_beam: bool = False,
+        show_basis_vecs: bool = False,
+        show_unrotated_cell: bool = False,
+        show_coordinate_system: bool = False,
+        show_surface: bool = False,
+        show_legend: bool = False,
+        atom_size: int = 50,
+        line_width: float = 1,
+        axes_equal_radius: float = 1,
+        elev: Optional[float] = -160,
+        azim: Optional[float] = -120,
+        roll: Optional[float] = None,
+        size_hint: Optional[QSize] = QSize(100, 100),
+        **kwargs
+    ):
+        self.miller_ind = miller_ind
+        self.basis_vecs = basis_vecs
+        if crystal_coords is None:
+            crystal_coords = {}
+        self.crystal_coords = crystal_coords
+
+        self.miller_rot_mat = np.identity(3)
+        self.display_mat = np.array([
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 1, 0]
+        ])
+
+        self.show_beam = show_beam
+        self.show_basis_vecs = show_basis_vecs
+        self.show_unrotated_cell = show_unrotated_cell
+        self.show_coordinate_system = show_coordinate_system
+        self.show_surface = show_surface
+        self.show_legend = show_legend
+
+        self.atom_size = atom_size
+        self.line_width = line_width
+        self.axes_equal_radius = axes_equal_radius
+
+        self.elev = elev
+        self.azim = azim
+        self.roll = roll
+
+        self.size_hint = size_hint
+
+        self.surf_xx, self.surf_yy = np.meshgrid(range(-2, 2), range(-1, 3))
+        self.surf_z = 0 * (self.surf_xx + self.surf_yy)
+
+        # TODO: helper function to check and set
+        kwargs['enable_3d'] = True
+        if kwargs.get('width') is None:
+            kwargs['width'] = 1
+        if kwargs.get('height') is None:
+            kwargs['height'] = 1
+        if kwargs.get('disable_interaction') is None:
+            kwargs['disable_interaction'] = True
+
+        super().__init__(parent, **kwargs)
+
+        self.axes.view_init(self.elev, self.azim, self.roll)
+
+        self._updatePlot()
+
+    def _setAxesEqual(self):
+        # TODO: this does not really work
+        """Make axes of 3D plot have equal scale so that spheres appear as spheres, cubes as cubes, etc."""
+
+        x_limits = self.axes.get_xlim3d()
+        y_limits = self.axes.get_ylim3d()
+        z_limits = self.axes.get_zlim3d()
+
+        x_range = abs(x_limits[1] - x_limits[0])
+        x_middle = (x_limits[0] + x_limits[1]) / 2
+        y_range = abs(y_limits[1] - y_limits[0])
+        y_middle = (y_limits[0] + y_limits[1]) / 2
+        z_range = abs(z_limits[1] - z_limits[0])
+        z_middle = (z_limits[0] + z_limits[1]) / 2
+
+        plot_radius = self.axes_equal_radius * max([x_range, y_range, z_range])
+
+        self.axes.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+        self.axes.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+        self.axes.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
+    def _plotVec3(self, vector: np.ndarray, startpoint: np.ndarray = np.zeros(3), label: Optional[str] = None, label_pos: Optional[np.ndarray] = None, **plot_kwargs):
+        """
+        Plots vector on axis
+
+        :param vector: vector to plot as <np.ndarray>
+        :param startpoint: (optional) starting position for vector as <np.ndarray>, otherwise zero
+        :param label: (optional) label of vector
+        :param label_pos: (optional) label position as <np.ndarray>, otherwise midpoint
+        :param plot_kwargs: (optional) parameters for plot
+        """
+
+        plot_params = {
+            'linewidth': self.line_width,
+            'color': self.fg_color
+        }
+        plot_params.update(plot_kwargs)
+
+        self.axes.quiver(*startpoint, *vector, **plot_params)
+        if label is not None:
+            if label_pos is None:
+                label_pos = startpoint + (vector - startpoint) / 2
+            del plot_params['linewidth']
+            self.axes.text(*(label_pos + 0.05), s=label, **plot_params)
+
+    def _plotUnitCellOutlines(self, rotated: bool = True, **plot_kwargs):
+        """
+        Make outline of unit cell
+
+        :param rotated: include rotation caused by miller indices
+        :param plot_kwargs: (optional) parameters for plot
+        """
+
+        plot_params = {
+            'linewidth': self.line_width,
+            'color': self.fg_color
+        }
+        plot_params.update(plot_kwargs)
+
+        b1, b2, b3 = self.basis_vecs
+        if rotated:
+            b1, b2, b3 = self.basis_vecs @ self.miller_rot_mat
+
+        vertices = [i * b1 + j * b2 + k * b3 for i in (0, 1) for j in (0, 1) for k in (0, 1)]
+
+        edges = []
+        for v in vertices:
+            for b in (b1, b2, b3):
+                neighbor = v + b
+                if any(np.allclose(neighbor, w) for w in vertices):
+                    edges.append((v, neighbor))
+
+        for v1, v2 in edges:
+            self.axes.plot([v1[0], v2[0]], [v1[1], v2[1]], [v1[2], v2[2]], **plot_params)
+
+    def _plotCoordSystem(self):
+        """Plot the coordinate system"""
+
+        self._plotVec3(np.array([0, 0, 1.5]), color='y', label='${X}$', label_pos=np.array([0, 0.1, 1.5]))
+        self._plotVec3(np.array([1.5, 0, 0]), color='y', label='${Y}$', label_pos=np.array([1.5, 0.1, 0]))
+        self._plotVec3(np.array([0, 1.5, 0]), color='y', label='${Z}$', label_pos=np.array([0, 1.5, 0.1]))
+
+    def _plotBasisVecs(self, rotated: bool = True):
+        """
+        Plot the basis vectors
+
+        :param rotated: include rotation caused by miller indices
+        """
+
+        labels = ['${\u00E2_1}$', '${\u00E2_2}$', '${\u00E2_3}$']
+        basis_vecs = self.basis_vecs
+        if rotated:
+            basis_vecs = basis_vecs @ self.miller_rot_mat
+
+        for basis_vec, label in zip(basis_vecs, labels):
+            self._plotVec3(basis_vec, color='b', label=label)
+
+    def _plotCoords(self, rotated: bool = True):
+        """
+        Plot atom coordinates
+
+        :param rotated: include rotation caused by miller indices
+        """
+
+        for i, (element, coords) in enumerate(self.crystal_coords.items()):
+            if not len(coords):
+                continue
+            color = getUniqueColor(i, len(self.crystal_coords)).name()
+            coords = coords @ self.basis_vecs
+            if rotated:
+                coords = coords @ self.miller_rot_mat
+            self.axes.scatter(
+                coords[:, 0], coords[:, 1], coords[:, 2],
+                c=color, s=self.atom_size / 3 * (1 + element.atomic_nr / 50), label=element.symbol
+            )
+
+    def _plotBeam(self):
+        """Plots the beam"""
+        self._plotVec3(np.array([0, 0, 1]), startpoint=np.array([0, 0, -1]), color='r', label='${beam}$', label_pos=np.array([0., 0.1, -0.5]))
+
+    def _plotSurface(self):
+        """Plot surface"""
+        self.axes.plot_surface(self.surf_xx, self.surf_yy, self.surf_z, alpha=0.2)
+
+    def _calcMillerRotMat(self):
+        """Calculates rotation matrix based on miller indices"""
+
+        a = np.array([1, 0, 0])
+        if np.any(self.miller_ind):
+            a = self.miller_ind / np.linalg.norm(self.miller_ind)
+        r = np.linalg.norm(a[:2])
+
+        sin_phi = 0
+        cos_phi = 0
+        if not np.isclose(r, 0):
+            sin_phi = a[1] / r
+            cos_phi = a[0] / r
+        sin_theta = a[2]
+        cos_theta = r
+
+        self.miller_rot_mat = np.array([
+           [-sin_phi, -cos_phi * sin_theta, cos_phi * cos_theta],
+           [cos_phi , -sin_phi * sin_theta, sin_phi * cos_theta],
+           [0       , cos_theta           , sin_theta          ]
+        ])
+
+    def _updatePlot(self):
+        """Update the plot"""
+
+        azim = self.axes.azim
+        elev = self.axes.elev
+        roll = self.axes.roll
+
+        self.clear()
+        self.axes.view_init(elev, azim, roll)
+        self.draw_idle()
+        self.axes.set_axis_off()
+
+        self._calcMillerRotMat()
+
+        if self.show_coordinate_system:
+            self._plotCoordSystem()
+        self._plotUnitCellOutlines()
+        if self.show_basis_vecs:
+            self._plotBasisVecs()
+        if self.show_beam:
+            self._plotBeam()
+        if self.show_unrotated_cell:
+            self._plotUnitCellOutlines(False)
+            self._plotBasisVecs(False)
+        self._plotCoords()
+
+        if self.show_legend:
+            handles, _ = self.axes.get_legend_handles_labels()
+            if handles:
+                legend = self.axes.legend(loc='upper right')
+                legend.get_frame().set_facecolor(self.bg_color)
+                legend.get_frame().set_edgecolor(self.fg_color)
+                for text in legend.get_texts():
+                    text.set_color(self.fg_color)
+
+        self._setAxesEqual()
+
+        if self.show_surface:
+            self._plotSurface()
+
+    def updateParams(
+        self,
+        miller_ind: Optional[np.ndarray] = None,
+        basis_vecs: Optional[np.ndarray] = None,
+        crystal_coords: Optional[Dict[Element, np.ndarray]] = None,
+        show_beam: Optional[bool] = None,
+        show_basis_vecs: Optional[bool] = None,
+        show_unrotated_cell: Optional[bool] = None,
+        show_coordinate_system: Optional[bool] = None,
+        show_surface: Optional[bool] = None,
+        show_legend: Optional[bool] = None
+    ):
+        """
+        Update parameters; all parameters are optional
+
+        :param miller_ind: (optional) miller index
+        :param basis_vecs: (optional) basis vectors
+        :param crystal_coords: (optional) crystal coordinates
+        :param show_beam: (optional) show beam
+        :param show_basis_vecs: (optional) show basis vectors
+        :param show_unrotated_cell: (optional) show unrotated cell
+        :param show_coordinate_system: (optional) show coordinate system
+        :param show_surface: (optional) show surface
+        :param show_legend: (optional) show legend
+        """
+
+        if miller_ind is not None:
+            self.miller_ind = miller_ind
+        if basis_vecs is not None:
+            self.basis_vecs = basis_vecs
+        if crystal_coords is not None:
+            self.crystal_coords = crystal_coords
+        if show_beam is not None:
+            self.show_beam = show_beam
+        if show_basis_vecs is not None:
+            self.show_basis_vecs = show_basis_vecs
+        if show_unrotated_cell is not None:
+            self.show_unrotated_cell = show_unrotated_cell
+        if show_coordinate_system is not None:
+            self.show_coordinate_system = show_coordinate_system
+        if show_surface is not None:
+            self.show_surface = show_surface
+        if show_legend is not None:
+            self.show_legend = show_legend
+
+        self._updatePlot()
+
+    def sizeHint(self):
+        """Returns size"""
+        if self.size_hint is None:
+            super().sizeHint()
+        else:
+            return self.size_hint
+
+    def minimumSizeHint(self):
+        """Returns minimum size"""
+        return QSize(50, 50)

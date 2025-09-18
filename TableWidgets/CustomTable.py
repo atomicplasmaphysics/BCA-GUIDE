@@ -1,21 +1,3 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from typing import List, Union
 
 from PyQt6.QtCore import pyqtSignal, QObject
@@ -39,8 +21,16 @@ class CustomRowField:
     uniqueList = []
     uniqueIdLast = 0
 
-    def __init__(self, unique: str, label: str, tooltip: str = '', synced: bool = True,
-                 limit: Union[bool, int, float] = False, reset_neg: bool = False, enabled: bool = True):
+    def __init__(
+        self,
+        unique: str,
+        label: str,
+        tooltip: str = '',
+        synced: bool = True,
+        limit: Union[bool, int, float] = False,
+        reset_neg: bool = False,
+        enabled: bool = True
+    ):
         self.unique = unique
         self.label = label
         self.tooltip = tooltip
@@ -57,13 +47,13 @@ class CustomRow(QObject):
     """
     Class for custom QObject row
     """
-    # coordinateChanged = pyqtSignal()
     contentChanged = pyqtSignal()
 
     def __init__(self):
         super().__init__()
         self.remove = QPushButton(QIcon(':/icons/delete.png'), '')
         self.remove.setFixedSize(30, 30)
+        self.remove.setAutoDefault(False)
         # Center the remove button by surrounding it with two stretches inside a horizontal layout
         self.remove_button_parent = QWidget()
         self.remove_button_parent_hl = QHBoxLayout()
@@ -114,7 +104,6 @@ class CustomTable(QTableWidget):
 
     settingsChanged = pyqtSignal(dict)
     contentChanged = pyqtSignal()
-    #coordinateChanged = pyqtSignal()
 
     def __init__(self, row_count: int, header_labels, parent):
         self.header_labels = [''] + header_labels
@@ -133,6 +122,7 @@ class CustomTable(QTableWidget):
 
         self.add_button = QPushButton(QIcon(':/icons/add.png'), '')
         self.add_button.setFixedSize(30, 30)
+        self.add_button.setAutoDefault(False)
         self.add_button.clicked.connect(lambda: self.addRow())
         self.createAddButton()
 

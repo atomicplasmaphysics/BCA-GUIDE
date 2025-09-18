@@ -1,21 +1,3 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from typing import List
 
 from PyQt6.QtGui import QRegularExpressionValidator, QIcon
@@ -236,8 +218,15 @@ class TargetLayersTable(CustomTable):
     ]
     abundanceTooltip = 'How much this element contributes to the composition of each layer (atomic fraction).<br>The abundances of all elements in a layer sum up to 1'
 
-    def __init__(self, parent, target_thickness: float, target_segments_count: int,
-                 labels=None, tooltips=None, custom_table_row=TargetLayersRow):
+    def __init__(
+        self,
+        parent,
+        target_thickness: float,
+        target_segments_count: int,
+        labels=None,
+        tooltips=None,
+        custom_table_row=TargetLayersRow
+    ):
         if labels is None:
             labels = []
         if tooltips is None:

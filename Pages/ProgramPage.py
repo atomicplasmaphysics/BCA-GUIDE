@@ -1,21 +1,3 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from __future__ import annotations
 from typing import List, Union, TYPE_CHECKING
 from enum import Enum, auto
@@ -41,7 +23,10 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from GlobalConf import GlobalConf
 from Styles import Styles
 
-from Utility.Layouts import TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor
+from Utility.Layouts import (
+    TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview,
+    CrystalPreview
+)
 from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
 from Utility.Functions import alphanumeric, inFileList, inFileDict
@@ -49,7 +34,6 @@ from Utility.ModifyWidget import setWidgetHighlight
 
 from TableWidgets.CompTable import CompRow, CompTable, CompTableTarget
 from TableWidgets.TargetTable import TargetLayersTable
-from TableWidgets.TargetPreview import TargetPreview
 from TableWidgets.CompoundList import CompoundList
 from TableWidgets.PeriodicTable import PeriodicTableDialog
 from TableWidgets.CrystalEditor import CrystalEditorDialog
@@ -93,7 +77,6 @@ class SimulationPage(TabWithToolbar):
         #
         # VARIABLES
         #
-
 
         self.main_window = main_window
         self.simulation_configuration = simulation_configuration
@@ -352,9 +335,17 @@ class SimulationPage(TabWithToolbar):
         self.target_composition_preview.addLayout(self.target_preview_vbox)
         self.settings_group_layout_target.addLayout(self.target_composition_preview)
 
+        self.target_preview_groupbox = QGroupBox(self)
+        self.target_preview_vbox.addWidget(self.target_preview_groupbox)
+
+        self.target_preview_groupbox_vbox = QVBoxLayout(self)
+        self.target_preview_groupbox_vbox.setContentsMargins(2, 2, 2, 2)
+        self.target_preview_groupbox.setLayout(self.target_preview_groupbox_vbox)
+
         self.target_preview = TargetPreview(self)
+        self.target_preview.setToolTip('Preview of target structure')
         self.target_preview.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        self.target_preview_vbox.addWidget(self.target_preview)
+        self.target_preview_groupbox_vbox.addWidget(self.target_preview)
 
         # Target layers
         self.target_structure_compounds = QHBoxLayout()
@@ -364,12 +355,11 @@ class SimulationPage(TabWithToolbar):
         self.target_layers = TargetLayersTable(self, 100, 100)
         self.target_structure_vbox.addWidget(self.target_layers)
 
-
         # Compounds
         self.compound_list = None
         if self.simulation_class.CompoundList:
-            self.target_compound_vbox = VBoxTitleLayout(self, 'Compounds', add_stretch=50)
-            self.target_structure_compounds.addLayout(self.target_compound_vbox)
+            target_compound_vbox = VBoxTitleLayout(self, 'Compounds', add_stretch=50)
+            self.target_structure_compounds.addLayout(target_compound_vbox)
 
             # Compound holder
             self.compound_list = CompoundList(
@@ -379,21 +369,34 @@ class SimulationPage(TabWithToolbar):
                 table_target=self.table_target
             )
             self.compound_list.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
-            self.target_compound_vbox.addWidget(self.compound_list)
+            target_compound_vbox.addWidget(self.compound_list)
 
         self.settings_group_layout_target.addLayout(self.target_structure_compounds)
 
-        if self.simulation_class.getVersionName(self.simulation_configuration.folder, self.simulation_configuration.binary) == 'SDTrimSP v7.00':
-            self.crystal_editor_vbox = VBoxTitleLayout(self, 'Crystal Editor', add_stretch=50)
-            self.target_structure_compounds.addLayout(self.crystal_editor_vbox)
-            self.settings_group_layout_target.addLayout(self.target_structure_compounds)
+        self.crystal_editor_vbox_widget = QWidget(self)
+        self.crystal_editor_vbox_widget.setHidden(True)
+        self.target_structure_compounds.addWidget(self.crystal_editor_vbox_widget)
 
-            self.crystal_editor = QPushButton('Edit Crystal')
-            self.crystal_editor.setToolTip('Click to change crystal parameters ')
-            self.crystal_editor.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-            self.crystal_editor_vbox.addWidget(self.crystal_editor)
+        self.crystal_editor_vbox = VBoxTitleLayout(self, 'Crystal Editor', add_stretch=50)
+        self.crystal_editor_vbox.setContentsMargins(0, 0, 0, 0)
+        self.crystal_editor_vbox_widget.setLayout(self.crystal_editor_vbox)
 
-            self.crystal_editor.clicked.connect(lambda _: self.openCrystalEditorDialog())
+        self.crystal_editor_groupbox = QGroupBox(self)
+        self.crystal_editor_vbox.addWidget(self.crystal_editor_groupbox)
+
+        self.crystal_editor_groupbox_vbox = QVBoxLayout(self)
+        self.crystal_editor_groupbox.setLayout(self.crystal_editor_groupbox_vbox)
+
+        self.crystal_editor_button = QPushButton('Edit Crystal')
+        self.crystal_editor_button.setToolTip('Click to change crystal parameters')
+        self.crystal_editor_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.crystal_editor_groupbox_vbox.addWidget(self.crystal_editor_button)
+
+        self.crystal_editor_button.clicked.connect(lambda _: self.openCrystalEditorDialog())
+
+        self.crystal_preview = CrystalPreview(self, axes_equal_radius=0.5)
+        self.crystal_preview.setToolTip('Preview of crystal structure')
+        self.crystal_editor_groupbox_vbox.addWidget(self.crystal_preview)
 
         #
         # Add a parent to the settings layout and add that to the splitter
@@ -471,7 +474,6 @@ class SimulationPage(TabWithToolbar):
         self.parent_widget_file_input.setLayout(self.file_input_vbox)
         self.file_preview_tab_splitter.addWidget(self.parent_widget_file_input)
 
-
         # Layer File
         self.parent_widget_file_layer = QWidget(self)
         self.file_layer_vbox = VBoxTitleLayout(self, 'LAYER FILE', add_stretch=False)
@@ -480,19 +482,14 @@ class SimulationPage(TabWithToolbar):
         self.parent_widget_file_layer.setLayout(self.file_layer_vbox)
         self.file_preview_tab_splitter.addWidget(self.parent_widget_file_layer)
 
-        #
-        # TAB: 'Files preview crystal'
-        #
-
         # Crystal Input File / Input Parameters
-        if self.simulation_configuration.version == '7.00':
-            self.parent_widget_file_crystal = QWidget(self)
-            self.file_crystal_vbox = VBoxTitleLayout(self, 'CRYSTAL FILE', add_stretch=False)
-            self.crystal_file_preview = FileEditor(self)
-            self.file_crystal_vbox.addWidget(self.crystal_file_preview)
-            self.parent_widget_file_crystal.setLayout(self.file_crystal_vbox)
-            self.file_preview_tab_splitter.addWidget(self.parent_widget_file_crystal)
-
+        self.parent_widget_file_crystal = QWidget(self)
+        self.parent_widget_file_crystal.setHidden(not self.simulation_class.default_values.enable_crystal)
+        self.file_crystal_vbox = VBoxTitleLayout(self, 'CRYSTAL FILE', add_stretch=False)
+        self.crystal_file_preview = FileEditor(self)
+        self.file_crystal_vbox.addWidget(self.crystal_file_preview)
+        self.parent_widget_file_crystal.setLayout(self.file_crystal_vbox)
+        self.file_preview_tab_splitter.addWidget(self.parent_widget_file_crystal)
 
         #
         # TAB: 'Log files'
@@ -581,9 +578,7 @@ class SimulationPage(TabWithToolbar):
 
         # Output and plots
         self.parent_widget_plot = QWidget(self)
-        # self.plot_vbox = VBoxTitleLayout(self, 'Outputs & plots', add_stretch=False)  # already defined at the top
         self.plot_vbox.title.setMaximumHeight(20)
-        # self.output_plot_view = MplCanvas()  # already set at the top
         self.output_plot_toolbar = NavigationToolbar2QT(self.output_plot_view, self)
         self.plot_vbox.addWidget(self.output_plot_view, stretch=1)
         self.plot_vbox.addWidget(self.output_plot_toolbar)
@@ -596,15 +591,14 @@ class SimulationPage(TabWithToolbar):
         self.simulation_result_splitter.setStretchFactor(0, 40)
         self.simulation_result_splitter.setStretchFactor(1, 60)
 
+        # crystal editor dialog
+        self.crystal_editor_dialog = CrystalEditorDialog(
+            self.main_window,
+            self.simulation_configuration,
+            [row.get('symbol') for row in self.table_target.getArguments()],  # TODO: this should be list of <Element> not strings
+            table_target=self.table_target
+        )
 
-        target_elements = []
-        for c in self.table_target.getArguments():
-            target_elements.append(c.get('symbol'))
-
-        if self.simulation_configuration.version == '7.00':
-            self.crystal_editor_dialog = CrystalEditorDialog(self.main_window, self.simulation_configuration, target_elements, table_target=self.table_target)
-        else:
-            self.crystal_editor_dialog = None
         #
         # CONNECT SIGNALS
         #
@@ -663,6 +657,7 @@ class SimulationPage(TabWithToolbar):
 
         # global density
         self.general_target_settings.settingsChanged.connect(lambda dictionary: self.updateGlobalDensity(dictionary))
+        self.general_target_settings.settingsChanged.connect(lambda dictionary: self.updateCrystalView(dictionary))
         self.target_layers.settingsChanged.connect(lambda dictionary: self.updateGlobalDensity(dictionary))
 
         # group elements
@@ -694,6 +689,13 @@ class SimulationPage(TabWithToolbar):
         self.evaluation_class.hlChange.connect(self.plot_hbox.receive)
         self.plot_hbox.settingsChanged.connect(self.evaluation_class.receive)
 
+        # crystal parameters
+        self.crystal_editor_dialog.crystalCoordsChanged.connect(lambda crystal_coords: self.crystal_preview.updateParams(crystal_coords=crystal_coords))
+        self.crystal_editor_dialog.crystalMillerChanged.connect(lambda miller_ind: self.crystal_preview.updateParams(miller_ind=miller_ind))
+        self.crystal_editor_dialog.crystalBasisChanged.connect(lambda basis_vecs: self.crystal_preview.updateParams(basis_vecs=basis_vecs))
+        self.crystal_editor_dialog.crystalDefinedChanged.connect(lambda state: setWidgetHighlight(self.crystal_editor_button, state))
+        self.table_target.elementChanged.connect(self.crystal_editor_dialog.elementChanged)
+
         #
         # TIMERS
         #
@@ -715,11 +717,6 @@ class SimulationPage(TabWithToolbar):
         # open last settings
         if starting_save_folder:
             self.loadSettings(starting_save_folder)
-
-
-
-
-
 
     def tabChange(self, tab: int):
         """Executed when tabs ara changed"""
@@ -852,6 +849,17 @@ class SimulationPage(TabWithToolbar):
             self.table_target.receive({
                 'atomic_global_density': self.global_density.atomicDensity()
             })
+
+    def updateCrystalView(self, value_dict: dict):
+        """
+        Updates crystal view if needed
+
+        :param value_dict: dictionary of updated settings
+        """
+
+        crystal_state = value_dict.get('crystal_state')
+        if crystal_state is not None:
+            self.crystal_editor_vbox_widget.setHidden(not crystal_state)
 
     def updateGroupElements(self, value_dict: dict):
         """
@@ -1078,16 +1086,13 @@ EOF
         self.target_layers.resetTable()
         self.table_beam.resetTable()
         self.table_target.resetTable()
-
-        #self.crystal_editor_dialog.resetTable()
+        self.crystal_editor_dialog.reset()
 
         # add first rows
         self.table_beam.addRow()
         self.table_target.addRow()
         self.target_layers.addRow()
-        if self.simulation_configuration.version == '7.00':
-            self.crystal_editor_dialog.reset()
-            self.crystal_editor_dialog.addRow()
+        self.crystal_editor_dialog.addRow()
 
         # somehow the resize of the target layer table does not work, therefore this fix is needed
         QTimer.singleShot(0, self.target_layers.resizeTable)
@@ -1098,11 +1103,12 @@ EOF
         self.settings_group_layout_settings.reset()
         self.additional_settings.setPlainText('')
 
-        # Reset Crystal settings
-
         # set run status
         self.setRunStatus(SimulationPage.RunStatus.READY)
         self.setEdited(False)
+
+        # reset file previews
+        self.makePreview()
 
     def loadSettings(self, path: Union[str, bool] = False, from_json: bool = True, unsaved_warning: bool = True) -> bool:
         """Loads settings and returns if it was successful"""
@@ -1217,8 +1223,7 @@ EOF
         self.target_layers.resetTable()
         self.table_target.resetTable()
         self.table_beam.resetTable()
-        if self.simulation_configuration.version == '7.00':
-            self.crystal_editor_dialog.table_crystal.resetTable()
+        self.crystal_editor_dialog.table_crystal.resetTable()
 
         load_error = []
         load_error += self.general_beam_settings.loadArguments(arguments)
@@ -1240,8 +1245,7 @@ EOF
             self.table_beam.limitColumns()
             self.table_target.connectRows()
             self.table_target.limitColumns()
-            if self.simulation_configuration.version == '7.00':
-                self.crystal_editor_dialog.table_crystal.connectRows()
+            self.crystal_editor_dialog.table_crystal.connectRows()
 
         else:
             self.table_beam.setArguments(arguments.beam_rows, arguments, element_data)
@@ -1254,11 +1258,11 @@ EOF
         if self.compound_list is not None:
             self.compound_list.setCompounds([compound.name_save for compound in arguments.settings.compounds])
 
-        if self.simulation_configuration.version == '7.00':
-            self.crystal_editor_dialog.elementChanged()
-            self.crystal_editor_dialog.table_crystal.setArguments(arguments.crystal_rows, arguments, element_data)
+        self.crystal_editor_dialog.elementChanged()
+        if arguments.crystal_rows is not None:
+            self.crystal_editor_dialog.table_crystal.setArguments(arguments.crystal_rows)
+        if self.simulation_class.default_values.enable_crystal:
             load_error += self.crystal_editor_dialog.loadArguments(arguments)
-
 
         self.makePreview()
         self.setEdited(False)
@@ -1268,6 +1272,8 @@ EOF
         self.updateOutputParametersList()
         QApplication.restoreOverrideCursor()
         self.main_window.writeStatusBar('Input files loaded')
+
+        return True
 
     def importSettings(self) -> bool:
         """Imports settings and returns if it was successful"""
@@ -1325,7 +1331,7 @@ EOF
 
         # open file
         self.loadSettings(self.simulation_configuration.save_folder)
-
+        return True
 
     def saveSettings(self, new_folder: bool = False) -> Union[List[str], bool]:
         """
@@ -1349,6 +1355,16 @@ EOF
                 QMessageBox.Icon.Warning,
                 'Warning!',
                 'All elements must be defined in order to save the input file'
+            )
+            return False
+
+        # check if crystal is fully defined
+        if self.crystal_editor_button.isVisible() and self.crystal_editor_dialog.undefined_state:
+            showMessageBox(
+                self,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'Crystal must be defined in order to save the input file'
             )
             return False
 
@@ -1448,10 +1464,9 @@ EOF
         input_file = self.simulation_class.makeInputFile(arguments, self.simulation_configuration.folder, self.simulation_configuration.version)
         layer_file = self.simulation_class.makeLayerFile(arguments, self.simulation_configuration.folder, self.simulation_configuration.version)
 
-        if self.simulation_configuration.version == '7.00':
+        crystal_file = ''
+        if self.simulation_class.default_values.enable_crystal:
             crystal_file = self.simulation_class.makeCrystalFile(arguments, self.simulation_configuration.folder, self.simulation_configuration.version)
-        else:
-            crystal_file = None
 
         create_layer_file = True
         if not layer_file:
@@ -1465,9 +1480,7 @@ EOF
 
         self.input_file_preview.setPlainText(input_file)
         self.layer_file_preview.setPlainText(layer_file)
-
-        if self.simulation_configuration.version == '7.00':
-            self.crystal_file_preview.setPlainText(crystal_file)
+        self.crystal_file_preview.setPlainText(crystal_file)
 
         return arguments, input_file, layer_file if create_layer_file else False, crystal_file if create_crystal_file else False
 
@@ -1487,41 +1500,22 @@ EOF
 
         additional = self.additional_settings.toPlainText().split('\n')
 
-        if self.simulation_configuration.version == '7.00':
-            crystal_args = self.crystal_editor_dialog.getArguments()
-            crystal_rows = self.crystal_editor_dialog.table_crystal.getArguments()
+        crystal_args = self.crystal_editor_dialog.getArguments()
+        crystal_rows = self.crystal_editor_dialog.table_crystal.getArguments()
+        target_args = self.general_target_settings.getArguments(miller_ind=crystal_args.miller_ind)
 
-            miller_index_h = crystal_args.miller_index_h
-            miller_index_k = crystal_args.miller_index_k
-            miller_index_l = crystal_args.miller_index_l
-
-            target_args = self.general_target_settings.getArguments(miller_index_h, miller_index_k, miller_index_l)
-
-            arguments = SimulationArguments(
-                simulation=simulation,
-                beam_args=beam_args,
-                beam_rows=beam_rows,
-                target_args=target_args,
-                target_rows=target_rows,
-                structure=structure,
-                settings=settings,
-                additional=additional,
-                crystal_args=crystal_args,
-                crystal_rows=crystal_rows
-            )
-
-        else:
-            target_args = self.general_target_settings.getArguments()
-            arguments = SimulationArguments(
-                simulation=simulation,
-                beam_args=beam_args,
-                beam_rows=beam_rows,
-                target_args=target_args,
-                target_rows=target_rows,
-                structure=structure,
-                settings=settings,
-                additional=additional
-            )
+        arguments = SimulationArguments(
+            simulation=simulation,
+            beam_args=beam_args,
+            beam_rows=beam_rows,
+            target_args=target_args,
+            target_rows=target_rows,
+            structure=structure,
+            settings=settings,
+            additional=additional,
+            crystal_args=crystal_args,
+            crystal_rows=crystal_rows
+        )
 
         return arguments
 
@@ -1865,11 +1859,13 @@ EOF
             self.main_window.writeStatusBar(f'No plot data provided - aborted')
             return
 
-        file_path = selectFileDialog(self,
-                                     True,
-                                     'Save plot data as...',
-                                     f'{self.simulation_configuration.save_folder}/{title}.txt',
-                                     'Text files (*.txt)')
+        file_path = selectFileDialog(
+            self,
+            True,
+            'Save plot data as...',
+            f'{self.simulation_configuration.save_folder}/{title}.txt',
+            'Text files (*.txt)'
+        )
         if file_path is None:
             self.main_window.writeStatusBar('No file selected - aborted')
             return
@@ -1882,17 +1878,8 @@ EOF
     def openCrystalEditorDialog(self):
         """
         Opens simulation specific crystal editor
-
         """
+
         self.setEdited(True)
         self.crystal_editor_dialog.elementChanged()
-        self.crystal_editor_dialog.openDialog()
-
-    def crystalEditorDialogClosed(self, return_element):
-
-        self.setEdited(True)
-        """
-        Function called when periodic table is closed. Sets element in row where select element button was pressed
-
-        :param return_element: selected element or 0 if no element was selected
-        """
+        self.crystal_editor_dialog.open()

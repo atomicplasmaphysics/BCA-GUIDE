@@ -1,21 +1,3 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from typing import Union, Tuple, Optional, List
 from os import listdir
 import logging
@@ -26,15 +8,24 @@ import matplotlib.pyplot as plt
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QObject, QThread
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
-from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout
+from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout, InputHBoxLayout
 from Utility.Indexing import RepeatingList, ElementList
 from Utility.Functions import getFileNameFromFileList, fileToNpArray
 
 from TableWidgets.CompTable import CompRow
+from TableWidgets.CrystalTable import CrystalRow
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Element import Element, Elements
 from Containers.Arguments import GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments
+
+
+class GeneralDefaultValues:
+    """
+    Default values for this simulation
+    """
+
+    enable_crystal = False
 
 
 class GeneralSettings:
@@ -95,9 +86,10 @@ class HlGeneralBeamSettings(GeneralSettings, QHBoxLayout):
     QHBoxLayout for general beam settings
 
     :param version: version of simulation
+    :param default_values: default values
     """
 
-    def __init__(self, version: str):
+    def __init__(self, version: str, default_values: Optional[GeneralDefaultValues] = None):
         super().__init__()
         self.version = version
 
@@ -113,17 +105,42 @@ class HlGeneralTargetSettings(GeneralSettings, QHBoxLayout):
     QHBoxLayout for general target settings
 
     :param version: version of simulation
+    :param default_values: default values
     """
 
-    def __init__(self, version: str):
+    def __init__(self, version: str, default_values: Optional[GeneralDefaultValues] = None):
         super().__init__()
         self.version = version
 
+        self.include_crystal = False if default_values is None else default_values.enable_crystal
+        self.layout_crystal_file = None
+
     @staticmethod
-    def getArguments() -> GeneralTargetArguments:
+    def getArguments(*args, **kwargs) -> GeneralTargetArguments:
         """Returns <GeneralTargetArguments> container of parameters for general target settings"""
 
         return GeneralTargetArguments()
+
+    def insertCrystalCheckbox(self, checkbox: Optional[bool] = None, tooltip: Optional[str] = None):
+        if not self.include_crystal:
+            raise ValueError('Cannot create Crystal checkbox is not allowed in default values')
+
+        self.layout_crystal_file = InputHBoxLayout(
+            'Crystal',
+            None,
+            checkbox=checkbox,
+            tooltip=tooltip
+        )
+        self.layout_crystal_file.checkbox.stateChanged.connect(lambda _: self.edited())
+        self.layout_crystal_file.checkbox.stateChanged.connect(lambda state: self.emit({'crystal_state': state}))
+        self.addStretch(1)
+        self.addLayout(self.layout_crystal_file)
+
+    def reset(self):
+        """Resets all input fields"""
+
+        if self.layout_crystal_file is not None:
+            self.layout_crystal_file.reset()
 
 
 class VlGeneralSimulationSettings(GeneralSettings, QVBoxLayout):
@@ -131,9 +148,10 @@ class VlGeneralSimulationSettings(GeneralSettings, QVBoxLayout):
     QVBoxLayout for general simulation settings
 
     :param version: version of simulation
+    :param default_values: default values
     """
 
-    def __init__(self, version: str):
+    def __init__(self, version: str, default_values: Optional[GeneralDefaultValues] = None):
         super().__init__()
         self.version = version
 
@@ -241,60 +259,6 @@ class CompRowTargetSettings(CompRow):
         return super().getArguments()
 
     def setArguments(self, arguments: RowArguments, general_arguments: SimulationArguments):
-        """
-        Sets <RowArguments> container of parameters for row
-
-        :param arguments: container of <RowArguments>
-        :param general_arguments: container of <GeneralArguments>
-        """
-
-        super().setArguments(arguments, general_arguments)
-
-
-class CompRowCrystalSettings(CompRow):
-    """
-    CompRow for beam
-
-    :param version: version of simulation
-    """
-
-    # list of CustomRowField() elements
-    """
-    Example:
-    rowFields = [
-        CustomRowField(                 # First Column
-            unique='unique_specifier',  # Unique specifier to link beam and target tables and for reference in input file
-            label='label_title',        # Title of column header
-            tooltip='tooltip'           # Tooltip for column header (optional)
-        ),
-        CustomRowField(...),            # Second Column
-        ...
-    ]
-    """
-    rowFields = []
-
-    def __init__(self, *args, version: str = '', **kwargs):
-        super().__init__(*args, **kwargs)
-        self.version = version
-
-        # extend list of widgets
-        """
-        Example:
-        self.rowWidgets += [
-            QSpinBox(),
-            QDoubleSpinBox(),
-            QComboBox(),
-            ...
-        ]
-        """
-        self.row_widgets += []
-
-    def getArguments(self) -> RowArguments:
-        """Returns <RowArguments> container of parameters for row"""
-
-        return super().getArguments()
-
-    def setArguments(self, arguments: RowArguments, general_arguments: GeneralArguments):
         """
         Sets <RowArguments> container of parameters for row
 
@@ -1860,22 +1824,20 @@ class SimulationsInput:
     CompoundList = []
     # group elements in beam and target
     GroupElements = False
-    # simulation is crystal capable
-    CrystalCapable = False
 
     # Reference to classes
     HlBeamSettings = HlGeneralBeamSettings
     HlTargetSettings = HlGeneralTargetSettings
-    HlCrystalSettings = HlGeneralTargetSettings
     VlSimulationSettings = VlGeneralSimulationSettings
     CompRowBeamSettings = CompRowBeamSettings
     CompRowTargetSettings = CompRowTargetSettings
-    CompRowCrystalSettings = CompRowCrystalSettings
+    CrystalRowSettings = CrystalRow
 
     # Maximum number of components
     MaxComponents = 10
 
     def __init__(self):
+        self.default_values = GeneralDefaultValues()
         self.element_data = GeneralElementData()
         self.element_data_default = True
 
@@ -1980,8 +1942,6 @@ class SimulationsInput:
 
         return ''
 
-
-
     def nameLayerFile(self, arguments: SimulationArguments, version: str) -> str:
         """
         Returns file-name of layer file
@@ -2008,15 +1968,14 @@ class SimulationsInput:
 
         return ''
 
-
     def nameCrystalFile(self, arguments: SimulationArguments, version: str) -> str:
         """
-        Returns file-name of input file
+        Returns file-name of crystal file
 
         :param arguments: <SimulationArguments> container
         :param version: version of simulation
 
-        :return: file-name of input file
+        :return: file-name of crystal file
         """
 
         return self.CrystalFilename
@@ -2024,17 +1983,16 @@ class SimulationsInput:
     @staticmethod
     def makeCrystalFile(arguments: SimulationArguments, folder: str, version: str) -> str:
         """
-        Returns input file as string
+        Returns crystal file as string
 
         :param arguments: <SimulationArguments> container
         :param folder: folder of simulation
         :param version: version of simulation
 
-        :return: input file for simulation as string
+        :return: crystal file for simulation as string
         """
 
         return ''
-
 
     @staticmethod
     def loadFiles(folder: str, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
@@ -2167,8 +2125,7 @@ class SimulationsOutput(QObject):
     def clearPlotWindow(self):
         """Clears the plot window"""
 
-        self.plot.fig.clf()
-        self.plot.axes = self.plot.fig.add_subplot(projection='rectilinear')
+        self.plot.clear()
         self.plot.fig.canvas.draw_idle()
 
     def analyse(self, plot: str = None, plot_args: dict = None, hide: bool = True, text: str = ''):
@@ -2272,7 +2229,7 @@ class SimulationsOutput(QObject):
         analysis_data = self.analysis.data
 
         if analysis_data is None or len(analysis_data) != 2:
-            return
+            return None
 
         data, labels = analysis_data
         output = '\t'.join(labels) + '\n'
@@ -2396,7 +2353,7 @@ class SimulationsAnalysis(QObject):
 
         file = getFileNameFromFileList(filename, listdir(self.save_folder))
         if not file:
-            return
+            return None
 
         try:
             # numpy genfromtxt is very slow, use own implementation instead
@@ -2405,9 +2362,9 @@ class SimulationsAnalysis(QObject):
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{file}"!')
-            return
+            return None
 
         if not data.size:
-            return
+            return None
 
         return data

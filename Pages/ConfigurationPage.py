@@ -1,21 +1,3 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from platform import system
@@ -315,11 +297,13 @@ class ConfigurationPage(TabWithToolbar):
         self.copy.setDisabled(True)
 
         self.clone = QPushButton('Clone configuration')
+        self.clone.setToolTip('Clone the currently selected simulation')
         self.copy_delete_hbox.addWidget(self.clone)
         self.clone.clicked.connect(lambda: self.cloneConfigView())
         self.clone.setDisabled(True)
 
         self.delete = QPushButton('Delete configuration')
+        self.delete.setToolTip('Delete the currently selected simulation')
         self.copy_delete_hbox.addWidget(self.delete)
         self.delete.clicked.connect(lambda: self.deleteConfigView())
         self.delete.setDisabled(True)
@@ -378,7 +362,7 @@ class ConfigurationPage(TabWithToolbar):
         """
         Clears all configurations
 
-        :pram show_warning: if warning should be shown
+        :param show_warning: if warning should be shown
         """
 
         if not self.main_window.simulation_configs:
@@ -501,6 +485,7 @@ class ConfigurationPage(TabWithToolbar):
         for sc in self.main_window.simulation_configs:
             item = QListWidgetItem(sc.title)
             item.setCheckState(Qt.CheckState.Unchecked)
+            item.setToolTip('Selecting simulations allows for simultaneous running')
             self.simulation_configuration_list.addItem(item)
 
         self.main_window.updateTabs()
@@ -757,9 +742,7 @@ class ConfigurationPage(TabWithToolbar):
             if name == selected:
                 self.description_label.setText(desc.strip())
                 if logo:
-                    self.description_logo.setPixmap(
-                        QPixmap(logo).scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    )
+                    self.description_logo.setPixmap(QPixmap(logo).scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                     self.description_logo.show()
                 else:
                     self.description_logo.hide()

@@ -1,24 +1,6 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from typing import List, Union
 from enum import Enum, auto
-from json import dump, JSONEncoder, load
+from json import dump as json_dump, JSONEncoder, load as json_load
 from json.decoder import JSONDecodeError
 import logging
 
@@ -26,6 +8,7 @@ from Utility.Indexing import RunningIndex, DefaultAssumed
 
 from Containers.Element import Element
 from Containers.Compound import Compound
+from Containers.Crystal import MillerIndex, BasisVector, Coordinate
 
 
 class ArgumentValues:
@@ -111,16 +94,17 @@ class Arguments:
     def __init__(self, **kwargs):
         self.optional = kwargs
 
-    def get(self, argument: str):
+    def get(self, argument: str, default = None):
         """
         Returns value of argument or None if not set
 
         :param argument: argument name
+        :param default: default return value
         """
 
         if hasattr(self, argument):
             return getattr(self, argument)
-        return self.optional.get(argument)
+        return self.optional.get(argument, default)
 
     def __str__(self) -> str:
         """Returns itself as printable string"""
@@ -314,56 +298,24 @@ class CrystalRowArguments(Arguments):
     Container that stores information of each element row
     :param index: index of row
     :param symbol: element symbol of row
-    :param a_1:
-    :param a_2:
-    :param a_3:
+    :param coordinate: <Coordinate>
     """
+    # TODO: change needed arguments & docstring
 
     def __init__(
         self,
-        index: int,
         symbol: str,
-        coordinate_a1: float = 0,
-        coordinate_a2: float = 0,
-        coordinate_a3: float = 0,
+        coord: Coordinate,
         **kwargs
     ):
         super().__init__(**kwargs)
-        self.index = int(index)
         self.symbol = str(symbol)
-        self.coordinate_a1 = float(coordinate_a1)
-        self.coordinate_a2 = float(coordinate_a2)
-        self.coordinate_a3 = float(coordinate_a3)
+        self.coord = coord
 
     def __str__(self) -> str:
         """Returns itself as printable string"""
 
-        return f'<"{self.__class__.__name__}" object {hex(id(self))}>\n  index={self.index}\n  symbol={self.symbol}\n  coordinate_a1={self.coordinate_a1}\n  coordinate_a2={self.coordinate_a2}\n  coordinate_a3={self.coordinate_a3}\n  optional={self.optional}'
-
-    def __lt__(self, other):
-        """Method used only for sorting (less)"""
-
-        return self.index < other.index
-
-    def __gt__(self, other):
-        """Method used only for sorting (greater)"""
-
-        return self.index > other.index
-
-    def __le__(self, other):
-        """Method used only for sorting (less or equal)"""
-
-        return self.index <= other.index
-
-    def __ge__(self, other):
-        """Method used only for sorting (greater or equal)"""
-
-        return self.index >= other.index
-
-    def __eq__(self, other):
-        """Method used only for sorting (equal)"""
-
-        return self.index == other.index
+        return f'<"{self.__class__.__name__}" object {hex(id(self))}>\n  symbol={self.symbol}\n  coordinate={self.coord}\n  optional={self.optional}'
 
 
 class GeneralCrystalArguments(Arguments):
@@ -372,70 +324,47 @@ class GeneralCrystalArguments(Arguments):
 
     :param name: name of crystal
     :param lattice_id: lattice id
-    :param number_of_species: number of different elements in crystal
-    :param species: list of elements
     :param lattice_constant: lattice constant in Angström
-    :param basis_vector_a1: basis vector a1=[x,y,z]
-    :param basis_vector_a2: basis vector a2=[x,y,z]
-    :param basis_vector_a3: basis vector a3=[x,y,z]
-    :param number_of_atoms: number of unique atom positions in crystal 
+    :param basis_vec_a1: basis vector <BasisVector>
+    :param basis_vec_a2: basis vector <BasisVector>
+    :param basis_vec_a3: basis vector <BasisVector>
     :param coordinates: dict [ int, list[[x,y,z]]] where the key represent the position of the element in the element list
     :param lattice_parameter: p_max
-    :miller_indices: list[h, k, l]
+    :param miller_ind: Miller Index <MillerIndex>
     """
+    # TODO: change needed arguments & docstring
 
     def __init__(
         self,
         name: str,
         lattice_id: int,
-        # number_of_species: int,
         lattice_constant: float,
 
-        basis_vector_a1_x: float,
-        basis_vector_a1_y: float,
-        basis_vector_a1_z: float,
+        basis_vec_a1: BasisVector,
+        basis_vec_a2: BasisVector,
+        basis_vec_a3: BasisVector,
 
-        basis_vector_a2_x: float,
-        basis_vector_a2_y: float,
-        basis_vector_a2_z: float,
-
-        basis_vector_a3_x: float,
-        basis_vector_a3_y: float,
-        basis_vector_a3_z: float,
-
-        miller_index_h: float,
-        miller_index_k: float,
-        miller_index_l: float,
-
+        miller_ind: MillerIndex,
 
         **kwargs
     ):
         super().__init__(**kwargs)
+
         self.name = str(name)
         self.lattice_id = lattice_id
         self.lattice_constant = lattice_constant
 
-        self.basis_vector_a1_x = basis_vector_a1_x
-        self.basis_vector_a1_y = basis_vector_a1_y
-        self.basis_vector_a1_z = basis_vector_a1_z
+        self.basis_vec_a1 = basis_vec_a1
+        self.basis_vec_a2 = basis_vec_a2
+        self.basis_vec_a3 = basis_vec_a3
 
-        self.basis_vector_a2_x = basis_vector_a2_x
-        self.basis_vector_a2_y = basis_vector_a2_y
-        self.basis_vector_a2_z = basis_vector_a2_z
-
-        self.basis_vector_a3_x = basis_vector_a3_x
-        self.basis_vector_a3_y = basis_vector_a3_y
-        self.basis_vector_a3_z = basis_vector_a3_z
-
-        self.miller_index_h = miller_index_h
-        self.miller_index_k = miller_index_k
-        self.miller_index_l = miller_index_l
+        self.miller_ind = miller_ind
 
 
     def __str__(self) -> str:
         """Returns itself as printable string"""
 
-        return f'<"{self.__class__.__name__}" object {hex(id(self))}>\n  name={self.name}\n lattice_id={self.lattice_id}\n  miller_index_h={self.miller_index_h}\n miller_index_k={self.miller_index_k}\n miller_index_l={self.miller_index_l}\n optional={self.optional}'
+        return f'<"{self.__class__.__name__}" object {hex(id(self))}>\n  name={self.name}\n  lattice_id={self.lattice_id}\n  basis_vectors=\n   {self.basis_vec_a1}\n   {self.basis_vec_a2}\n   {self.basis_vec_a3}\n  miller_index={self.miller_ind}\n  optional={self.optional}'
 
 
 class SimulationArguments(Arguments):
@@ -480,11 +409,12 @@ class SimulationArguments(Arguments):
         self.crystal_args = crystal_args
         self.crystal_rows = crystal_rows
 
-    def get(self, argument: str):
+    def get(self, argument: str, default = None):
         """
         Returns value of argument which could be in any sub container or None if not set
 
         :param argument: argument name
+        :param default: default return value
         """
 
         if hasattr(self, argument):
@@ -501,7 +431,7 @@ class SimulationArguments(Arguments):
                     res = value.get(argument)
                     if res is not None:
                         return res
-        return self.optional.get(argument)
+        return self.optional.get(argument, default)
 
     def __str__(self) -> str:
         """Returns itself as printable string"""
@@ -528,10 +458,12 @@ def saveSimulationArguments(arguments: SimulationArguments, file: str):
     :param arguments: container of <SimulationArguments>
     :param file: path to save file
     """
+
     if arguments.crystal_rows:
         crystal_rows = [row for row in arguments.crystal_rows]
     else:
         crystal_rows = None
+
     config = {
         'general': {
             'title': arguments.title,
@@ -546,11 +478,10 @@ def saveSimulationArguments(arguments: SimulationArguments, file: str):
         'crystal_args': arguments.crystal_args,
         'crystal_rows': crystal_rows,
         'additional': arguments.additional
-
     }
 
     with open(file, 'w', encoding='utf-8') as conf_file:
-        dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
+        json_dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
 
 
 def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
@@ -607,7 +538,7 @@ def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
     # Try to read from json file
     try:
         with open(file, 'r', encoding='utf-8', errors='replace') as conf_file:
-            data = load(conf_file)
+            data = json_load(conf_file)
     except (FileNotFoundError, JSONDecodeError):
         logging.info(f'Could not open file "{file}"!')
         return False
@@ -642,23 +573,11 @@ def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
         'lattice_id': getValue(data_crystal_args.get('lattice_id'), int, 1, 'lattice_id', assumed_cls=assumed),
         'lattice_constant': getValue(data_crystal_args.get('lattice_constant'), float, 1, 'lattice_constant', assumed_cls=assumed),
 
-        'basis_vector_a1_x': getValue(data_crystal_args.get('basis_vector_a1_x'), float, 1, 'basis_vector_a1_x', assumed_cls=assumed),
-        'basis_vector_a1_y': getValue(data_crystal_args.get('basis_vector_a1_y'), float, 0, 'basis_vector_a1_y', assumed_cls=assumed),
-        'basis_vector_a1_z': getValue(data_crystal_args.get('basis_vector_a1_z'), float, 0, 'basis_vector_a1_z', assumed_cls=assumed),
+        'basis_vec_a1': BasisVector(getValue(data_crystal_args.get('basis_vec_a1'), dict, {}, 'basis_vec_a1', assumed_cls=assumed).get('vec')),
+        'basis_vec_a2': BasisVector(getValue(data_crystal_args.get('basis_vec_a2'), dict, {}, 'basis_vec_a2', assumed_cls=assumed).get('vec')),
+        'basis_vec_a3': BasisVector(getValue(data_crystal_args.get('basis_vec_a3'), dict, {}, 'basis_vec_a3', assumed_cls=assumed).get('vec')),
 
-        'basis_vector_a2_x': getValue(data_crystal_args.get('basis_vector_a2_x'), float, 0, 'basis_vector_a2_x', assumed_cls=assumed),
-        'basis_vector_a2_y': getValue(data_crystal_args.get('basis_vector_a2_y'), float, 1, 'basis_vector_a2_y', assumed_cls=assumed),
-        'basis_vector_a2_z': getValue(data_crystal_args.get('basis_vector_a2_z'), float, 0, 'basis_vector_a2_z', assumed_cls=assumed),
-
-        'basis_vector_a3_x': getValue(data_crystal_args.get('basis_vector_a3_x'), float, 0, 'basis_vector_a3_x',assumed_cls=assumed),
-        'basis_vector_a3_y': getValue(data_crystal_args.get('basis_vector_a3_y'), float, 0, 'basis_vector_a3_y',assumed_cls=assumed),
-        'basis_vector_a3_z': getValue(data_crystal_args.get('basis_vector_a3_z'), float, 1, 'basis_vector_a3_z',assumed_cls=assumed),
-
-        'miller_index_h': getValue(data_crystal_args.get('miller_index_h'), float, 1, 'miller_index_h', assumed_cls=assumed),
-        'miller_index_k': getValue(data_crystal_args.get('miller_index_k'), float, 0, 'miller_index_k', assumed_cls=assumed),
-        'miller_index_l': getValue(data_crystal_args.get('miller_index_l'), float, 0, 'miller_index_l', assumed_cls=assumed),
-
-
+        'miller_ind': MillerIndex(getValue(data_crystal_args.get('miller_ind'), dict, {}, 'miller_ind', assumed_cls=assumed).get('vec'))
     }
     crystal_args_parameters.update(getDict(data_crystal_args.get('optional')))
     crystal_args = GeneralCrystalArguments(**crystal_args_parameters)
@@ -716,9 +635,7 @@ def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
             row_parameters = {
                 'index': row_index,
                 'symbol': row_dict.get('symbol'),
-                'coordinate_a1': row_dict.get('coordinate_a1'),
-                'coordinate_a2': row_dict.get('coordinate_a2'),
-                'coordinate_a3': row_dict.get('coordinate_a3')
+                'coord': Coordinate(getValue(row_dict.get('coord'), dict, {}, 'coord', assumed_cls=assumed).get('vec'))
             }
             optional = getDict(row_dict.get('optional'))
             row_parameters.update(optional)

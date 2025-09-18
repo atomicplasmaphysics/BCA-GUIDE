@@ -1,27 +1,9 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from typing import List, Union, Tuple
 from datetime import datetime
 from re import sub, findall
 import logging
 
-from numpy import array, ndarray
+import numpy as np
 
 
 from PyQt6.QtGui import QColor
@@ -251,7 +233,7 @@ def getFilesNameFromFileList(file: str, files_list: List[str]) -> List[str]:
     return matches
 
 
-def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols: Tuple[int, ...] = None, colum_required: int = None) -> ndarray:
+def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols: Tuple[int, ...] = None, colum_required: int = None) -> np.ndarray:
     """
     Use this function instead of numpy genfromtxt, since it is very slow. Reads file as numpy array.
 
@@ -283,7 +265,7 @@ def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols:
         if line_count > 1:
             lines = [' '.join(lines[i:i+line_count]) for i in range(0, len(lines), line_count)]
 
-    data = array([[float(var) for var in line.split()] for line in lines[:len(lines) - skip_footer]])
+    data = np.array([[float(var) for var in line.split()] for line in lines[:len(lines) - skip_footer]])
     if usecols is None:
         return data
 
@@ -298,6 +280,7 @@ def intSafe(string: str, fallback: int = 0, log_warning: bool = False) -> int:
 
     :param string: string to be converted
     :param fallback: (optional) fallback value
+    :param log_warning: (optional) enable logging of warnings
     """
 
     try:
@@ -315,6 +298,7 @@ def floatSafe(string: str, fallback: float = 0, log_warning: bool = False) -> fl
 
     :param string: string to be converted
     :param fallback: (optional) fallback value
+    :param log_warning: (optional) enable logging of warnings
     """
 
     try:
@@ -340,5 +324,43 @@ def splitSafe(string: str, seperator: str = None, length: int = -1) -> Union[lis
     return False
 
 
-def getElementColor(index: int, number_of_elements: int):
-    return QColor.fromHsv(int(index * 359 / number_of_elements), 255, 255, 127)
+def getUniqueColor(index: int, length: int):
+    """
+    Generates unique color based on index and total length of requested colors
+
+    :param index: index of color
+    :param length: length of requested colors
+    :return: unique <QColor> per index
+    """
+
+    return QColor.fromHsv(int(index * 359 / length), 255, 255, 127)
+
+
+def getPeriodicCoords(coord: np.ndarray, bounds: Tuple[float, float] = (0, 1), tol: float = 1e-8):
+    """
+    Generates 3D coordinates including periodic images for boundary points
+
+    :param coord: coordinate to check
+    :param bounds: (optional) boundaries in all directions
+    :param tol: (optional) tolerance to boundaries
+    :return: coordinates including periodic images from initial coord
+    """
+
+    bounds_len = bounds[1] - bounds[0]
+
+    shifts = []
+    coords = []
+    for c in coord:
+        if abs(c - bounds[0]) < tol:
+            shifts.append([c, c + bounds_len])
+        elif abs(c - bounds[1]) < tol:
+            shifts.append([c, c - bounds_len])
+        else:
+            shifts.append([c])
+
+    for x in shifts[0]:
+        for y in shifts[1]:
+            for z in shifts[2]:
+                coords.append((x, y, z))
+
+    return np.array(coords)

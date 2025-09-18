@@ -1,21 +1,3 @@
-# BCA-GUIDE - a graphical user interface for bca simulations to simulate sputtering, ion implantation and the
-# dynamic effects of ion irradiation
-#
-# Copyright(C) 2022, Alexander Redl, Paul S.Szabo, David Weichselbaum, Herbert Biber, Christian Cupak, Andreas Mutzke,
-# Wolfhard Möller, Richard A.Wilhelm, Friedrich Aumayr
-#
-# This program implements libraries of the Qt framework (https://www.qt.io/).
-#
-# This program is free software: you can redistribute it and / or modify it under the terms of the GNU General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with this program. If not, see
-# https://www.gnu.org/licenses/.
-
-
 from typing import List, Union, Tuple, Dict, Optional
 from os import path, listdir
 from re import findall
@@ -39,7 +21,6 @@ from Utility.Indexing import DefaultAssumed, RunningIndex, ElementList
 
 from TableWidgets.CompTable import CompRow
 from TableWidgets.CustomTable import CustomRowField
-# from TableWidgets.CrystalTable import CrystalRow
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Arguments import (
@@ -51,11 +32,11 @@ from Containers.Compound import Compound
 
 from Simulations.Simulations import (
     SimulationsInput, SimulationsOutput, SimulationsAnalysis, HlGeneralTargetSettings,
-    VlGeneralSimulationSettings, HlGeneralPlot
+    VlGeneralSimulationSettings, HlGeneralPlot, GeneralDefaultValues
 )
 
 
-class DefaultValues:
+class DefaultValues(GeneralDefaultValues):
     """
     Default values for this simulation
     """
@@ -104,8 +85,6 @@ class DefaultValues:
     sput = False
     vcin = False
     rrlv = False
-
-    crystal_capable = False
 
 
 class DictLookup:
@@ -269,7 +248,7 @@ class HlTargetSettings(HlGeneralTargetSettings):
         self.updateSegmentThickness()
         self.changedGlobDens()
 
-    def getArguments(self) -> GeneralTargetArguments:
+    def getArguments(self, *args, **kwargs) -> GeneralTargetArguments:
         """Returns <GeneralTargetArguments> container of parameters for target settings"""
 
         global_density = False
@@ -1785,6 +1764,7 @@ class CompRowTargetSettings(CompRowBeamSettings):
         elif isinstance(density, float):
             self.atomic_density.setValue(density)
             self.atomic_density.setEnabled(False)
+
 
 class ElementData(Elements):
     """
@@ -3421,179 +3401,6 @@ Wolfhard Möller
             elements={'Ga': 1, 'Sb': 1}
         )
     ]
-    CompoundList = [
-        Compound(
-            'CHps',
-            elements={'C': 8, 'H': 8}
-        ),
-        Compound(
-            elements={'Fe': 1, 'B': 1}
-        ),
-        Compound(
-            elements={'Mg': 1, 'B': 2}
-        ),
-        Compound(
-            elements={'Ti': 1, 'B': 2}
-        ),
-        Compound(
-            elements={'Al': 4, 'C': 3}
-        ),
-        Compound(
-            elements={'Si': 1, 'C': 1}
-        ),
-        Compound(
-            elements={'Ta': 1, 'C': 1}
-        ),
-        Compound(
-            elements={'Ti': 1, 'C': 1}
-        ),
-        Compound(
-            elements={'W': 1, 'C': 1}
-        ),
-        Compound(
-            elements={'Al': 2, 'O': 3}
-        ),
-        Compound(
-            elements={'As': 2, 'O': 3}
-        ),
-        Compound(
-            elements={'B': 2, 'O': 3}
-        ),
-        Compound(
-            elements={'Co': 1, 'O': 1}
-        ),
-        Compound(
-            elements={'Cr': 2, 'O': 3}
-        ),
-        Compound(
-            elements={'Cs': 2, 'O': 1}
-        ),
-        Compound(
-            elements={'Cu': 2, 'O': 1}
-        ),
-        Compound(
-            elements={'Fe': 2, 'O': 3}
-        ),
-        Compound(
-            elements={'Ga': 2, 'O': 3}
-        ),
-        Compound(
-            elements={'Ge': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'Mg': 1, 'O': 1}
-        ),
-        Compound(
-            elements={'Mn': 3, 'O': 4}
-        ),
-        Compound(
-            elements={'P': 2, 'O': 5}
-        ),
-        Compound(
-            elements={'Ru': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'Se': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'Si': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'Sn': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'Ta': 2, 'O': 5}
-        ),
-        Compound(
-            elements={'Ti': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'U': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'W': 1, 'O': 3}
-        ),
-        Compound(
-            elements={'Zn': 1, 'O': 1}
-        ),
-        Compound(
-            elements={'Zr': 1, 'O': 2}
-        ),
-        Compound(
-            elements={'Al': 1, 'N': 1}
-        ),
-        Compound(
-            'cBN',
-            elements={'B': 1, 'N': 1}
-        ),
-        Compound(
-            'hBN',
-            elements={'B': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'Cr': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'Cu': 3, 'N': 1}
-        ),
-        Compound(
-            elements={'Ga': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'Hf': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'Mo': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'Si': 3, 'N': 4}
-        ),
-        Compound(
-            elements={'Ti': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'W': 2, 'N': 1}
-        ),
-        Compound(
-            elements={'Zr': 1, 'N': 1}
-        ),
-        Compound(
-            elements={'Mo': 1, 'S': 2}
-        ),
-        Compound(
-            elements={'Co': 1, 'Si': 2}
-        ),
-        Compound(
-            elements={'Fe': 1, 'Si': 2}
-        ),
-        Compound(
-            elements={'Fe': 1, 'Si': 1}
-        ),
-        Compound(
-            elements={'Mg': 1, 'Si': 2}
-        ),
-        Compound(
-            elements={'Pt': 1, 'Si': 1}
-        ),
-        Compound(
-            elements={'Ti': 1, 'Si': 2}
-        ),
-        Compound(
-            elements={'W': 1, 'Si': 2}
-        ),
-        Compound(
-            elements={'Al': 1, 'As': 1}
-        ),
-        Compound(
-            elements={'Ga': 1, 'As': 1}
-        ),
-        Compound(
-            elements={'In': 1, 'As': 1}
-        ),
-        Compound(
-            elements={'Ga': 1, 'Sb': 1}
-        )
-    ]
 
     # Reference to classes
     HlTargetSettings = HlTargetSettings
@@ -3647,6 +3454,18 @@ Wolfhard Möller
             return f'{folder}/{files[0]}'
 
         return False
+
+    def update(self, folder: str, binary: str, version: str):
+        """
+        Updates on startup
+
+        :param folder: folder of simulation
+        :param binary: binary path of simulation
+        :param version: version of simulation
+        """
+
+        # default values
+        self.default_values = DefaultValues()
 
     @staticmethod
     def updateElements(folder: str, version: str) -> bool:
@@ -4578,10 +4397,11 @@ fout {idfout} {iddout} {idqout}{output}
         :return: list of errors
         """
 
-        if not settings:
-            return []
-
         errors = []
+
+        if not settings:
+            return errors
+
         sbem_flag = False
         for i, setting in enumerate(settings.split('\n')):
             setting = setting.strip()
@@ -5072,7 +4892,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         protocol = getFileNameFromFileList('*_indat.dat', listdir(self.save_folder))
         if not protocol:
-            return
+            return None
 
         result = {}
 
@@ -5171,11 +4991,11 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{protocol}"!')
-            return
+            return None
 
         except (ValueError, IndexError):
             logging.warning(f'Could not process file "{protocol}"!')
-            return
+            return None
 
         return result
 
@@ -5197,7 +5017,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         protocol = getFileNameFromFileList('*_out.dat', listdir(self.save_folder))
         if not protocol:
-            return
+            return None
 
         sputter_yield = np.zeros(len(self.elements))
         transmission_yield = np.zeros(len(self.elements))
@@ -5214,7 +5034,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{protocol}"!')
-            return
+            return None
 
         for i, line in enumerate(lines):
             if line.startswith('pseudoprojectile statistics:'):
@@ -5292,7 +5112,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_spyl.dat', skip_header=2, colum_required=len(self.elements))
         if data is None:
-            return
+            return None
 
         return data[:, 0], data[:, 1:]
 
@@ -5317,7 +5137,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         profiles = getFilesNameFromFileList('*_pr*.dat', listdir(self.save_folder))
         profiles = [profile for profile in profiles if profile[-7:-4].isnumeric()]
         if not profiles:
-            return
+            return None
         profiles = sorted(profiles, key=lambda x: int(x[-7:-4]))
 
         if self.depth_profile_data:
@@ -5444,7 +5264,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_srfe.dat', skip_header=2)
         if data is None:
-            return
+            return None
 
         return data[:, 0], -data[:, 1]
 
@@ -5462,7 +5282,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_reem.dat', skip_header=2)
         if data is None:
-            return
+            return None
 
         return data[:, 0], data[:, 1:]
 
@@ -5480,7 +5300,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_ardn.dat', skip_header=2)
         if data is None:
-            return
+            return None
 
         return data[:, 0], data[:, 1:]
 
@@ -5503,7 +5323,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_prlst.dat', skip_header=2)
         if data is None:
-            return
+            return None
 
         element, count = np.unique(data[:, 0], return_counts=True)
 
@@ -5541,7 +5361,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_rglst.dat', skip_header=2)
         if data is None:
-            return
+            return None
 
         element, count = np.unique(data[:, 0], return_counts=True)
 
@@ -5590,7 +5410,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         data = self.genfromtxt('*_bslst.dat', skip_header=2 + old_length)
         if data is None:
             if all([sd is None for sd in self.scattered_data]):
-                return
+                return None
             return self.scattered_data
 
         element, count = np.unique(data[:, 0], return_counts=True)
@@ -5652,7 +5472,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         data = self.genfromtxt('*_splst.dat', skip_header=2 + old_length)
         if data is None:
             if all([sd is None for sd in self.sputtered_data]):
-                return
+                return None
             return self.sputtered_data
 
         element, count = np.unique(data[:, 0], return_counts=True)
@@ -5703,7 +5523,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         electronic_data = self.genfromtxt('*_edepn.dat', skip_header=2)
         nuclear_data = self.genfromtxt('*_edepe.dat', skip_header=2)
         if electronic_data is None or nuclear_data is None:
-            return
+            return None
 
         return electronic_data[:, 0], electronic_data[:, 1:], nuclear_data[:, 1:]
         
