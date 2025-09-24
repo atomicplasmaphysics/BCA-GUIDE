@@ -61,7 +61,7 @@ def main():
     # show splashscreen on startup
     pixmap = SplashPixmap(
         image=':/icons/splash.png',
-        text='v. 1.5.00',
+        text='v. 1.5.01',
         box=QRect(530, 65, 90, 25),
         align=Qt.AlignmentFlag.AlignLeft,
         color=QColor('#154167'),

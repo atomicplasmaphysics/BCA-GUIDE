@@ -52,6 +52,9 @@ class CrystalEditorDialog(QDialog):
     ):
         super().__init__(parent)
 
+        self.crystal_name = DefaultValues.crystal_name
+        self.lattice_id = DefaultValues.lattice_id
+
         self.target_elements = target_elements
         self.table_target = table_target
 
@@ -86,7 +89,6 @@ class CrystalEditorDialog(QDialog):
 
         # Miller indices Widgets
         self.miller_ind = [SpinBox(0, input_range=SpinBoxRange.ZERO_INF) for _ in range(3)]
-        self.miller_ind[0].setAndDefault(1)
         self.layout_miller_ind = InputHBoxLayouts(
             'Miller Indices:',
             self.miller_ind,
@@ -502,8 +504,8 @@ class CrystalEditorDialog(QDialog):
         """" get <GeneralCrystalArgument> """
 
         return GeneralCrystalArguments(
-            name=DefaultValues.crystal_name,
-            lattice_id=DefaultValues.lattice_id,
+            name=self.crystal_name,
+            lattice_id=self.lattice_id,
             lattice_constant=self.lattice_constant.value(),
 
             basis_vec_a1=BasisVector([widget.value() for widget in self.basis_vecs[0]]),
@@ -517,7 +519,7 @@ class CrystalEditorDialog(QDialog):
             matrix_id=self.getMatrixId()
         )
 
-    def loadArguments(self, arguments: SimulationArguments) -> list:
+    def loadArguments(self, arguments: SimulationArguments) -> List[str]:
         """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
 
         crystal_args = arguments.crystal_args
@@ -525,6 +527,22 @@ class CrystalEditorDialog(QDialog):
         if not isinstance(assumed, list):
             assumed = []
         not_loadable = []
+
+        # name
+        crystal_name = crystal_args.name
+        if 'name' in assumed:
+            crystal_name = DefaultValues.crystal_name
+            not_loadable.append('name')
+        # TODO: highlight if we have field available and set value propperly
+        self.crystal_name = crystal_name
+
+        # lattice id
+        lattice_id = crystal_args.lattice_id
+        if 'lattice_id' in assumed:
+            lattice_id = DefaultValues.lattice_id
+            not_loadable.append('lattice_id')
+        # TODO: highlight if we have field available and set value propperly
+        self.lattice_id = lattice_id
 
         # basis vectors
         basis_vec_a1 = crystal_args.basis_vec_a1
@@ -565,7 +583,7 @@ class CrystalEditorDialog(QDialog):
             widget.setValue(val)
 
         # beam parameters
-        beam_dy = crystal_args.optional.get('beam_dy')
+        beam_dy = crystal_args.optional.get('beam_dy', DefaultValues.beam_dy)
         if 'beam_dy' in assumed:
             beam_dy = DefaultValues.beam_dy
             self.layout_beam_dy.mark()
@@ -573,7 +591,7 @@ class CrystalEditorDialog(QDialog):
 
         self.beam_dy.setValue(beam_dy)
 
-        beam_dz = crystal_args.optional.get('beam_dz')
+        beam_dz = crystal_args.optional.get('beam_dz', DefaultValues.beam_dz)
         if 'beam_dz' in assumed:
             beam_dz = DefaultValues.beam_dz
             self.layout_beam_dz.mark()
@@ -581,7 +599,7 @@ class CrystalEditorDialog(QDialog):
 
         self.beam_dz.setValue(beam_dz)
 
-        p_max = crystal_args.optional.get('p_max')
+        p_max = crystal_args.optional.get('p_max', DefaultValues.p_max)
         if 'p_max' in assumed:
             p_max = DefaultValues.p_max
             self.layout_impact_parameter.mark()
@@ -598,7 +616,7 @@ class CrystalEditorDialog(QDialog):
         self.lattice_constant.setValue(lattice_constant)
 
         #matrix
-        matrix_id = crystal_args.optional.get('matrix_id')
+        matrix_id = crystal_args.optional.get('matrix_id', DefaultValues.matrix_id)
         if 'matrix_id' in assumed:
             matrix_id = DefaultValues.matrix_id
             for layout_matrix in self.layout_matrices:

@@ -1,6 +1,8 @@
 from typing import Tuple, Union
 
 from Utility.Layouts import MplCanvas
+from Utility.Functions import setDictIfNotExists
+
 from matplotlib import rc_context
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
@@ -104,6 +106,7 @@ class MplCanvasSettings:
             for call in self.axes.get_calls():
                 # tick_params() overwrites labelcolor
                 if call[0] == 'func' and call[1] == 'tick_params':
+                    setDictIfNotExists(call[3], 'labelcolor', canvas.fg_color)
                     if not call[3].get('labelcolor'):
                         call[3]['labelcolor'] = canvas.fg_color
                 self.apply_call(canvas.axes, call)

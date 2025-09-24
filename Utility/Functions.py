@@ -274,6 +274,15 @@ def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols:
     return data
 
 
+class SafeInt(int):
+    """
+    Integer class that first converts to float before converting to int
+    """
+
+    def __new__(cls, value=0):
+        return super().__new__(cls, float(value))
+
+
 def intSafe(string: str, fallback: int = 0, log_warning: bool = False) -> int:
     """
     Tries to convert the string to an integer and returns it, if it fails, it will return the fallback value
@@ -364,3 +373,16 @@ def getPeriodicCoords(coord: np.ndarray, bounds: Tuple[float, float] = (0, 1), t
                 coords.append((x, y, z))
 
     return np.array(coords)
+
+
+def setDictIfNotExists(dictionary: dict, key, value):
+    """
+    Sets value to key-entry of dictionary
+
+    :param dictionary: dictionary
+    :param key: key object
+    :param value: value object
+    """
+
+    if key not in dictionary.keys():
+        dictionary[key] = value

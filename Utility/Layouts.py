@@ -19,7 +19,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
 from Utility.ModifyWidget import setWidgetBackground
-from Utility.Functions import getUniqueColor
+from Utility.Functions import getUniqueColor, setDictIfNotExists
 
 from Containers.Element import Element
 
@@ -1387,14 +1387,10 @@ class CrystalPreview(MplCanvas):
         self.surf_xx, self.surf_yy = np.meshgrid(range(-2, 2), range(-1, 3))
         self.surf_z = 0 * (self.surf_xx + self.surf_yy)
 
-        # TODO: helper function to check and set
         kwargs['enable_3d'] = True
-        if kwargs.get('width') is None:
-            kwargs['width'] = 1
-        if kwargs.get('height') is None:
-            kwargs['height'] = 1
-        if kwargs.get('disable_interaction') is None:
-            kwargs['disable_interaction'] = True
+        setDictIfNotExists(kwargs, 'width', 1)
+        setDictIfNotExists(kwargs, 'height', 1)
+        setDictIfNotExists(kwargs, 'disable_interaction', True)
 
         super().__init__(parent, **kwargs)
 

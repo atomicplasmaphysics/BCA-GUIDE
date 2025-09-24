@@ -1213,7 +1213,7 @@ EOF
                 QMessageBox.Icon.Information,
                 'Information!',
                 'Input files could not be read',
-                'There are either no input files present, or the chosen simulation does not support the present input files. Try to open the input files with the corresponding simulation selected and copy the generated "input.json" file.'
+                arguments
             )
             return False
 

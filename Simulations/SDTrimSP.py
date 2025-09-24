@@ -16,7 +16,7 @@ from Utility.Layouts import (
     SpinBox, DoubleSpinBox, SpinBoxRange, ComboBox, LineEdit
 )
 from Utility.Indexing import RunningIndex, DefaultAssumed, DeleteDict, ElementList
-from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe
+from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt
 from Utility.Dialogs import DownloadDialog
 
 from TableWidgets.CustomTable import CustomRowField
@@ -95,12 +95,7 @@ class DefaultValues(GeneralDefaultValues):
     l_crystal_dyn = False
     crystal_capable = False
 
-    # TODO: we need this?!
-    number_of_species = 1
-    number_of_atoms = 1
-    species = []
-
-    miller_ind = MillerIndex([1, 0, 0])
+    miller_ind = MillerIndex([0, 0, 0])
 
     basis_vec_a1 = BasisVector(direction=1)
     basis_vec_a2 = BasisVector(direction=2)
@@ -112,7 +107,7 @@ class DefaultValues(GeneralDefaultValues):
 
     matrix_id = 3
 
-    lattice_constant = 10
+    lattice_constant = 1
 
     def __init__(self, version: str):
         if version == '6.09':
@@ -2798,7 +2793,20 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             with open(input_file, 'r', encoding='utf-8', errors='replace') as file:
                 contents['title'] = file.readline().strip()
                 for line in file.readlines():
-                    content = [p.strip() for p in line.strip().split('=')]
+                    line = line.strip()
+
+                    # strip off comments
+                    comment_offset = np.inf
+                    for c in ['!', '#']:
+                        try:
+                            comment_offset = min(comment_offset, line.index(c))
+                        except ValueError:
+                            pass
+                    if not np.isinf(comment_offset) and comment_offset > 0:
+                        line = line[:comment_offset]
+
+                    # split into key and value
+                    content = [p.strip() for p in line.split('=')]
                     if len(content) != 2 or content[0] == 'text':
                         continue
                     contents[content[0]] = content[1]
@@ -2854,7 +2862,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                     assumed_cls.assumed(item)
                 return [k for k, v in lookup_dict.items() if v == default_value][0]
 
-        def getValueList(value: str, value_type, default_value, item=None, lookup_dict=None, assumed_cls: DefaultAssumed = None) -> list:
+        def getValueList(value: str, value_type, default_value, item=None, lookup_dict=None, split_str: str = ',', assumed_cls: DefaultAssumed = None) -> list:
             """Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value"""
 
             if assumed_cls is None:
@@ -2863,7 +2871,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                 if item is not None:
                     assumed_cls.assumed(item)
                 value = ''
-            values = value.replace('\"', '').replace('\'', '').split(',')
+            values = value.replace('\"', '').replace('\'', '').split(split_str)
             values_out = []
             if lookup_dict is None:
                 lookup_dict = {}
@@ -2920,10 +2928,9 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         if self.default_values.enable_crystal:
             l_crystal = getValueBool(contents.get('l_crystal'), default_values.l_crystal)
-            miller_ind_arg = getValueList(contents.get('miller_ind'), int, 0, 'miller_indices_list', assumed_cls=assumed)
-            if not any(miller_ind_arg):
-                miller_ind_arg = None
-            miller_ind = MillerIndex(miller_ind_arg)
+
+        if l_crystal:
+            miller_ind = MillerIndex(getValueList(contents.get('miller_ind'), SafeInt, 0, 'miller_indices_list', assumed_cls=assumed))
 
         # get rid of 'tableinp' since it is not used
         contents.get('tableinp')
@@ -3110,96 +3117,99 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         crystal_args = None
         crystal_rows = None
 
-        if self.default_values.enable_crystal:
+        if l_crystal:
+            """
+            open file
+            get rid of lines starting with # and skip empty lines
+            
+            read file: name -> name
+            read file: lattice_id -> lattice_id
+            
+            read file: k -> number of species
+            if ( k > ncp )then 'ERROR: number of spezies in crystal.inp > ncp in tri.inp'
+            do i=1,k: read file: name -> species
+            read file: lattice % base_vectors0(1) % p -> basis vec 1
+            read file: lattice % base_vectors0(2) % p -> basis vec 2
+            read file: lattice % base_vectors0(3) % p -> basis vec 3
+            
+            read file: k
+            do i=1, k: read file: lattice%base_atom0(i)%p,it -> position, species
+            read file: pmax_crystal -> pmax_crystal
+            read file: dy_crystal_beam, dz_crystal_beam -> dy_beam, dz_beam
+            read file: matrix_id -> matrix_id
+            """
+
+            file_lines = []
             contents = DeleteDict()
-            #TODO: !!IMPORTANT!! better read-in -> this will fail if e.g. not 'name' in name line, etc.
+
+            crystal_args = GeneralCrystalArguments(
+                name=default_values.crystal_name,
+                lattice_id=default_values.lattice_id,
+                lattice_constant=default_values.lattice_constant,
+                basis_vec_a1=default_values.basis_vec_a1,
+                basis_vec_a2=default_values.basis_vec_a2,
+                basis_vec_a3=default_values.basis_vec_a3,
+                miller_ind=default_values.miller_ind,
+                p_max=default_values.p_max,
+                beam_dy=default_values.beam_dy,
+                beam_dz=default_values.beam_dz,
+                matrix_id=default_values.matrix_id
+            )
+
             try:
                 with open(crystal_file, 'r', encoding='utf-8', errors='replace') as file:
-                    content_list = []
-                    for i, line in enumerate(file.readlines()):
-                        if not line.startswith('#'):
-                            if '=' in line and 'matrix_id' not in line:
-                                content = [p.strip() for p in line.strip().split('=')]
-                                if len(content) != 2 or content[0] == 'text':
-                                    continue
-                                contents[content[0]] = content[1]
-                            else:
-                                content_list.append(line.strip().split())
-                        if line.startswith('# lattice_constant'):
+
+                    for line in file.readlines():
+                        line = line.strip()
+
+                        if not line:
+                            continue
+                        elif not line.startswith('#'):
+                            file_lines.append(line)
+                        elif line.startswith('# lattice_constant'):
                             contents['lattice_constant'] = line.split('=')[-1]
 
-                for i in content_list:
+                lattice_constant = getValue(contents.get('lattice_constant'), float, default_values.lattice_constant, assumed_cls=assumed)
 
-                    if 'name' in i:
-                        contents[i[1]] = i[0]
+                contents['name'] = file_lines[0].split()[0]
+                crystal_name = getValue(contents.get('name'), str, 'MyLittleCrystal', 'name', assumed_cls=assumed)
 
-                    if 'lattice_id' in i:
-                        contents[i[1]] = i[0]
+                contents['lattice_id'] = file_lines[1].split()[0]
+                lattice_id = getValue(contents.get('lattice_id'), int, 1, 'lattice_id', assumed_cls=assumed)
 
-                    if 'a1:' in i:
-                        contents[i[3]] = f'{i[0]},{i[1]},{i[2]}'
+                contents['number_of_species'] = file_lines[2].split()[0]
+                number_of_species = getValue(contents.get('number_of_species'), int, 0, 'number_of_species', assumed_cls=assumed)
 
-                    if 'a2:' in i:
-                        contents[i[3]] = f'{i[0]},{i[1]},{i[2]}'
+                species = [file_lines[3 + i].split()[0].strip('"') for i in range(number_of_species)]
+                if not species:
+                    assumed.assumed('species')
 
-                    if 'a3:' in i:
-                        contents[i[3]] = f'{i[0]},{i[1]},{i[2]}'
+                basis_vec_1 = BasisVector([float(i) for i in file_lines[3 + number_of_species].split()[:3]]) / lattice_constant
+                basis_vec_2 = BasisVector([float(i) for i in file_lines[4 + number_of_species].split()[:3]]) / lattice_constant
+                basis_vec_3 = BasisVector([float(i) for i in file_lines[5 + number_of_species].split()[:3]]) / lattice_constant
 
-                    if 'number' in i and 'atoms' in i:
-                        contents['number_of_atoms'] = i[0]
+                contents['number_of_atoms'] = file_lines[6 + number_of_species].split()[0]
+                number_of_atoms = getValue(contents.get('number_of_atoms'), int, 0, 'number_of_atoms', assumed_cls=assumed)
 
-                    if 'number' in i and 'species' in i:
-                        contents['number_of_species'] = i[0]
+                crystal_rows = []
+                for i in range(number_of_atoms):
+                    numbers = file_lines[7 + number_of_species + i].split()
+                    row = CrystalRowArguments(
+                        index=i,
+                        symbol=species[int(numbers[3]) - 1],
+                        coord=Coordinate([floatSafe(numbers[i], 0) for i in range(3)])
+                    )
+                    crystal_rows.append(row)
 
-                    if 'p_max' in i:
-                        contents[i[1]] = i[0]
-
-                    if 'surface' in i:
-                        contents['dy'] = i[0]
-                        contents['dz'] = i[1]
-
-                    if 'matrix_id' in i:
-                        contents[i[1]] = i[0]
-
-                crystal_name = getValue(contents.get('name'), str, 'MyLittelCrystal', 'name', assumed_cls=assumed)
-                lattice_id = getValue(contents.get('lattice_id'), str, '1', 'lattice_id', assumed_cls=assumed)
-                number_of_species = getValue(contents.get('number_of_species'), int, 1, 'number_of_species', assumed_cls=assumed)
-                lattice_constant = getValue(contents.get('lattice_constant'), float, 3.0, assumed_cls=assumed)
-
-                basis_vec_1 = BasisVector(getValueList(contents.get('a1:'), float, default_values.basis_vec_a1, 'basis_vec_a1', assumed_cls=assumed))
-                basis_vec_2 = BasisVector(getValueList(contents.get('a2:'), float, default_values.basis_vec_a2, 'basis_vec_a2', assumed_cls=assumed))
-                basis_vec_3 = BasisVector(getValueList(contents.get('a3:'), float, default_values.basis_vec_a3, 'basis_vec_a3', assumed_cls=assumed))
-
+                contents['p_max'] = file_lines[7 + number_of_species + number_of_atoms].split()[0]
                 impact_parameter = getValue(contents.get('p_max'), float, default_values.p_max, 'impact_parameter', assumed_cls=assumed)
-                dy = getValue(contents.get('dy'), float, default_values.beam_dy, 'beam_dy', assumed_cls=assumed)
-                dz = getValue(contents.get('dz'), float, default_values.beam_dz, 'beam_dz', assumed_cls=assumed)
+
+                beam = file_lines[8 + number_of_species + number_of_atoms].split()[:2]
+                dy = getValue(beam[0], float, default_values.beam_dy, 'beam_dy', assumed_cls=assumed)
+                dz = getValue(beam[1], float, default_values.beam_dz, 'beam_dz', assumed_cls=assumed)
+
+                contents['matrix_id'] = file_lines[9 + number_of_species + number_of_atoms].split()[0]
                 matrix_id = getValue(contents.get('matrix_id'), int, default_values.matrix_id, 'matrix_id', assumed_cls=assumed)
-                number_of_atoms = getValue(contents.get('number_of_atoms'), float, default_values.number_of_atoms, 'number_of_atoms', assumed_cls=assumed)
-
-                species = []
-                for i in range(number_of_species):
-                    species.append(content_list[4 + i][0].strip('"'))
-
-                if len(species) == 0 or len(species) == 1:
-                    offset = 0
-
-                else:
-                    offset = len(species) - 1
-
-                row_list = []
-                for i in range(int(number_of_atoms)):
-                    row_list.append(content_list[10 + offset + i][0:4])
-
-                if lattice_constant != 1.0:
-
-                    for i in range(len(basis_vec_1)):
-                        basis_vec_1[i] = basis_vec_1[i] / lattice_constant
-
-                    for i in range(len(basis_vec_2)):
-                        basis_vec_2[i] = basis_vec_2[i] / lattice_constant
-
-                    for i in range(len(basis_vec_3)):
-                        basis_vec_3[i] = basis_vec_3[i] / lattice_constant
 
                 # crystal_args data (<GeneralTargetArguments>)
                 crystal_args = GeneralCrystalArguments(
@@ -3217,34 +3227,12 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                     beam_dz=dz,
                     matrix_id=matrix_id
                 )
-                crystal_rows = []
-                for i, rows in enumerate(row_list):
-                    row = CrystalRowArguments(
-                        index=i,
-                        symbol=species[int(rows[3]) - 1],
-                        coord=Coordinate([floatSafe(rows[i], 0) for i in range(3)])
-                    )
-                    crystal_rows.append(row)
 
             except FileNotFoundError:
-                logging.info(f'Could not open file "{crystal_file}"!')
+                error_list.append(f'Could not open crystal file.')
 
-                crystal_args = GeneralCrystalArguments(
-                    name=default_values.crystal_name,
-                    lattice_id=default_values.lattice_id,
-                    number_of_species=default_values.number_of_species,
-                    species=default_values.species,
-                    lattice_constant=default_values.lattice_constant,
-                    basis_vec_a1=default_values.basis_vec_a1,
-                    basis_vec_a2=default_values.basis_vec_a2,
-                    basis_vec_a3=default_values.basis_vec_a3,
-                    miller_ind=default_values.miller_ind,
-                    p_max=default_values.p_max,
-                    beam_dy=default_values.beam_dy,
-                    beam_dz=default_values.beam_dz,
-                    matrix_id=default_values.matrix_id
-                )
-
+            except IndexError:
+                error_list.append('Crystal file has incorrect format.')
 
         simulation = SimulationArguments(
             simulation=self.Name,

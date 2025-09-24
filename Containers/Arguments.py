@@ -296,11 +296,10 @@ class StructureArguments(Arguments):
 class CrystalRowArguments(Arguments):
     """
     Container that stores information of each element row
-    :param index: index of row
+
     :param symbol: element symbol of row
-    :param coordinate: <Coordinate>
+    :param coord: <Coordinate>
     """
-    # TODO: change needed arguments & docstring
 
     def __init__(
         self,
@@ -328,11 +327,8 @@ class GeneralCrystalArguments(Arguments):
     :param basis_vec_a1: basis vector <BasisVector>
     :param basis_vec_a2: basis vector <BasisVector>
     :param basis_vec_a3: basis vector <BasisVector>
-    :param coordinates: dict [ int, list[[x,y,z]]] where the key represent the position of the element in the element list
-    :param lattice_parameter: p_max
     :param miller_ind: Miller Index <MillerIndex>
     """
-    # TODO: change needed arguments & docstring
 
     def __init__(
         self,

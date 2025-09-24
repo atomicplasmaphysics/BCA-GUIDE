@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import List, Optional, Union
 import logging
 
@@ -13,6 +14,12 @@ class Vec3:
     def crystal_inp_str(self, delimiter: str = ',') -> str:
         """Returns string of vector to use in crystal input file"""
         return f'{self.vec[0]}{delimiter} {self.vec[1]}{delimiter} {self.vec[2]}'
+
+    def __mul__(self, factor: float) -> Vec3:
+        return self.__class__([self.vec[i] * factor for i in range(len(self))])
+
+    def __truediv__(self, factor: float) -> Vec3:
+        return self.__class__([self.vec[i] / factor for i in range(len(self))])
 
     def __len__(self) -> int:
         return 3
@@ -84,7 +91,7 @@ class MillerIndex(Vec3):
     """
 
     def __init__(self, miller_index: Optional[List[int]] = None):
-        super().__init__([1, 0, 0])
+        super().__init__([0, 0, 0])
 
         if isinstance(miller_index, list) and len(miller_index):
             self.vec = [0, 0, 0]
