@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from platform import system
+from pathlib import Path
 from json import dump, load
 from json.decoder import JSONDecodeError
 import logging
@@ -17,6 +18,7 @@ from Styles import Styles
 
 from Utility.Layouts import TabWithToolbar, VBoxTitleLayout, InputHBoxLayout, LineEdit, FilePath, ComboBox
 from Utility.Dialogs import showMessageBox, selectFileDialog
+from Utility.Functions import pathToStr
 
 from Pages.ProgramPage import SimulationPage
 
@@ -265,6 +267,8 @@ class ConfigurationPage(TabWithToolbar):
         # LIST OF SIMULATION CONFIGURATIONS
         #
 
+        # TODO: make configurations movable
+
         self.simulation_configuration_list_vbox = VBoxTitleLayout(self, 'List of Simulation Configurations', add_stretch=False)
         self.simulation_configuration_list_group = QVBoxLayout()
 
@@ -396,10 +400,10 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         if default:
-            save_file = f'{GlobalConf.save_path}/config/autosave.json'
+            save_file = GlobalConf.save_path / 'config' / 'autosave.json'
 
         else:
-            save_file = f'{GlobalConf.save_path}/config/config.json'
+            save_file = GlobalConf.save_path / 'config' / 'config.json'
 
             save_file = selectFileDialog(
                 self,
@@ -408,7 +412,8 @@ class ConfigurationPage(TabWithToolbar):
                 save_file,
                 file_filter='Configuration Files (*.json)'
             )
-            folder = QFileInfo(save_file).canonicalPath()
+            # TODO: pathlib
+            folder = QFileInfo(pathToStr(save_file)).canonicalPath()
             if save_file is None or not len(folder):
                 self.main_window.writeStatusBar('Loading configuration file aborted')
                 return
@@ -452,13 +457,14 @@ class ConfigurationPage(TabWithToolbar):
         :param no_config: if True, only programs without config will be saved
         """
 
-        QDir().mkpath(f'{GlobalConf.save_path}/config')
+        config_path = GlobalConf.save_path / 'config'
+        QDir().mkpath(str(config_path))
 
         if autosave:
-            save_file = f'{GlobalConf.save_path}/config/autosave.json'
+            save_file = config_path / 'autosave.json'
 
         else:
-            save_file = f'{GlobalConf.save_path}/config/config.json'
+            save_file = config_path / 'config.json'
             save_file = selectFileDialog(
                 self,
                 True,
@@ -723,8 +729,8 @@ class ConfigurationPage(TabWithToolbar):
 
         self.title.setText('')
         self.program.setCurrentIndex(0)
-        self.simulation_folder.setPath('', ssh=False)
-        self.simulation_binary.setPath('', ssh=False)
+        self.simulation_folder.setPath(None, ssh=False)
+        self.simulation_binary.setPath(None, ssh=False)
         self.saveFolderChanged()
         self.detected_simulation.setText('<b>unknown</b>')
         self.description_logo.hide()
@@ -766,7 +772,7 @@ class ConfigurationPage(TabWithToolbar):
             self.layout_versions.setEnabled(True)
             self.versions.setCurrentIndex(len(version_list) - 1)
 
-    def selectSimFolder(self, show_warning_window: bool = False, simulation: str = 'Simulation') -> Optional[str]:
+    def selectSimFolder(self, show_warning_window: bool = False, simulation: str = 'Simulation') -> Optional[Path]:
         """
         Opens select dialog for simulation path and returns selected path
 
@@ -784,17 +790,24 @@ class ConfigurationPage(TabWithToolbar):
             )
 
         # Starting directory
-        start_dir = self.selected_configuration.folder if self.selected_configuration is not None else QDir.currentPath()
-        folder_dir = QFileDialog.getExistingDirectory(self, f'Select the main "{simulation}" folder', start_dir)
+        if self.selected_configuration is not None:
+            start_dir = self.selected_configuration.folder
+        elif self.simulation_folder.path:
+            start_dir = self.simulation_folder.path
+        else:
+            start_dir = Path(QDir.currentPath())
+
+        folder_dir = QFileDialog.getExistingDirectory(self, f'Select the main "{simulation}" folder', pathToStr(start_dir))
         if len(folder_dir) == 0:
             self.main_window.writeStatusBar(f'{simulation} folder selection aborted')
             return None
+        folder_dir = Path(folder_dir)
 
-        self.tryParseSimVersion()
+        self.tryParseSimVersion(folder=folder_dir)
         self.main_window.writeStatusBar(f'{simulation} folder successfully located')
         return folder_dir
 
-    def selectSimBinary(self, show_warning_window: bool = False, simulation: str = 'Simulation') -> Optional[str]:
+    def selectSimBinary(self, show_warning_window: bool = False, simulation: str = 'Simulation') -> Optional[Path]:
         """
         Select dialog for simulation binary
 
@@ -818,19 +831,23 @@ class ConfigurationPage(TabWithToolbar):
         elif self.simulation_folder.path:
             start_dir = self.simulation_folder.path
         else:
-            start_dir = QDir.currentPath()
+            start_dir = Path(QDir.currentPath())
+
         allowed_filetypes = ''
         if system() == 'Windows':
             allowed_filetypes = 'Executable File (*.exe)'
+
         file_path = selectFileDialog(self, False, f'Select the "{simulation}" binary', start_dir, allowed_filetypes)
         if file_path is None:
             self.main_window.writeStatusBar(f'{simulation} binary selection aborted')
             return None
-        self.tryParseSimVersion()
+
+        file_path = Path(file_path)
+        self.tryParseSimVersion(binary=file_path)
         self.main_window.writeStatusBar(f'{simulation} binary successfully located')
         return file_path
 
-    def selectSaveFolder(self, simulation: str = 'Simulation') -> Optional[str]:
+    def selectSaveFolder(self, simulation: str = 'Simulation') -> Optional[Path]:
         """
         Opens select dialog for save folder path and returns selected path
         """
@@ -840,10 +857,10 @@ class ConfigurationPage(TabWithToolbar):
         if not start_dir:
             start_dir = GlobalConf.save_path
         if not start_dir:
-            start_dir = QDir.currentPath()
+            start_dir = Path(QDir.currentPath())
 
-        folder_dir = QFileDialog.getExistingDirectory(self, f'Select the "{simulation}" save folder', start_dir)
-        if len(folder_dir) == 0:
+        folder_dir = Path(QFileDialog.getExistingDirectory(self, f'Select the "{simulation}" save folder', str(start_dir)))
+        if not folder_dir.is_dir():
             self.main_window.writeStatusBar('Save folder selection aborted')
             return None
         self.main_window.writeStatusBar('Save folder successfully located')
@@ -855,13 +872,15 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         default_save_folder = SimulationsList().simulation_program_list[self.program.currentIndex()].SaveFolder
-        self.base_save_folder.setPath(f'{GlobalConf.save_path}/{default_save_folder}', ssh=False)
+        self.base_save_folder.setPath(GlobalConf.save_path / default_save_folder, ssh=False)
 
-    def tryParseSimVersion(self):
+    def tryParseSimVersion(self, folder: Optional[Path] = None, binary: Optional[Path] = None):
         """Try to get Simulation name and version"""
 
-        folder = self.simulation_folder.path
-        binary = self.simulation_binary.path
+        if folder is None:
+            folder = self.simulation_folder.path
+        if binary is None:
+            binary = self.simulation_binary.path
         simulation_programs = SimulationsList().simulation_program_list
         version = 'unknown'
         self.detected_program = 0

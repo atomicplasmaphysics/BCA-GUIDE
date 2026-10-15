@@ -1,6 +1,6 @@
 from typing import List, Union, Tuple, Optional
 from itertools import zip_longest
-from os import path, listdir
+from pathlib import Path
 from re import findall, sub
 import logging
 
@@ -16,7 +16,7 @@ from Utility.Layouts import (
     SpinBox, DoubleSpinBox, SpinBoxRange, ComboBox, LineEdit
 )
 from Utility.Indexing import RunningIndex, DefaultAssumed, DeleteDict, ElementList
-from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt
+from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt, readlines, pathToStr
 from Utility.Dialogs import DownloadDialog
 
 from TableWidgets.CustomTable import CustomRowField
@@ -30,11 +30,19 @@ from Containers.Arguments import (
 from Containers.Element import Element, Elements
 from Containers.Compound import Compound
 from Containers.Crystal import MillerIndex, BasisVector, Coordinate
+from Containers.Particle import Particle
 
 from Simulations.Simulations import (
     SimulationsInput, SimulationsOutput, SimulationsAnalysis, HlGeneralBeamSettings,
     HlGeneralTargetSettings, VlGeneralSimulationSettings, HlGeneralPlot, GeneralDefaultValues
 )
+
+
+class Versions:
+    V_601 = '6.01, 6.06'
+    V_609 = '6.09'
+    V_700 = '7.00, 7.01'  # introduction of crystal input files
+    V_702 = '7.02, 7.05'  # introduction of global crystal files
 
 
 class DefaultValues(GeneralDefaultValues):
@@ -110,16 +118,14 @@ class DefaultValues(GeneralDefaultValues):
     lattice_constant = 1
 
     def __init__(self, version: str):
-        if version == '6.09':
+        if version in [Versions.V_609, Versions.V_700]:
             self.isbv = 8
             self.inel0 = 7
 
-        if version == '7.00':
+        if version in [Versions.V_700]:
             self.enable_crystal = True
 
-            self.isbv = 8
-            self.inel0 = 7
-            self.isbv = 8
+        #TODO: defaults for Version.V_702
 
 
 class DictLookup:
@@ -190,7 +196,7 @@ class DictLookup:
     }
 
     def __init__(self, version: str):
-        if version == '6.09':
+        if version == Versions.V_609:
             self.isbv = {
                 ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC: 1,
                 ArgumentValues.SurfaceBindingModel.AVERAGE: 2,
@@ -200,7 +206,7 @@ class DictLookup:
                 ArgumentValues.SurfaceBindingModel.ELECTRONEGATIVITY: 7,
                 ArgumentValues.SurfaceBindingModel.TABLE: 8
             }
-        if version == '7.00':
+        if version == Versions.V_700:
             self.isbv = {
                 ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC: 1,
                 ArgumentValues.SurfaceBindingModel.AVERAGE: 2,
@@ -943,7 +949,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         ]
         self.surface_binding_model_disabled_list = []
 
-        if self.version == '6.09':
+        if self.version == Versions.V_609:
             self.surface_binding_model_entries = [
                 'element-specific',
                 'average for all elements',
@@ -976,7 +982,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             ]
             self.surface_binding_model_disabled_list = [4]
 
-        if self.version == '7.00':
+        if self.version == Versions.V_700:
             self.surface_binding_model_entries = [
                 'element-specific',
                 'average for all elements',
@@ -1512,7 +1518,7 @@ class CompRowBeamSettings(CompRow):
             'Values are calculated for each element based on values taken from "table6a" and "table6b"'
         ]
 
-        if self.version in ['6.09', '7.00']:
+        if self.version in [Versions.V_609, Versions.V_700]:
             self.inelastic_loss_model_entries.append('LZ7')
             self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER)
             self.inelastic_loss_model_tooltips.append('Combination of Lindhard-Scharff and Ziegler-Biersack with corretion')
@@ -1710,6 +1716,7 @@ class CompRowBeamSettings(CompRow):
         if angle is not None:
             self.angle.setEnabled(bool(angle))
 
+
 class CompRowTargetSettings(CompRowBeamSettings):
     """
     CompRow for target
@@ -1759,28 +1766,81 @@ class HlPlot(HlGeneralPlot):
         )
         self.layout_history_step.setHidden(True)
         self.addLayout(self.layout_history_step)
+
+        self.history_spacer = QLabel()
+        self.history_spacer.setHidden(True)
+        self.addWidget(self.history_spacer)
+
         self.history_step_slider = QSlider(Qt.Orientation.Horizontal)
         self.history_step_slider.setMinimumWidth(200)
         self.history_step_slider.setMinimum(0)
         self.history_step_slider.setToolTip(self.history_step_tooltip)
         self.history_step_slider.hide()
-        self.addWidget(QLabel())
         self.addWidget(self.history_step_slider)
-        self.addStretch(1)
 
         # connect history sliders
         self.history_step.valueChanged.connect(self.history_step_slider.setValue)
         self.history_step_slider.valueChanged.connect(self.history_step.setValue)
         self.history_step.valueChanged.connect(lambda val: self.emit({'history': val}))
 
+        # polar energy
+        self.polar_angle = DoubleSpinBox(
+            default=0,
+            input_range=(-90, 90),
+            scroll=True
+        )
+        self.layout_polar_angle = InputHBoxLayout(
+            'Polar angle',
+            self.polar_angle,
+            tooltip='Polar angle at which the energy will be displayed'
+        )
+        self.layout_polar_angle.setHidden(True)
+        self.addLayout(self.layout_polar_angle)
+        self.polar_angle.valueChanged.connect(self.emit_polar_angle)
+
+        self.polar_angle_delta = DoubleSpinBox(
+            default=0,
+            input_range=(0, 180),
+            scroll=True
+        )
+        self.layout_polar_angle_delta = InputHBoxLayout(
+            'Polar angle delta',
+            self.polar_angle_delta,
+            tooltip='Delta polar angle at which the energy will be displayed'
+        )
+        self.layout_polar_angle_delta.setHidden(True)
+        self.addLayout(self.layout_polar_angle_delta)
+        self.polar_angle_delta.valueChanged.connect(self.emit_polar_angle)
+
+        self.addStretch(1)
+
+    def emit_polar_angle(self):
+        """Emits signal for polar angle energy"""
+
+        self.emit({
+            'energy_polar': {
+                'polar_angle': self.polar_angle.value(),
+                'polar_angle_delta': self.polar_angle_delta.value(),
+            }
+        })
+
     def receive(self, value_dict: dict):
         """Receives pyqtSignal -> dict"""
 
-        # hide buttons
         hide = value_dict.get('hide')
-        if isinstance(hide, bool):
+        if hide:
             self.layout_history_step.setHidden(hide)
             self.history_step_slider.setHidden(hide)
+            self.history_spacer.setHidden(hide)
+            self.layout_polar_angle.setHidden(hide)
+            self.layout_polar_angle_delta.setHidden(hide)
+
+        # hide history buttons
+        hide_history = value_dict.get('hide_history')
+        if isinstance(hide_history, bool):
+            self.layout_history_step.setHidden(hide_history)
+            self.history_step_slider.setHidden(hide_history)
+            self.history_spacer.setHidden(hide_history)
 
         # set max history
         max_hist = value_dict.get('max_history')
@@ -1792,8 +1852,23 @@ class HlPlot(HlGeneralPlot):
         # set history
         hist = value_dict.get('history')
         if hist is not None:
-            hist = int(hist)
-            self.history_step_slider.setValue(hist)
+            self.history_step_slider.setValue(int(hist))
+
+        # hide polar angle buttons
+        hide_polar_angle = value_dict.get('hide_polar_angle')
+        if isinstance(hide_polar_angle, bool):
+            self.layout_polar_angle.setHidden(hide_polar_angle)
+            self.layout_polar_angle_delta.setHidden(hide_polar_angle)
+
+        # set polar angle
+        polar_angle = value_dict.get('polar_angle')
+        if polar_angle is not None:
+            self.polar_angle.setValue(float(polar_angle))
+
+        # set polar angle delta
+        polar_angle_delta = value_dict.get('polar_angle_delta')
+        if polar_angle_delta is not None:
+            self.polar_angle_delta.setValue(float(polar_angle_delta))
 
 
 class SimulationInput(SimulationsInput):
@@ -1804,9 +1879,10 @@ class SimulationInput(SimulationsInput):
     # parameters should be different for each simulation class
     Name = 'SDTrimSP'
     Versions = [
-        '6.01, 6.06',
-        '6.09',
-        '7.00'
+        Versions.V_601,
+        Versions.V_609,
+        Versions.V_700,
+        Versions.V_702,
     ]
     Description = '''
 SDTrimSP is designed for atomic collisions in amorphous
@@ -1883,7 +1959,7 @@ Andreas Mutzke
         super().__init__()
 
     @staticmethod
-    def getVersionName(folder: str, binary: str) -> Union[str, bool]:
+    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, bool]:
         """
         Returns version of simulation depending on selected folder and binary or False if no version can be determined
 
@@ -1892,21 +1968,23 @@ Andreas Mutzke
         """
 
         version = []
-        # checked on sourcecode or if 'src'-directory exists
-        source_code = f'{folder}/src/SDTrimSP.F90'  # check sourcecode
-        try:
-            with open(source_code, 'r', encoding='utf-8', errors='replace') as f:
-                for line in f:
-                    if line.strip().startswith('avs0 ='):
-                        version = [line.split('\'')[1]]  # save as array to we can ask its length
-                        break
-        except FileNotFoundError:
-            logging.info(f'Could not open file "{source_code}"!')
-            pass
-        if not version and path.exists(f'{folder}/src'):  # search path
-            version = findall(r'\d+\.\d+', folder)
-        if not version:  # search binary path
-            version = findall(r'\d+\.\d+', binary)
+
+        if folder is not None:
+            # checked on sourcecode or if 'src'-directory exists
+            source_code = folder / 'src' / 'SDTrimSP.F90'  # check sourcecode
+            try:
+                with open(source_code, 'r', encoding='utf-8', errors='replace') as f:
+                    for line in f:
+                        if line.strip().startswith('avs0 ='):
+                            version = [line.split('\'')[1]]  # save as array to we can ask its length
+                            break
+            except FileNotFoundError:
+                logging.info(f'Could not open sourcecode file "{source_code}"!')
+                pass
+            if not version and (folder / 'src').is_dir():  # search path
+                version = findall(r'\d+\.\d+', pathToStr(folder))
+            if not version:  # search binary path
+                version = findall(r'\d+\.\d+', pathToStr(binary))
 
         if not len(version) or not len(version[0]):
             return False
@@ -1914,7 +1992,7 @@ Andreas Mutzke
         return f'SDTrimSP v{version[0]}'
 
     @staticmethod
-    def getDoc(folder: str, binary: str, version: str) -> Union[str, bool]:
+    def getDoc(folder: Path, binary: Path, version: str) -> Union[Path, bool]:
         """
         Returns path to documentation pdf-file
 
@@ -1928,22 +2006,22 @@ Andreas Mutzke
         """
 
         # check for pdf file in doc folder
-        doc_folder = f'{folder}/doc'
-        if path.exists(doc_folder):
-            files = [file for file in listdir(doc_folder) if path.isfile(f'{doc_folder}/{file}') and path.splitext(f'{doc_folder}/{file}')[1].lower() == '.pdf']
+        doc_folder = folder / 'doc'
+        if doc_folder.is_dir():
+            files = [file for file in doc_folder.iterdir() if file.is_file() and file.suffix.lower() == '.pdf']
             if files:
-                return f'{doc_folder}/{files[0]}'
+                return doc_folder / files[0]
 
         # check for pdf files in main folder
-        files = [file for file in listdir(folder) if path.isfile(f'{folder}/{file}') and path.splitext(f'{folder}/{file}')[1].lower() == '.pdf']
+        files = [file for file in folder.iterdir() if file.is_file() and file.suffix.lower() == '.pdf']
         if files:
-            return f'{folder}/{files[0]}'
+            return folder / files[0]
 
         # no pdf documentation found, but downloadDoc method is implemented
         return True
 
     @staticmethod
-    def downloadDoc(parent, folder: str, binary: str, version: str):
+    def downloadDoc(parent, folder: Path, binary: Path, version: str):
         """
         Downloads documentation pdf-file and saves it in the default directory
 
@@ -1956,13 +2034,13 @@ Andreas Mutzke
         dialog = DownloadDialog(
             parent=parent,
             url='https://pure.mpg.de/pubman/item/item_3026474_4/component/file_3028154/IPP%202019-02.pdf',
-            path=f'{folder}/doc',
+            path=folder / 'doc',
             name='IPP_2019-02.pdf',
             expected_file_size=1250762
         )
         dialog.open()
 
-    def update(self, folder: str, binary: str, version: str):
+    def update(self, folder: Path, binary: Path, version: str):
         """
         Updates on startup
 
@@ -1977,29 +2055,40 @@ Andreas Mutzke
         # get compounds
         # open compound file and read contents
         self.CompoundList = []
-        if version == '7.00':
-            compound_table = f'{folder}/tables/table.compound'
+        if version in [Versions.V_700, Versions.V_702]:
+            compound_table2 = folder / 'tables' / 'table.compound'
             try:
-                with open(compound_table, 'r', encoding='utf-8', errors='replace') as file:
-                    while file.readline().strip() != '!234567890!234567890!234567890':
-                        continue
+                for line in readlines(compound_table2, 'r', comments=['', '!'], encoding='utf-8', errors='replace'):
+                    content = line.split()
 
-                    while True:
-                        line = file.readline().strip()
+                    try:
+                        self.CompoundList.append(Compound(
+                            content[0],
+                            elements={content[1]: int(content[9]), content[2]: int(content[10])}
+                        ))
+                    except (ValueError, IndexError) as e:
+                        logging.debug(f'Could not read compound "{line}"!')
+            except FileNotFoundError:
+                logging.info(f'Could not open compound table (2 elements) "{compound_table2}"!')
 
-                        if not line.strip():
-                            break
+            compound_table3 = folder / 'tables' / 'table.compound3'
+            try:
+                for line in readlines(compound_table3, 'r', comments=['', '!'], encoding='utf-8', errors='replace'):
+                    content = line.split()
 
-                        content = line.split()
-
-                        if not content[0].startswith('!'):
-                            self.CompoundList.append(Compound(content[0], {content[1]: content[-3], content[2]: content[-2]}))
+                    try:
+                        self.CompoundList.append(Compound(
+                            content[0],
+                            elements={content[6]: int(content[10]), content[7]: int(content[11]), content[8]: int(content[12])}
+                        ))
+                    except (ValueError, IndexError):
+                        logging.debug(f'Could not read compound "{line}"!')
 
             except FileNotFoundError:
-                pass
+                logging.info(f'Could not open compound table (3 elements) "{compound_table3}"!')
 
         # update number of components
-        if version in ['6.09', '7.00']:
+        if version in [Versions.V_609, Versions.V_700, Versions.V_702]:
             self.MaxComponents = 11
 
         # update OutputTooltips
@@ -2007,7 +2096,7 @@ Andreas Mutzke
         # -> not all files are described in output_files.txt, some are in Readme
         update_tooltips = False
         if update_tooltips:
-            output_variables_doc = f'{folder}/doc/output_files.txt'
+            output_variables_doc = folder / 'doc' / 'output_files.txt'
             try:
                 with open(output_variables_doc, 'r', encoding='utf-8', errors='replace') as file:
                     for line in file.readlines():
@@ -2018,11 +2107,11 @@ Andreas Mutzke
                         output_file_name = f'{content[0].strip()}.dat'
                         self.OutputTooltips[output_file_name] = content[1].strip()
             except FileNotFoundError:
-                logging.info(f'Could not open file "{output_variables_doc}"!')
+                logging.info(f'Could not open output variable documentation "{output_variables_doc}"!')
                 pass
 
         # update possible input variables
-        input_variables_doc = f'{folder}/doc/tri.inp.txt'
+        input_variables_doc = folder / 'doc' / 'tri.inp.txt'
         try:
             with open(input_variables_doc, 'r', encoding='utf-8', errors='replace') as file:
                 while file.readline().strip() != 'variable in tri.inp:':
@@ -2056,10 +2145,29 @@ Andreas Mutzke
                     self.InputParameters.update({variable: data_type})
 
         except FileNotFoundError:
-            logging.info(f'Could not open file "{input_variables_doc}"!')
+            logging.info(f'Could not open input variable documentation "{input_variables_doc}"!')
             pass
 
-    def updateElements(self, folder: str, version: str) -> bool:
+        # TODO: update available crystals
+        if version == Versions.V_702:
+            crystal_table = folder / 'tables' / 'table.crystal'
+            try:
+                lines = readlines(crystal_table, 'r', comments=['', '!'], encoding='utf-8', errors='replace')
+                no_crystal_structures = int(lines[0].split()[0])
+                crystal_structures = []
+                j = 1
+                for _ in range(no_crystal_structures):
+                    no_coords = int(lines[j].split()[1])
+                    coords = []
+                    for i in range(no_coords):
+                        coords.append(Coordinate([float(coord) for coord in lines[j + i].split()[:3]]))
+                    crystal_structures.append(coords)
+
+
+            except (FileNotFoundError, ValueError, IndexError):
+                logging.info(f'Could not open or read crystal table "{crystal_table}"!')
+
+    def updateElements(self, folder: Path, version: str) -> bool:
         """
         Updates list of <Element> for this simulation
 
@@ -2068,7 +2176,7 @@ Andreas Mutzke
         """
 
         element_list = []
-        table_path = f'{folder}/tables/table1'
+        table_path = folder / 'tables' / 'table1'
 
         try:
             # get table contents
@@ -2237,7 +2345,7 @@ Andreas Mutzke
         self.element_data_default = False
         return self.element_data.updateElements(element_list)
 
-    def makeInputFile(self, arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeInputFile(self, arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns input file as string
 
@@ -2516,8 +2624,9 @@ text = "--- crystal ---"
         cmpd = []
         comp_output = ''
 
-        for compound in arguments.settings.compounds:
-            cmpd.append(compound.name_save)
+        if arguments.settings.compounds:
+            for compound in arguments.settings.compounds:
+                cmpd.append(compound.name_save)
 
         cmpd_limit = 3
         if 0 < len(cmpd) <= cmpd_limit:
@@ -2555,7 +2664,7 @@ text = "--- compound ---"
 
         # --- extra ---
 
-        tableinp = f'{folder}/tables'
+        tableinp = pathToStr(folder / 'tables')
         additional = '\n    '.join(arguments.additional)
         out = f'''
 {title}
@@ -2603,7 +2712,7 @@ text = "--- extra ---"
         return f'{out.strip()}\n'
 
     @staticmethod
-    def makeLayerFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeLayerFile(arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns layer input file as string
 
@@ -2678,7 +2787,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         return f'{out.strip()}\n'
 
     @staticmethod
-    def makeCrystalFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeCrystalFile(arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns input file as string
 
@@ -2688,20 +2797,24 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         """
 
         title = arguments.settings.title
-        name = arguments.crystal_args.name
-        lattice_id = arguments.crystal_args.lattice_id
+        crystal = arguments.crystal_args
+        if not crystal:
+            return ''
 
-        a1 = arguments.crystal_args.basis_vec_a1
-        a2 = arguments.crystal_args.basis_vec_a2
-        a3 = arguments.crystal_args.basis_vec_a3
+        name = crystal.name
+        lattice_id = crystal.lattice_id
 
-        miller_ind = arguments.crystal_args.miller_ind
+        a1 = crystal.basis_vec_a1
+        a2 = crystal.basis_vec_a2
+        a3 = crystal.basis_vec_a3
 
-        lattice_constant = arguments.crystal_args.get('lattice_constant')
-        p_max = arguments.crystal_args.get('p_max')
-        beam_dy = arguments.crystal_args.get('beam_dy')
-        beam_dz = arguments.crystal_args.get('beam_dz')
-        matrix_id = arguments.crystal_args.get('matrix_id')
+        miller_ind = crystal.miller_ind
+
+        lattice_constant = crystal.get('lattice_constant')
+        p_max = crystal.get('p_max')
+        beam_dy = crystal.get('beam_dy')
+        beam_dz = crystal.get('beam_dz')
+        matrix_id = crystal.get('matrix_id')
         crystal_rows = arguments.crystal_rows
         if not crystal_rows:
             number_of_atoms = 0
@@ -2767,7 +2880,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         return f'{out.strip()}\\n'
 
-    def loadFiles(self, folder: str, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
+    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
         Returns string of error if input file can not be opened
@@ -2782,9 +2895,9 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         default_values = DefaultValues(version)
         dict_lookup = DictLookup(version)
 
-        input_file = f'{folder}/{self.InputFilename}'
-        layer_file = f'{folder}/{self.LayerFilename}'
-        crystal_file = f'{folder}/{self.CrystalFilename}'
+        input_file = folder / self.InputFilename
+        layer_file = folder / self.LayerFilename
+        crystal_file = folder / self.CrystalFilename
 
         contents = DeleteDict()
 
@@ -3306,7 +3419,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         return errors
 
-    def getProgress(self, save_folder: str, process_log: str, version: str) -> int:
+    def getProgress(self, save_folder: Path, process_log: str, version: str) -> float:
         """
         Returns progress in % of running simulation.
         Negative return value indicates some error.
@@ -3316,10 +3429,9 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         :param version: version of simulation
         """
 
-        files = listdir(save_folder)
         log_file = 'time_run.dat'
 
-        if log_file not in files:
+        if not (save_folder / log_file).is_file():
             process_log_packages = process_log.split('%')
             if len(process_log_packages) < 2:
                 return -1
@@ -3336,12 +3448,12 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         percent = -1
         try:
-            with open(f'{save_folder}/{log_file}', 'r', encoding='utf-8', errors='replace') as file:
+            with open(save_folder / log_file, 'r', encoding='utf-8', errors='replace') as file:
                 for line in reversed(file.readlines()):
                     data = line.split(' %')
                     if len(data) == 2 and data[0][0] not in ['I', 'W']:
                         try:
-                            percent = int(data[0][-3:])
+                            percent = float(data[0][-3:])
                             break
                         except (ValueError, IndexError):
                             pass
@@ -3350,17 +3462,17 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             return -1
 
         # single run
-        if not any('001' in file for file in files) or percent < 0:
+        if not any('001' in file.name for file in save_folder.iterdir() if file.is_file()) or percent < 0:
             return percent
 
         # sweep run
         else:
-            current_sweep = len([None for file in files if 'output.' in file])
-            if self.InputFilename not in files:
+            current_sweep = sum('output.' in file.name for file in save_folder.iterdir() if file.is_file())
+            if not (save_folder / self.InputFilename).is_file():
                 return -1
             sweeps = DefaultValues(version).number_calc
             try:
-                with open(f'{save_folder}/{self.InputFilename}', 'r', encoding='utf-8', errors='replace') as file:
+                with open(save_folder / self.InputFilename, 'r', encoding='utf-8', errors='replace') as file:
                     for line in file.readlines():
                         if not line.strip().startswith('number_calc'):
                             continue
@@ -3373,7 +3485,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             except FileNotFoundError:
                 return -1
 
-            return round((100 * current_sweep + percent) / sweeps)
+            return (100 * current_sweep + percent) / sweeps
 
 
 class SimulationOutput(SimulationsOutput):
@@ -3393,9 +3505,13 @@ class SimulationOutput(SimulationsOutput):
 
         histories = value_dict.get('history')
         if histories is not None:
-            self.analyse('plotDepthConcentration', {'history_step': int(histories)}, False)
+            self.analyse('plotDepthConcentration', {'history_step': int(histories)}, hide=False)
 
-    def listParameters(self, save_folder: str, list_widget: ListWidget):
+        energy_polar = value_dict.get('energy_polar')
+        if energy_polar is not None:
+            self.analyse('plotParticlesEnergyPolar', energy_polar, hide=False)
+
+    def listParameters(self, save_folder: Path, list_widget: ListWidget):
         """
         Builds ListWidget from files in save folder
 
@@ -3403,11 +3519,10 @@ class SimulationOutput(SimulationsOutput):
         :param list_widget: empty ListWidget (extension of QListWidget) that should be written to
         """
 
-        files = listdir(save_folder)
         info_file = 'E0_31_target.dat'
-        if info_file not in files:
+        if not (save_folder / info_file).is_file():
             info_file = 'E0_31_target001.dat'
-            if info_file not in files:
+            if not (save_folder / info_file).is_file():
                 list_widget.addItem(ListWidgetItem('Corrupted input files', bold=True))
                 return
 
@@ -3419,7 +3534,7 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItemEmpty()
 
         # static
-        elif 'output.dat' in files:
+        elif (save_folder / 'output.dat').is_file():
             list_widget.addItem(ListWidgetItem('Results overview:', bold=True))
 
             output_data = self.analysis.getOutputFileData()
@@ -3522,9 +3637,9 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItemEmpty()
 
         # depth statistic
-        depth_proj_exists = 'depth_proj.dat' in files
-        depth_recoil_exists = 'depth_recoil.dat' in files
-        depth_damage_exists = 'depth_damage.dat' in files
+        depth_proj_exists = (save_folder / 'depth_proj.dat').is_file()
+        depth_recoil_exists = (save_folder / 'depth_recoil.dat').is_file()
+        depth_damage_exists = (save_folder / 'depth_damage.dat').is_file()
 
         if depth_proj_exists or depth_recoil_exists or depth_damage_exists:
             list_widget.addItem(ListWidgetItem('Plot depth statistic:', bold=True))
@@ -3664,8 +3779,8 @@ class SimulationOutput(SimulationsOutput):
         list_widget.addItemEmpty()
 
         # reflected projectiles and sputtered recoils
-        back_p_exists = 'partic_back_p.dat' in files
-        back_r_exists = 'partic_back_r.dat' in files
+        back_p_exists = (save_folder / 'partic_back_p.dat').is_file()
+        back_r_exists = (save_folder / 'partic_back_r.dat').is_file()
 
         if back_p_exists or back_r_exists:
             list_widget.addItem(ListWidgetItem('Plot secondary particle distributions:', bold=True))
@@ -3676,13 +3791,13 @@ class SimulationOutput(SimulationsOutput):
                                                        indent=1,
                                                        function=self.analyse,
                                                        function_args={'plot': 'plotPolar',
-                                                                      'plot_args': {'element': i, 'projectile_or_recoil': 'p'}}))
+                                                                      'plot_args': {'element': i, 'particle': Particle.Projectile}}))
                 if back_r_exists:
                     list_widget.addItem(ListWidgetItem(f'Backsputtered {element} recoil atoms',
                                                        indent=1,
                                                        function=self.analyse,
                                                        function_args={'plot': 'plotPolar',
-                                                                      'plot_args': {'element': i, 'projectile_or_recoil': 'r'}}))
+                                                                      'plot_args': {'element': i, 'particle': Particle.Recoil}}))
             list_widget.addItemEmpty()
 
             if back_p_exists:
@@ -3701,12 +3816,14 @@ class SimulationOutput(SimulationsOutput):
                 list_widget.addItem(ListWidgetItem('Energy of backscattered ions',
                                                    indent=1,
                                                    function=self.analyse,
-                                                   function_args={'plot': 'plotParticlesEnergyP'}))
+                                                   function_args={'plot': 'plotParticlesEnergyP',
+                                                                  'hide': False}))
             if back_r_exists:
                 list_widget.addItem(ListWidgetItem('Energy of backsputtered recoils',
                                                    indent=1,
                                                    function=self.analyse,
-                                                   function_args={'plot': 'plotParticlesEnergyR'}))
+                                                   function_args={'plot': 'plotParticlesEnergyR',
+                                                                  'hide': False}))
             list_widget.addItemEmpty()
 
         else:
@@ -3729,6 +3846,10 @@ class SimulationAnalysis(SimulationsAnalysis):
         self.fluence_array = None
         self.depth_array = None
         self.conc_array = None
+
+        # TODO: move this to general <Simulations.py>
+        self.particle: Particle = Particle.Projectile
+        self.particle_data = None
         
     def reset(self):
         """Reset class"""
@@ -3744,7 +3865,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         self.depth_array = None
         self.conc_array = None
         
-    def updateData(self, save_folder: str, file: str):
+    def updateData(self, save_folder: Path, file: str):
         """
         Update evaluation data from file
 
@@ -3752,7 +3873,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         :param file: target file
         """
 
-        target = f'{save_folder}/{file}'
+        target = save_folder / file
 
         # data from target file
         self.save_folder = save_folder
@@ -3815,7 +3936,10 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        output = f'{self.save_folder}/output.dat'
+        if not self.save_folder:
+            return None
+
+        output = self.save_folder / 'output.dat'
 
         try:
             with open(output, 'r', encoding='utf-8', errors='replace') as file:
@@ -4034,7 +4158,10 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        serie = f'{self.save_folder}/serie.dat'
+        if not self.save_folder:
+            return None
+
+        serie = self.save_folder / 'serie.dat'
 
         try:
             with open(serie, 'r', encoding='utf-8', errors='replace') as file:
@@ -4149,7 +4276,10 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        depth_file = f'{self.save_folder}/{filename}'
+        if not self.save_folder:
+            return None
+
+        depth_file = self.save_folder / filename
 
         try:
             with open(depth_file, 'r', encoding='utf-8', errors='replace') as file:
@@ -4215,7 +4345,11 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        damage_file = f'{self.save_folder}/{filename}'
+
+        if not self.save_folder:
+            return None
+
+        damage_file = self.save_folder / filename
 
         try:
             with open(damage_file, 'r', encoding='utf-8', errors='replace') as file:
@@ -4275,19 +4409,22 @@ class SimulationAnalysis(SimulationsAnalysis):
             logging.warning(f'Could not process file "{filename}"!')
             return None
 
-    def getParticleData(self, projectile_or_recoil: str = 'p') -> Optional[List[np.ndarray]]:
+    def getParticleData(self, particle: Particle) -> Optional[List[np.ndarray]]:
         """
         Returns content from particle files
 
-        :param projectile_or_recoil: string to indentify if particle ('p') of recoil ('r') data should be used
+        :param particle: particle to identify if projectile of recoil data should be used
 
-        :return: list of file data per element
+        :return: list of file data per element [species, cosp, cosa, end-energy]
                  or None
         """
 
-        is_projectile = projectile_or_recoil.startswith('p')
-        letter_file_name = 'p' if is_projectile else 'r'
-        file_path = f'{self.save_folder}/partic_back_{letter_file_name}.dat'
+
+        if not self.save_folder:
+            return None
+
+        letter_file_name = 'p' if particle == Particle.Projectile else 'r'
+        file_path = self.save_folder / f'partic_back_{letter_file_name}.dat'
 
         try:
             with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
@@ -4304,7 +4441,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             logging.info(f'Could not open file "{file_path}"!')
             return None
 
-        old_data_len = len(self.particle_back_p_data) if is_projectile else len(self.particle_back_r_data)
+        old_data_len = len(self.particle_back_p_data) if particle == Particle.Projectile else len(self.particle_back_r_data)
 
         try:
             new_particle_file_data = fileToNpArray(file_path,
@@ -4320,7 +4457,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             if new_particle_file_data.ndim == 1:
                 new_particle_file_data = new_particle_file_data[np.newaxis, ...]
 
-            if is_projectile:
+            if particle == Particle.Projectile:
                 if self.particle_back_p_data.size:
                     self.particle_back_p_data = np.append(self.particle_back_p_data, new_particle_file_data, axis=0)
                 else:
@@ -4332,7 +4469,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                 else:
                     self.particle_back_r_data = new_particle_file_data
 
-        particle_file_data = self.particle_back_p_data if is_projectile else self.particle_back_r_data
+        particle_file_data = self.particle_back_p_data if particle == Particle.Projectile else self.particle_back_r_data
         if not particle_file_data.size:
             return None
 
@@ -4363,7 +4500,10 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        file_path = f'{self.save_folder}/E0_31_target.dat'
+        if not self.save_folder:
+            return None
+
+        file_path = self.save_folder / 'E0_31_target.dat'
 
         if not self.masses.size:
             self.getOutputFileData()
@@ -4622,7 +4762,10 @@ class SimulationAnalysis(SimulationsAnalysis):
     def plotVacanciesDepth(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
         """Plot and return vacancies over depth"""
 
-        use_depth_damage = path.exists(f'{self.save_folder}/depth_damage.dat')
+        if not self.save_folder:
+            return None
+
+        use_depth_damage = (self.save_folder / 'depth_damage.dat').is_file()
 
         if use_depth_damage:
             depth_data = self.getDamageDepthFileData('depth_damage.dat')
@@ -5274,11 +5417,13 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         return (data, plot_labels), mpl_settings
 
-    def plotParticlesPolar(self, projectile_or_recoil: str = 'p') -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return data of backscattered particles"""
+    def plotParticlesPolar(self, particle: Optional[Particle] = None) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """Plot and return angle data of backscattered particles"""
 
-        is_projectile = projectile_or_recoil.startswith('p')
-        particle_data = self.getParticleData(projectile_or_recoil)
+        if particle is None:
+            particle = self.particle
+        particle_data = self.getParticleData(particle)
+        self.particle = particle
 
         mpl_settings = MplCanvasSettings()
         mpl_settings.fig.add_subplot(projection='polar')
@@ -5300,7 +5445,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             if not cos_polar.size:
                 continue
 
-            hist, bin_edges = np.histogram(polar_angles, density=True, bins=72, range=(-np.pi / 2, np.pi / 2))
+            hist, bin_edges = np.histogram(polar_angles, bins=72, range=(-np.pi / 2, np.pi / 2))
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             polar_plot_norm = np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])) / np.sum(np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])))
             # 0.5 ... normalization because both + and - polar angle are shown, np.pi/180. for conversion from 1/rad to 1/deg
@@ -5324,7 +5469,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        if is_projectile:
+        if particle == Particle.Projectile:
             mpl_settings.axes.set_title('Backscattered projectiles over polar angle')
         else:
             mpl_settings.axes.set_title('Sputtered recoils over polar angle')
@@ -5346,20 +5491,22 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def plotParticlesPolarP(self) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return data of backscattered projectiles"""
+        """Plot and return angle data of backscattered projectiles"""
 
-        return self.plotParticlesPolar('p')
+        return self.plotParticlesPolar(Particle.Projectile)
 
     def plotParticlesPolarR(self) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return data of backscattered recoils"""
+        """Plot and return angle data of backscattered recoils"""
 
-        return self.plotParticlesPolar('r')
+        return self.plotParticlesPolar(Particle.Recoil)
 
-    def plotParticlesEnergy(self, projectile_or_recoil: str = 'p') -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotParticlesEnergy(self, particle: Optional[Particle] = None) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return energy of backscattered particles"""
 
-        is_projectile = projectile_or_recoil.startswith('p')
-        particle_data = self.getParticleData(projectile_or_recoil)
+        if particle is None:
+            particle = self.particle
+        particle_data = self.getParticleData(particle)
+        self.particle = particle
 
         mpl_settings = MplCanvasSettings()
 
@@ -5378,12 +5525,12 @@ class SimulationAnalysis(SimulationsAnalysis):
             if not energies.size:
                 continue
 
-            if is_projectile:
-                hist, bin_edges = np.histogram(energies, density=True, bins=100)
+            if particle == Particle.Projectile:
+                hist, bin_edges = np.histogram(energies, bins=100)
 
             # use very fine resolution in binning for sputtered atoms because lower energies are of more interest
             else:
-                hist, bin_edges = np.histogram(energies, density=True, bins=int(np.max(energies) / 0.2))
+                hist, bin_edges = np.histogram(energies, bins=int(np.max(energies) / 0.2))
 
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             mpl_settings.axes.plot(bin_edges_new,
@@ -5403,7 +5550,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             return None, mpl_settings
 
         mpl_settings.axes.set_xlabel('Energy [eV]')
-        if is_projectile:
+        if particle == Particle.Projectile:
             mpl_settings.axes.set_ylabel('Reflected ions [1/eV]')
         else:
             mpl_settings.axes.set_ylabel('Sputtered atoms [1/eV]')
@@ -5416,21 +5563,100 @@ class SimulationAnalysis(SimulationsAnalysis):
     def plotParticlesEnergyP(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
         """Plot and return energy of backscattered projectiles"""
 
-        return self.plotParticlesEnergy('p')
+        return self.updateParticlesEnergyPolar(Particle.Projectile, 0, 90)
 
     def plotParticlesEnergyR(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
         """Plot and return energy of backscattered recoils"""
 
-        return self.plotParticlesEnergy('r')
+        return self.updateParticlesEnergyPolar(Particle.Recoil, 0, 90)
 
-    def plotPolar(self, element: int, projectile_or_recoil: str = 'p', n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotParticlesEnergyPolar(self, polar_angle: float, polar_angle_delta: float) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """Plot and return angle and energy data of backscattered particles"""
+
+        mpl_settings = MplCanvasSettings()
+
+        if self.particle_data is None or not self.particle_data:
+            mpl_settings.axes.set_title('No data found')
+            return None, mpl_settings
+
+        data = []
+        plot_labels = []
+
+        plot_counter = 0
+        for i, element in enumerate(self.elements):
+            plot_data = self.particle_data[i]
+            cos_polar = plot_data[:, 0]
+            cos_azimuth = plot_data[:, 1]
+            energies = plot_data[:, 2]
+            polar_angles = np.arccos(np.asarray(cos_polar)) * np.sign(cos_azimuth)
+
+            if not cos_polar.size or not energies.size:
+                continue
+
+            polar_angle_filter = np.logical_and(
+                polar_angles < (polar_angle + polar_angle_delta) * np.pi / 180,
+                polar_angles > (polar_angle - polar_angle_delta) * np.pi / 180
+            )
+            energies = energies[polar_angle_filter]
+
+            if self.particle == Particle.Projectile:
+                hist, bin_edges = np.histogram(energies, bins=100)
+
+            # use very fine resolution in binning for sputtered atoms because lower energies are of more interest
+            else:
+                hist, bin_edges = np.histogram(energies, bins=int(np.max(energies) / 0.2))
+
+            bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+            mpl_settings.axes.plot(bin_edges_new,
+                                   hist,
+                                   label=element,
+                                   linewidth=self.line_width,
+                                   color=self.colors[i])
+
+            data.append(bin_edges_new)
+            plot_labels.append(f'Energy ({element}) [eV]')
+            data.append(hist)
+            plot_labels.append(f'Probability ({element}) [1/eV]')
+
+            plot_counter += 1
+
+        if not plot_counter:
+            return None, mpl_settings
+
+        mpl_settings.axes.set_xlabel('Energy [eV]')
+        if self.particle == Particle.Projectile:
+            mpl_settings.axes.set_ylabel('Reflected ions [1/eV]')
+        else:
+            mpl_settings.axes.set_ylabel('Sputtered atoms [1/eV]')
+        mpl_settings.axes.set_ylim(ymin=0.)
+        mpl_settings.axes.set_xlim(xmin=0.)
+        mpl_settings.axes.legend()
+
+        return (data, plot_labels), mpl_settings
+
+    def updateParticlesEnergyPolar(self, particle: Particle, polar_angle: float, polar_angle_delta: float) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """Updates te plot and data of the angle and energy of backscattered particles"""
+
+        self.particle = particle
+        self.particle_data = self.getParticleData(particle)
+        result = self.plotParticlesEnergyPolar(polar_angle, polar_angle_delta)
+
+        # emit signal for HlPlot Layout
+        self.emit({
+            'hide_polar_angle': False,
+            'polar_angle': polar_angle,
+            'polar_angle_delta': polar_angle_delta
+        })
+
+        return result
+
+    def plotPolar(self, element: int, particle: Particle, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return backscattered particles of element"""
 
         if element not in range(len(self.elements)):
             return None
 
-        is_projectile = projectile_or_recoil.startswith('p')
-        particle_data = self.getParticleData(projectile_or_recoil)
+        particle_data = self.getParticleData(particle)
 
         mpl_settings = MplCanvasSettings()
         mpl_settings.fig.add_subplot(projection='polar')
@@ -5498,7 +5724,7 @@ class SimulationAnalysis(SimulationsAnalysis):
                 continue
             data.append(np.append(np.mod(np.round(abins_center[i] / np.pi * 180., 2), 360.), hist[i]))
 
-        if is_projectile:
+        if particle == Particle.Projectile:
             title = f'Angular distribution of backscattered {self.elements[element]} projectiles'
         else:
             title = f'Angular distribution of backsputtered {self.elements[element]} recoil atoms'
@@ -5812,7 +6038,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         # emit signal for HlPlot Layout
         self.emit({
-            'hide': False,
+            'hide_history': False,
             'max_history': max_hist,
             'history': max_hist
         })

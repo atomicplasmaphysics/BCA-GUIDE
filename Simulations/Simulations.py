@@ -1,5 +1,5 @@
-from typing import Union, Tuple, Optional, List
-from os import listdir
+from typing import Union, Tuple, Optional, List, Callable
+from pathlib import Path
 import logging
 
 import numpy as np
@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
 from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout, InputHBoxLayout
 from Utility.Indexing import RepeatingList, ElementList
-from Utility.Functions import getFileNameFromFileList, fileToNpArray
+from Utility.Functions import getFileNameFromFileList, fileToNpArray, pathToStr
 
 from TableWidgets.CompTable import CompRow
 from TableWidgets.CrystalTable import CrystalRow
@@ -18,6 +18,7 @@ from TableWidgets.CrystalTable import CrystalRow
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Element import Element, Elements
 from Containers.Arguments import GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments
+from Containers.Compound import Compound
 
 
 class GeneralDefaultValues:
@@ -40,7 +41,7 @@ class GeneralSettings:
     def __init__(self):
         super().__init__()
 
-    def emit(self, value_dict: dict = None):
+    def emit(self, value_dict: Optional[dict] = None):
         """
         Emits settingsChanged pyqtSignal
 
@@ -65,18 +66,15 @@ class GeneralSettings:
 
         pass
 
-    @staticmethod
-    def reset():
+    def reset(self):
         """Resets all input fields"""
         pass
 
-    @staticmethod
-    def getArguments():
+    def getArguments(self):
         """Returns container of parameters for settings"""
         raise NotImplementedError
 
-    @staticmethod
-    def loadArguments(arguments: SimulationArguments) -> list:
+    def loadArguments(self, arguments: SimulationArguments) -> list:
         """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
         return []
 
@@ -93,8 +91,7 @@ class HlGeneralBeamSettings(GeneralSettings, QHBoxLayout):
         super().__init__()
         self.version = version
 
-    @staticmethod
-    def getArguments() -> GeneralBeamArguments:
+    def getArguments(self) -> GeneralBeamArguments:
         """Returns <GeneralBeamArguments> container of parameters for general beam settings"""
 
         return GeneralBeamArguments()
@@ -115,8 +112,7 @@ class HlGeneralTargetSettings(GeneralSettings, QHBoxLayout):
         self.include_crystal = False if default_values is None else default_values.enable_crystal
         self.layout_crystal_file = None
 
-    @staticmethod
-    def getArguments(*args, **kwargs) -> GeneralTargetArguments:
+    def getArguments(self, *args, **kwargs) -> GeneralTargetArguments:
         """Returns <GeneralTargetArguments> container of parameters for general target settings"""
 
         return GeneralTargetArguments()
@@ -131,8 +127,9 @@ class HlGeneralTargetSettings(GeneralSettings, QHBoxLayout):
             checkbox=checkbox,
             tooltip=tooltip
         )
-        self.layout_crystal_file.checkbox.stateChanged.connect(lambda _: self.edited())
-        self.layout_crystal_file.checkbox.stateChanged.connect(lambda state: self.emit({'crystal_state': state}))
+        if self.layout_crystal_file.checkbox is not None:
+            self.layout_crystal_file.checkbox.stateChanged.connect(lambda _: self.edited())
+            self.layout_crystal_file.checkbox.stateChanged.connect(lambda state: self.emit({'crystal_state': state}))
         self.addStretch(1)
         self.addLayout(self.layout_crystal_file)
 
@@ -155,8 +152,7 @@ class VlGeneralSimulationSettings(GeneralSettings, QVBoxLayout):
         super().__init__()
         self.version = version
 
-    @staticmethod
-    def getArguments() -> GeneralArguments:
+    def getArguments(self) -> GeneralArguments:
         """Returns <GeneralArguments> container of parameters for general simulation settings"""
 
         return GeneralArguments(title='SIMULATION TITLE MISSING')
@@ -1766,7 +1762,7 @@ class HlGeneralPlot(QHBoxLayout):
         super().__init__()
         self.version = version
 
-    def emit(self, value_dict: dict = None):
+    def emit(self, value_dict: Optional[dict] = None):
         """
         Emits settingsChanged pyqtSignal
 
@@ -1821,7 +1817,7 @@ class SimulationsInput:
     # possible input parameters
     InputParameters = {}
     # list of possible compounds
-    CompoundList = []
+    CompoundList: List[Compound] = []
     # group elements in beam and target
     GroupElements = False
 
@@ -1842,7 +1838,7 @@ class SimulationsInput:
         self.element_data_default = True
 
     @staticmethod
-    def getVersionName(folder: str, binary: str) -> Union[str, bool]:
+    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, bool]:
         """
         Returns version of simulation depending on selected folder and binary
 
@@ -1855,7 +1851,7 @@ class SimulationsInput:
         return False
 
     @staticmethod
-    def getDoc(folder: str, binary: str, version: str) -> Union[str, bool]:
+    def getDoc(folder: Path, binary: Path, version: str) -> Union[Path, bool]:
         """
         Returns path to documentation pdf-file
 
@@ -1871,7 +1867,7 @@ class SimulationsInput:
         return False
 
     @staticmethod
-    def downloadDoc(parent, folder: str, binary: str, version: str):
+    def downloadDoc(parent, folder: Path, binary: Path, version: str):
         """
         Downloads documentation pdf-file and saves it in the default directory
 
@@ -1883,8 +1879,7 @@ class SimulationsInput:
 
         pass
 
-    @staticmethod
-    def update(folder: str, binary: str, version: str):
+    def update(self, folder: Path, binary: Path, version: str):
         """
         Updates on startup
 
@@ -1905,8 +1900,8 @@ class SimulationsInput:
         self.element_data = GeneralElementData()
         self.element_data_default = True
 
-    @staticmethod
-    def updateElements(folder: str, version: str) -> bool:
+
+    def updateElements(self, folder: Path, version: str) -> bool:
         """
         Updates list of <Element> for this simulation
 
@@ -1928,8 +1923,7 @@ class SimulationsInput:
 
         return self.InputFilename
 
-    @staticmethod
-    def makeInputFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeInputFile(self, arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns input file as string
 
@@ -1955,7 +1949,7 @@ class SimulationsInput:
         return self.LayerFilename
 
     @staticmethod
-    def makeLayerFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeLayerFile(arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns layer input file as string
 
@@ -1981,7 +1975,7 @@ class SimulationsInput:
         return self.CrystalFilename
 
     @staticmethod
-    def makeCrystalFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeCrystalFile(arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns crystal file as string
 
@@ -1994,8 +1988,7 @@ class SimulationsInput:
 
         return ''
 
-    @staticmethod
-    def loadFiles(folder: str, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
+    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
         Returns string of error if input file can not be opened
@@ -2009,8 +2002,7 @@ class SimulationsInput:
 
         return False
 
-    @staticmethod
-    def checkAdditional(settings: str, version: str) -> List[str]:
+    def checkAdditional(self, settings: str, version: str) -> List[str]:
         """
         Checks the user defined additional settings and returns list of errors
 
@@ -2022,8 +2014,7 @@ class SimulationsInput:
 
         return []
 
-    @staticmethod
-    def cmd(binary: str, save_folder: str, input_file: str, version: str) -> (str, bool, str):
+    def cmd(self, binary: Path, save_folder: Path, input_file: str, version: str) -> Tuple[str, bool, str]:
         """
         Returns command to be executed
 
@@ -2039,13 +2030,12 @@ class SimulationsInput:
         """
 
         return (
-            binary,
+            pathToStr(binary),
             False,
-            f'"{binary}"'
+            f'"{pathToStr(binary)}"'
         )
 
-    @staticmethod
-    def getProgress(save_folder: str, process_log: str, version: str) -> int:
+    def getProgress(self, save_folder: Path, process_log: str, version: str) -> float:
         """
         Returns progress in % of running simulation.
         Negative return value indicates some error.
@@ -2097,7 +2087,7 @@ class SimulationsOutput(QObject):
         self.analysis.moveToThread(self.thread)
         self.thread.start()
 
-    def emit(self, value_dict: dict = None):
+    def emit(self, value_dict: Optional[dict] = None):
         """
         Emits settingsChanged pyqtSignal
 
@@ -2128,7 +2118,7 @@ class SimulationsOutput(QObject):
         self.plot.clear()
         self.plot.fig.canvas.draw_idle()
 
-    def analyse(self, plot: str = None, plot_args: dict = None, hide: bool = True, text: str = ''):
+    def analyse(self, plot: Optional[str] = None, plot_args: Optional[dict] = None, hide: bool = True, text: str = ''):
         """
         Call the analysis function in the thread with function parameters
 
@@ -2196,7 +2186,7 @@ class SimulationsOutput(QObject):
         """
 
         # wait cursor
-        if waiting is False:
+        if not waiting:
             if not identifier == self.waiting:
                 print('Wrong plotting object returned')
             self.waiting = None
@@ -2208,8 +2198,7 @@ class SimulationsOutput(QObject):
             self.title_label.busy(True, text)
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
-    @staticmethod
-    def listParameters(save_folder: str, list_widget: ListWidget):
+    def listParameters(self, save_folder: Path, list_widget: ListWidget):
         """
         Builds ListWidget from files in save folder
 
@@ -2258,7 +2247,7 @@ class SimulationsAnalysis(QObject):
 
         self.data = None
         self.element_data = element_data
-        self.save_folder = ''
+        self.save_folder: Path | None = None
 
         self.elements = ElementList()
         self.masses = np.array([])
@@ -2269,7 +2258,7 @@ class SimulationsAnalysis(QObject):
         # colors for plots
         self.colors = RepeatingList()
         order = [4, 0, 6, 8, 14, 12, 16, 18, 10, 3, 5, 1, 7, 9, 15, 13, 17, 11, 19]
-        colors = plt.get_cmap('tab20').colors
+        colors = plt.get_cmap('tab20').colors  # is actually a ListedColormap not just a Colormap, so obj.colors is fine
         for i in order:
             self.colors.append(colors[i])
         self.first_color = colors[2]
@@ -2278,12 +2267,12 @@ class SimulationsAnalysis(QObject):
         """Reset class"""
 
         self.data = None
-        self.save_folder = ''
+        self.save_folder = None
 
         self.elements = ElementList()
         self.masses = np.array([])
 
-    def emit(self, value_dict: dict = None):
+    def emit(self, value_dict: Optional[dict] = None):
         """
         Emits settingsChanged pyqtSignal
 
@@ -2305,7 +2294,7 @@ class SimulationsAnalysis(QObject):
         """
 
         # check if func exists and is executable
-        analyse_func = getattr(self, func, None)
+        analyse_func: Optional[Callable] = getattr(self, func, None)
         if callable(analyse_func):
             result = analyse_func(**func_args)
 
@@ -2351,14 +2340,14 @@ class SimulationsAnalysis(QObject):
                  numpy.array of data in file
         """
 
-        file = getFileNameFromFileList(filename, listdir(self.save_folder))
+        file = getFileNameFromFileList(filename, self.save_folder.iterdir())
         if not file:
             return None
 
         try:
             # numpy genfromtxt is very slow, use own implementation instead
-            # data = np.genfromtxt(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
-            data = fileToNpArray(f'{self.save_folder}/{file}', skip_header=skip_header, **kwargs)
+            # data = np.genfromtxt(self.save_folder / file, skip_header=skip_header, **kwargs)
+            data = fileToNpArray(self.save_folder / file, skip_header=skip_header, **kwargs)
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{file}"!')

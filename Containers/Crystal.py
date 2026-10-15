@@ -3,6 +3,9 @@ from typing import List, Optional, Union
 import logging
 
 
+from Containers.Element import Element
+
+
 class Vec3:
     """
     Container that stores basis vector
@@ -122,3 +125,29 @@ class MillerIndex(Vec3):
     def l(self) -> int:
         """Returns l (=3) component of miller index vector"""
         return self.vec[2]
+
+
+class Crystal:
+    """
+    Container that stores crystal information, structure and elements
+
+    :param name: crystal name
+    :param basis_vec: basis vector
+    :param crystal_structure:
+    :param elements:
+    :param matrix_id:
+    :param p_max:
+    :param deltaH_f:
+    """
+
+    def __init__(
+        self,
+        name: str,
+        basis_vec: BasisVector,
+        crystal_structure: List[Coordinate],
+        elements: List[Element],
+        matrix_id: int = 3,
+        p_max: float = 3,
+        deltaH_f: float = 0
+    ):
+        pass

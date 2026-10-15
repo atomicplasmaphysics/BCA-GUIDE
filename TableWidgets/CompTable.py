@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Optional
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QComboBox, QPushButton, QDoubleSpinBox, QSpinBox
@@ -241,7 +241,7 @@ class CompTable(CustomTable):
         self,
         parent,
         comp_count,
-        row_fields: List[CustomRowField] = None,
+        row_fields: Optional[List[CustomRowField]] = None,
         custom_comp_row=CompRow,
         version: str = ''
     ):
@@ -274,7 +274,7 @@ class CompTable(CustomTable):
 
         return self.component_row(self.row_fields, version=self.version)
 
-    def addRow(self, update: bool = True, connect: bool = True) -> Union[CompRow, bool]:
+    def addRow(self, update: bool = True, connect: bool = True) -> Optional[CompRow]:
         """
         Add a new row
 
@@ -284,8 +284,12 @@ class CompTable(CustomTable):
 
         next_rank = self.component_count.getNext()
         if not next_rank:
-            return False
-        row = super().addRow(update=update, connect=connect)
+            return None
+
+        row: Optional[CompRow] = super().addRow(update=update, connect=connect)
+        if row is None:
+            return None
+
         row.selected_element.clicked.connect(lambda checked: self.elementClicked.emit(row))
         row.elementChanged.connect(lambda element: self.elementChanged.emit(row, element))
         if connect:
@@ -298,6 +302,7 @@ class CompTable(CustomTable):
         self.emit({
             'row_added': True
         })
+
         return row
 
     def addRows(self, comp_entries: list):
@@ -485,7 +490,7 @@ class CompTableTarget(CompTable):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def addRow(self, update: bool = True, connect: bool = True) -> Union[CompRow, bool]:
+    def addRow(self, update: bool = True, connect: bool = True) -> Optional[CompRow]:
         """
         Add a new row
 
@@ -493,9 +498,9 @@ class CompTableTarget(CompTable):
         :param connect: if row should be connected
         """
 
-        row = super().addRow(update=update, connect=connect)
-        if row is False:
-            return row
+        row: Optional[CompRow] = super().addRow(update=update, connect=connect)
+        if row is None:
+            return None
 
         for field, widget in zip(self.row_fields, row.row_widgets[1:]):
             if not field.synced:

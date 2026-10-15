@@ -1,5 +1,5 @@
 from typing import List, Union, Tuple, Dict, Optional
-from os import path, listdir
+from pathlib import Path
 from re import findall
 import logging
 
@@ -15,7 +15,7 @@ from Utility.Layouts import (
 )
 from Utility.Functions import (
     dateStr, alphanumeric, getFileNameFromFileList, getFilesNameFromFileList,
-    fileToNpArray, roundToStr, normalizeList
+    fileToNpArray, roundToStr, normalizeList, pathToStr
 )
 from Utility.Indexing import DefaultAssumed, RunningIndex, ElementList
 
@@ -3419,7 +3419,7 @@ Wolfhard Möller
         self.element_data_default = False
 
     @staticmethod
-    def getVersionName(folder: str, binary: str) -> Union[str, bool]:
+    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, bool]:
         """
         Returns version of simulation depending on selected folder and binary or False if no version can be determined
 
@@ -3428,14 +3428,16 @@ Wolfhard Möller
         """
 
         # check on path or binary path
-        version = findall(r'(?<=tridyn).\d+', (binary + folder).lower())
+        version = findall(r'(?<=tridyn\.)\d+', pathToStr(binary).lower())
+        version.extend(findall(r'(?<=tridyn\.)\d+', pathToStr(folder).lower()))
+
         if version:
             return f'TRIDYN {version[0]}'
 
         return False
 
     @staticmethod
-    def getDoc(folder: str, binary: str, version: str) -> Union[str, bool]:
+    def getDoc(folder: Path, binary: Path, version: str) -> Union[Path, bool]:
         """
         Returns path to documentation pdf-file
 
@@ -3449,13 +3451,16 @@ Wolfhard Möller
         """
 
         # pdf should have 'userguide' in title and not be in any subdirectory
-        files = [file for file in listdir(folder) if path.isfile(f'{folder}/{file}') and path.splitext(f'{folder}/{file}')[1].lower() == '.pdf' and 'userguide' in file.lower()]
+        files = [
+            file for file in folder.iterdir()
+            if file.is_file() and file.suffix.lower() == '.pdf' and 'userguide' in file.name.lower()
+        ]
         if files:
-            return f'{folder}/{files[0]}'
+            return  folder / files[0]
 
         return False
 
-    def update(self, folder: str, binary: str, version: str):
+    def update(self, folder: Path, binary: Path, version: str):
         """
         Updates on startup
 
@@ -3467,8 +3472,7 @@ Wolfhard Möller
         # default values
         self.default_values = DefaultValues()
 
-    @staticmethod
-    def updateElements(folder: str, version: str) -> bool:
+    def updateElements(self, folder: Path, version: str) -> bool:
         """
         Updates list of <Element> for this simulation
 
@@ -3497,7 +3501,7 @@ Wolfhard Möller
 
         return filename
 
-    def makeInputFile(self, arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeInputFile(self, arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns input file as string
 
@@ -3788,7 +3792,7 @@ fout {idfout} {iddout} {idqout}{output}
         return filename
 
     @staticmethod
-    def makeLayerFile(arguments: SimulationArguments, folder: str, version: str) -> str:
+    def makeLayerFile(arguments: SimulationArguments, folder: Path, version: str) -> str:
         """
         Returns layer input file as string
 
@@ -3827,7 +3831,7 @@ fout {idfout} {iddout} {idqout}{output}
 
         return f'{layer_info_total.strip()}\n'
 
-    def loadFiles(self, folder: str, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
+    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
         Returns string of error if input file can not be opened
@@ -3839,14 +3843,12 @@ fout {idfout} {iddout} {idqout}{output}
         :return: Tuple(<SimulationArguments>, list), str or False
         """
 
-        files = listdir(folder)
-
-        input_file = getFileNameFromFileList(self.InputFilename, files)
-        layer_file = getFileNameFromFileList(self.LayerFilename, files)
+        input_file = getFileNameFromFileList(self.InputFilename, folder.iterdir())
+        layer_file = getFileNameFromFileList(self.LayerFilename, folder.iterdir())
 
         # get all contents from input file
         try:
-            with open(f'{folder}/{input_file}', 'r', encoding='utf-8', errors='replace') as file:
+            with open(folder / input_file, 'r', encoding='utf-8', errors='replace') as file:
                 contents = [line.strip() for line in file.readlines() if line.strip()]
 
         except FileNotFoundError:
@@ -4161,7 +4163,7 @@ fout {idfout} {iddout} {idqout}{output}
 
             try:
                 # get all contents from layer file
-                with open(f'{folder}/{layer_file}', 'r', encoding='utf-8', errors='replace') as file:
+                with open(folder / layer_file, 'r', encoding='utf-8', errors='replace') as file:
                     last_content = []
                     last_abundances = False
                     segment_count = 0
@@ -4471,7 +4473,7 @@ fout {idfout} {iddout} {idqout}{output}
 
         return errors
 
-    def cmd(self, binary: str, save_folder: str, input_file: str, version: str) -> (str, bool, str):
+    def cmd(self, binary: Path, save_folder: Path, input_file: str, version: str) -> Tuple[str, bool, str]:
         """
         Returns command to be executed
 
@@ -4487,12 +4489,12 @@ fout {idfout} {iddout} {idqout}{output}
         """
 
         return (
-            binary,
+            pathToStr(binary),
             True,
-            f'"{binary}" < "{save_folder}/{input_file}"'
+            f'"{pathToStr(binary)}" < "{pathToStr(save_folder / input_file)}"'
         )
 
-    def getProgress(self, save_folder: str, process_log: str, version: str) -> int:
+    def getProgress(self, save_folder: Path, process_log: str, version: str) -> float:
         """
         Returns progress in % of running simulation.
         Negative return value indicates some error.
@@ -4508,14 +4510,13 @@ fout {idfout} {iddout} {idqout}{output}
         except ValueError:
             return -1
 
-        files = listdir(save_folder)
         indat_file_template = '*_indat.dat'
-        indat_file = getFileNameFromFileList(indat_file_template, files)
+        indat_file = getFileNameFromFileList(indat_file_template, save_folder.iterdir())
         if not indat_file:
             return -1
 
         try:
-            with open(f'{save_folder}/{indat_file}', 'r', encoding='utf-8', errors='replace') as file:
+            with open(save_folder / indat_file, 'r', encoding='utf-8', errors='replace') as file:
                 file.readline()
                 line_contents = [sp.strip() for sp in file.readline().split(' ') if sp.strip()]
                 try:
@@ -4527,7 +4528,7 @@ fout {idfout} {iddout} {idqout}{output}
             logging.info(f'Could not open file "{indat_file}"!')
             return -1
 
-        return round(100 * simulated / particles)
+        return 100 * simulated / particles
 
 
 class SimulationOutput(SimulationsOutput):
@@ -4549,7 +4550,7 @@ class SimulationOutput(SimulationsOutput):
         if histories is not None:
             self.analyse('plotDepthConcentration', {'history_step': int(histories)}, False)
 
-    def listParameters(self, save_folder: str, list_widget: ListWidget):
+    def listParameters(self, save_folder: Path, list_widget: ListWidget):
         """
         Builds ListWidget from files in save folder
 
@@ -4557,7 +4558,6 @@ class SimulationOutput(SimulationsOutput):
         :param list_widget: empty ListWidget (extension of QListWidget) that should be written to
         """
 
-        files = listdir(save_folder)
         tooltip_slow = '<b>Waring:</b> While the simulations is running, the refreshing of this plot will cause lag.'
 
         if not self.analysis.updateData(save_folder):
@@ -4571,7 +4571,7 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItemEmpty()
 
         # static
-        elif getFileNameFromFileList('*_out.dat', files):
+        elif getFileNameFromFileList('*_out.dat', save_folder.iterdir()):
             list_widget.addItem(ListWidgetItem('Results overview:', bold=True))
 
             protocol_data = self.analysis.getProtocolData()
@@ -4672,8 +4672,8 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItemEmpty()
 
         # depth statistic
-        energy_loss_exists = getFileNameFromFileList('*_edepn.dat', files)
-        depth_deposited_exists = getFileNameFromFileList('*_rglst.dat', files)
+        energy_loss_exists = getFileNameFromFileList('*_edepn.dat', save_folder.iterdir())
+        depth_deposited_exists = getFileNameFromFileList('*_rglst.dat', save_folder.iterdir())
 
         if not self.analysis.is_dynamic and (energy_loss_exists or depth_deposited_exists):
             list_widget.addItem(ListWidgetItem('Plot depth statistic:', bold=True))
@@ -4744,8 +4744,8 @@ class SimulationOutput(SimulationsOutput):
         list_widget.addItemEmpty()
 
         # reflected projectiles and sputtered recoils
-        scatter_exist = getFileNameFromFileList('*_bslst.dat', files)
-        sputter_exist = getFileNameFromFileList('*_splst.dat', files)
+        scatter_exist = getFileNameFromFileList('*_bslst.dat', save_folder.iterdir())
+        sputter_exist = getFileNameFromFileList('*_splst.dat', save_folder.iterdir())
 
         if scatter_exist or sputter_exist:
             list_widget.addItem(ListWidgetItem('Plot secondary particle distributions:', bold=True))
@@ -4830,7 +4830,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         self.depth_array = None
         self.conc_array = None
         
-    def updateData(self, save_folder: str) -> bool:
+    def updateData(self, save_folder: Path) -> bool:
         """
         Update evaluation data from file
 
@@ -4840,7 +4840,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         self.save_folder = save_folder
         initial_data = self.getInitialData()
         if initial_data is None:
-            self.save_folder = ''
+            self.save_folder = None
             return False
 
         elements = ElementList()
@@ -4890,14 +4890,17 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        protocol = getFileNameFromFileList('*_indat.dat', listdir(self.save_folder))
+        if self.save_folder is None:
+            return None
+
+        protocol = getFileNameFromFileList('*_indat.dat', self.save_folder.iterdir())
         if not protocol:
             return None
 
         result = {}
 
         try:
-            with open(f'{self.save_folder}/{protocol}', 'r', encoding='utf-8', errors='replace') as file:
+            with open(self.save_folder / protocol, 'r', encoding='utf-8', errors='replace') as file:
                 # 'id'
                 result['id'] = file.readline()
 
@@ -5015,7 +5018,10 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        protocol = getFileNameFromFileList('*_out.dat', listdir(self.save_folder))
+        if self.save_folder is None:
+            return None
+
+        protocol = getFileNameFromFileList('*_out.dat', self.save_folder.iterdir())
         if not protocol:
             return None
 
@@ -5029,7 +5035,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         launched_total = 0
 
         try:
-            with open(f'{self.save_folder}/{protocol}', 'r', encoding='utf-8', errors='replace') as file:
+            with open(self.save_folder / protocol, 'r', encoding='utf-8', errors='replace') as file:
                 lines = [line.strip() for line in file.readlines()]
 
         except FileNotFoundError:
@@ -5134,7 +5140,10 @@ class SimulationAnalysis(SimulationsAnalysis):
                  or None
         """
 
-        profiles = getFilesNameFromFileList('*_pr*.dat', listdir(self.save_folder))
+        if self.save_folder is None:
+            return None
+
+        profiles = getFilesNameFromFileList('*_pr*.dat', self.save_folder.iterdir())
         profiles = [profile for profile in profiles if profile[-7:-4].isnumeric()]
         if not profiles:
             return None
@@ -5150,7 +5159,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         new_profiles = len(profiles)
 
         try:
-            with open(f'{self.save_folder}/{profiles[0]}', 'r', encoding='utf-8', errors='replace') as file:
+            with open(self.save_folder / profiles[0], 'r', encoding='utf-8', errors='replace') as file:
                 lines = [line.strip() for line in file.readlines() if line.strip()]
                 columns = len(lines[5].split())
                 layers = len(lines) - 5
@@ -5177,7 +5186,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         atomic_fractions = np.zeros((len(self.elements), new_profiles, layers))
 
         for i, profile in enumerate(profiles):
-            profile = f'{self.save_folder}/{profile}'
+            profile = self.save_folder / profile
 
             try:
                 with open(profile, 'r', encoding='utf-8', errors='replace') as file:
@@ -5246,7 +5255,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         data = self.genfromtxt('*_srfc.dat', skip_header=2)
         if data is None:
-            return
+            return None
 
         return data[:, 0], data[:, 1:]
 
@@ -5552,7 +5561,7 @@ class SimulationAnalysis(SimulationsAnalysis):
              collisions,
              coordinates) = plot_data
 
-            hist, bin_edges = np.histogram(coordinates[:, 0], bins=n_bins, density=True)
+            hist, bin_edges = np.histogram(coordinates[:, 0], bins=n_bins)
             bin_edges = (bin_edges[1:] + bin_edges[:-1]) / 2
 
             mpl_settings.axes.plot(bin_edges,
@@ -6216,7 +6225,7 @@ class SimulationAnalysis(SimulationsAnalysis):
              cosines,
              coordinates) = plot_data
 
-            hist, bin_edges = np.histogram(energy, density=True, bins=100)
+            hist, bin_edges = np.histogram(energy, bins=100)
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
             mpl_settings.axes.plot(bin_edges_new,
@@ -6275,7 +6284,7 @@ class SimulationAnalysis(SimulationsAnalysis):
              start_cosines,
              start_coordinates) = plot_data
 
-            hist, bin_edges = np.histogram(energy, density=True, bins=int(np.max(energy) / 0.2))
+            hist, bin_edges = np.histogram(energy, bins=int(np.max(energy) / 0.2))
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
             mpl_settings.axes.plot(bin_edges_new,
@@ -6304,7 +6313,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         return (data, plot_labels), mpl_settings
 
-    def plotParticlesPolar(self, cosines_array: List[np.array], mpl_settings: MplCanvasSettings) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotParticlesPolar(self, cosines_array: List[np.ndarray], mpl_settings: MplCanvasSettings) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return data of backscattered/backsputtered particles"""
 
         data = []
@@ -6321,7 +6330,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             if not cos_polar.size:
                 continue
 
-            hist, bin_edges = np.histogram(polar_angles, density=True, bins=72, range=(-np.pi / 2, np.pi / 2))
+            hist, bin_edges = np.histogram(polar_angles, bins=72, range=(-np.pi / 2, np.pi / 2))
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             polar_plot_norm = np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])) / np.sum(np.absolute(np.cos(bin_edges[:-1]) - np.cos(bin_edges[1:])))
             # 0.5 ... normalization because both + and - polar angle are shown, np.pi/180. for conversion from 1/rad to 1/deg

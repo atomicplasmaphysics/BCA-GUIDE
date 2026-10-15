@@ -33,6 +33,9 @@ from MainWindow import MainWindow
 from Utility.Layouts import SplashPixmap
 from Utility.Logger import setupLogging
 
+# TODO: simulation folder in preferences is not preferred when open file dialog is selected!
+# TODO: path objects from "import os.path"
+# TODO: when selecting simulation folder automatically search for any .exe if in windows and ELF file if in linux/mac(?)
 
 def main():
     """
@@ -40,7 +43,7 @@ def main():
     """
 
     # set up logging level
-    setupLogging(logging.WARNING)
+    setupLogging(logging.INFO)  #TODO: set back to logging.WARNING
 
     # ctypes.windll only works in Windows
     if system() == 'Windows':

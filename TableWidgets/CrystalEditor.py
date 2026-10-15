@@ -523,6 +523,9 @@ class CrystalEditorDialog(QDialog):
         """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
 
         crystal_args = arguments.crystal_args
+        if not isinstance(crystal_args, GeneralCrystalArguments):
+            return []
+
         assumed = arguments.optional.get('assumed')
         if not isinstance(assumed, list):
             assumed = []
@@ -533,7 +536,7 @@ class CrystalEditorDialog(QDialog):
         if 'name' in assumed:
             crystal_name = DefaultValues.crystal_name
             not_loadable.append('name')
-        # TODO: highlight if we have field available and set value propperly
+        # TODO: highlight if we have field available and set value properly
         self.crystal_name = crystal_name
 
         # lattice id
@@ -541,7 +544,7 @@ class CrystalEditorDialog(QDialog):
         if 'lattice_id' in assumed:
             lattice_id = DefaultValues.lattice_id
             not_loadable.append('lattice_id')
-        # TODO: highlight if we have field available and set value propperly
+        # TODO: highlight if we have field available and set value properly
         self.lattice_id = lattice_id
 
         # basis vectors

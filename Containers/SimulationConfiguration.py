@@ -1,8 +1,10 @@
 from __future__ import annotations
 from typing import Union, TYPE_CHECKING
-from os import path
+from pathlib import Path
 
 from Simulations.SimulationsList import SimulationsList
+
+from Utility.Functions import pathToStr
 
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
@@ -26,11 +28,11 @@ class SimulationConfiguration:
         self,
         title: str,
         program: int,
-        folder: str,
-        binary: str,
+        folder: Path,
+        binary: Path,
         version: str = 'unknown',
-        base_save_folder: str = '',
-        save_folder: str = ''
+        base_save_folder: Path | None = None,
+        save_folder: Path | None = None
     ):
         # Get list of simulations
         sim_list = SimulationsList()
@@ -50,12 +52,13 @@ class SimulationConfiguration:
         self.changed = True
         self.has_settings = False
         self.running = False
+        self.progress = 0
         self.is_active = False
         self.unsaved_changes = False
         self.base_save_folder = base_save_folder
         self.save_folder = save_folder
 
-    def edit(self, title: str, folder: str, binary: str, version: str, base_save_folder: str):
+    def edit(self, title: str, folder: str, binary: str, version: str, base_save_folder: Path):
         """
         Sets main parameters of simulation
 
@@ -83,15 +86,15 @@ class SimulationConfiguration:
         save_dict = {
             'title': str(self.title),
             'program': str(self.program_name),
-            'folder': str(self.folder),
-            'binary': str(self.binary),
+            'folder': pathToStr(self.folder),
+            'binary': pathToStr(self.binary),
             'version': str(self.version)
         }
 
         if not no_config:
             save_dict.update({
-                'base_save_folder': str(self.base_save_folder),
-                'save_folder': str(self.save_folder)
+                'base_save_folder': pathToStr(self.base_save_folder),
+                'save_folder': pathToStr(self.save_folder)
             })
 
         return save_dict
@@ -117,11 +120,17 @@ class SimulationConfiguration:
             return False
 
         folder = settings.get('folder')
-        if not isinstance(folder, str) or not path.exists(folder):
+        if not isinstance(folder, str):
+            return False
+        folder = Path(folder)
+        if not folder.is_dir():
             return False
 
         binary = settings.get('binary')
-        if not isinstance(binary, str) or not path.exists(binary):
+        if not isinstance(binary, str):
+            return False
+        binary = Path(binary)
+        if not binary.is_file():
             return False
 
         version = settings.get('version')
@@ -129,12 +138,20 @@ class SimulationConfiguration:
             version = 'unknown'
 
         base_save_folder = settings.get('base_save_folder')
-        if not isinstance(base_save_folder, str) or not path.exists(base_save_folder):
-            base_save_folder = ''
+        if isinstance(base_save_folder, str):
+            base_save_folder = Path(base_save_folder)
+            if not base_save_folder.is_dir():
+                base_save_folder = None
+        else:
+            base_save_folder = None
 
         save_folder = settings.get('save_folder')
-        if not isinstance(save_folder, str) or not path.exists(save_folder):
-            save_folder = ''
+        if isinstance(save_folder, str):
+            save_folder = Path(save_folder)
+            if not save_folder.is_dir():
+                save_folder = None
+        else:
+            save_folder = None
 
         sc = SimulationConfiguration(title, program_idx, folder, binary, version)
         sc.base_save_folder = base_save_folder

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PyQt6.QtCore import QDir, QSettings, QLocale
 
 
@@ -14,7 +16,8 @@ class GlobalConf:
 
     # path of save folder
     save_path_name = 'save_path'
-    save_path = settings.value(save_path_name, defaultValue=f'{QDir.currentPath()}/saves', type=str)
+    save_path: Path = Path(settings.value(save_path_name, defaultValue=Path(QDir.currentPath()) / 'saves', type=str))
+    save_path_exists = bool(settings.value(save_path_name, defaultValue='', type=str))
 
     # language
     language = 'en'

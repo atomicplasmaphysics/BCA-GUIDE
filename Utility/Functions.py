@@ -1,7 +1,9 @@
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional
 from datetime import datetime
+from pathlib import Path
 from re import sub, findall
 import logging
+
 
 import numpy as np
 
@@ -102,6 +104,7 @@ def roundToStr(number: float) -> str:
     return f'{number:.2e}'
 
 
+# TODO: file = str | Path, match_file: str | Path
 def fileMatches(file: str, match_file: str) -> bool:
     """
     Returns True if file matches the match_file, otherwise False. Also supports wildcards (*) in match_file
@@ -148,6 +151,7 @@ def fileMatches(file: str, match_file: str) -> bool:
     return True
 
 
+# TODO: file = str | Path, files_list: List[str] | List[Path] | Generator[Path]
 def inFileList(file: str, files_list: List[str]) -> bool:
     """
     Returns True if file is in files_list, otherwise False. Also supports wildcards (*) in file_list
@@ -169,6 +173,7 @@ def inFileList(file: str, files_list: List[str]) -> bool:
     return False
 
 
+# TODO: file = str | Path, files_list: dict[str|Path, Any]
 def inFileDict(file: str, files_dict: dict) -> Union[Tuple[str, str], bool]:
     """
     Returns key-value-pair if file is in files_dict(key), otherwise False. Also supports wildcards (*) in files_dict
@@ -190,6 +195,7 @@ def inFileDict(file: str, files_dict: dict) -> Union[Tuple[str, str], bool]:
     return False
 
 
+# TODO: file = str | Path, files_list: List[str] | List[Path] | Generator[Path]
 def getFileNameFromFileList(file: str, files_list: List[str]) -> str:
     """
     Returns first filename in files_list that matches file. File supports wildcards (*)
@@ -213,6 +219,7 @@ def getFileNameFromFileList(file: str, files_list: List[str]) -> str:
     return ''
 
 
+# TODO: file = str | Path, files_list: List[str] | List[Path] | Generator[Path]
 def getFilesNameFromFileList(file: str, files_list: List[str]) -> List[str]:
     """
     Returns all filenames in files_list that matches file. File supports wildcards (*)
@@ -233,7 +240,7 @@ def getFilesNameFromFileList(file: str, files_list: List[str]) -> List[str]:
     return matches
 
 
-def fileToNpArray(filename, skip_header: int = 0, skip_footer: int = 0, usecols: Tuple[int, ...] = None, colum_required: int = None) -> np.ndarray:
+def fileToNpArray(filename: Path, skip_header: int = 0, skip_footer: int = 0, usecols: Optional[Tuple[int, ...]] = None, colum_required: Optional[int] = None) -> np.ndarray:
     """
     Use this function instead of numpy genfromtxt, since it is very slow. Reads file as numpy array.
 
@@ -318,7 +325,7 @@ def floatSafe(string: str, fallback: float = 0, log_warning: bool = False) -> fl
         return fallback
 
 
-def splitSafe(string: str, seperator: str = None, length: int = -1) -> Union[list, bool]:
+def splitSafe(string: str, seperator: Optional[str] = None, length: int = -1) -> Union[list, bool]:
     """
     Splits a string on a seperator. The resulting list should be of a specific length, otherwise False is returned
 
@@ -386,3 +393,49 @@ def setDictIfNotExists(dictionary: dict, key, value):
 
     if key not in dictionary.keys():
         dictionary[key] = value
+
+
+def readlines(file, *args, comments: Union[str, List[str], None] = None, strip_lines: bool = True, **kwargs) -> List[str]:
+    """
+    Reads lines from a text file and excludes lines that start with given comments
+
+    :param file: filepath
+    :param comments: comment(s) to be excluded
+    :param strip_lines: strip lines
+    :return: list of lines
+    """
+
+    if comments is None:
+        comments = []
+    elif isinstance(comments, str):
+        comments = [comments]
+
+    exclude_empty = False
+    if '' in comments:
+        exclude_empty = True
+        comments.remove('')
+
+    lines = []
+    with open(file, *args, **kwargs) as f:
+        for line in f.readlines():
+            if strip_lines:
+                line = line.strip()
+            if any(line.startswith(comment) for comment in comments):
+                continue
+            if exclude_empty and not line:
+                continue
+            lines.append(line)
+
+    return lines
+
+def pathToStr(path: Path | None) -> str:
+    """
+    Returns a stringified path
+
+    :param path: Path object or None
+    :return: stringified path or empty string
+    """
+
+    if isinstance(path, Path):
+        return str(path)
+    return ''

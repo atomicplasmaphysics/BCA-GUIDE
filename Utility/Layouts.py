@@ -1,14 +1,15 @@
 from __future__ import annotations
 from typing import Union, Optional, Tuple, List, Callable, Dict
+from pathlib import Path
 
 from Styles import Styles
 
-from PyQt6.QtCore import Qt, QSize, QRect
+from PyQt6.QtCore import Qt, QSize, QRect, QElapsedTimer
 from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette, QPixmap
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit,
+    QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QApplication
+    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle
 )
 
 import numpy as np
@@ -77,19 +78,19 @@ class InputHBoxLayouts(QHBoxLayout):
         self,
         label: str,
         widgets: Optional[List[QWidget]],
-        tooltip: str = None,
+        tooltip: Optional[str] = None,
         widgets_labels: Optional[List[str]] = None,
         widgets_tooltips: Optional[List[str]] = None,
         split: int = 50,
         disabled: bool = False,
         hidden: bool = False,
-        checkbox: bool = None,
+        checkbox: Optional[bool] = None,
         checkbox_connected: bool = True,
         **kwargs
     ):
         super().__init__(**kwargs)
 
-        self.checkbox = None
+        self.checkbox: Optional[QCheckBox] = None
         self.default_checkbox = checkbox
         self.label = None
         self.widgets = widgets
@@ -607,7 +608,7 @@ class FilePath(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
 
-        self.path = ''
+        self.path: Path | None = None
         self.ssh = False
 
         self.path_display = QLineEdit()
@@ -643,7 +644,7 @@ class FilePath(QWidget):
 
             self.button_ssh.clicked.connect(self.select_path_ssh)
 
-    def setPath(self, path: str, ssh: bool = False):
+    def setPath(self, path: Optional[Path], ssh: bool = False):
         """Sets a path and whether it is ssh"""
         self.path = path
         self.ssh = ssh
@@ -651,12 +652,12 @@ class FilePath(QWidget):
 
     def displayPath(self):
         """Displays the path in QLineEdit"""
-        if not self.path:
+        if self.path is None or not self.path:
             self.path_display.setText('')
             return
 
         if self.function_ssh is None:
-            self.path_display.setText(self.path)
+            self.path_display.setText(str(self.path))
         else:
             prefix = 'ssh' if self.ssh else 'local'
             self.path_display.setText(f'{prefix}: {self.path}')
@@ -774,6 +775,184 @@ class VBoxTitleLayout(QVBoxLayout):
         else:
             self.title.setText(self.title_str)
             self.title.setStyleSheet(self.title_style)
+
+
+class ProgressTabBar(QTabBar):
+    """
+    Extension of QTabBar to introduce a progress bar at the bottom
+
+    :param parent: parent widget
+    :param color: color of progress bar
+    :param color_alpha: alpha of progress bar
+    :param padding_x: padding in both x directions
+    :param fraction_height: height fraction of progress bar
+    """
+
+    def __init__(
+        self,
+        parent,
+        color: QColor = QColor(Styles.green_hex),
+        color_alpha: float = 0.5,
+        padding_x: int = 5,
+        fraction_height: float = 1/8
+    ):
+        super().__init__(parent)
+
+        self.color = color
+        self.color_alpha = color_alpha
+        self.padding_x = padding_x
+        self.fraction_height = fraction_height
+
+        self.color.setAlphaF(self.color_alpha)
+
+        self.progress = {}
+
+    def setProgress(self, index: int, value: int):
+        """
+        Set progress for a specific tab
+
+        :param index: index of tab
+        :param value: percentage between 0 and 100
+        """
+
+        self.progress[index] = max(0, min(100, value)) / 100
+        self.update()
+
+    def paintEvent(self, event):
+        """Custom paint event to draw a progress bar"""
+
+        painter = QStylePainter(self)
+        option = QStyleOptionTab()
+
+        for index in range(self.count()):
+            self.initStyleOption(option, index)
+
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTabShape, option)
+            progress = self.progress.get(index, 0.0)
+            if progress > 0:
+                rect = self.tabRect(index)
+                progress_height = int(rect.height() * self.fraction_height)
+                painter.fillRect(QRect(
+                    rect.x() + self.padding_x,
+                    rect.y() + rect.height() - progress_height,
+                    int((rect.width() - 2 * self.padding_x) * progress),
+                    progress_height
+                ), self.color)
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTabLabel, option)
+
+
+class TimeProgressBar(QProgressBar):
+    """
+    Extension of QProgressBar to display elapsed and remaining time
+    Progress bar ranges from 0 to 100
+
+    :param parent: parent widget
+    :param shadow_size: size of shadow
+    """
+
+    def __init__(
+        self,
+        parent,
+        shadow_size: int = 2
+    ):
+        super().__init__(parent)
+
+        self.shadow_size = shadow_size
+
+        self.setRange(0, 100)
+        self.val = 0
+        self.setTextVisible(False)
+
+        self.elapsed_timer = QElapsedTimer()
+        self.elapsed_timer_final = 0
+        self.elapsed_timer_started = False
+        self.elapsed_timer_ended = False
+
+    def startTiming(self):
+        """Resets value to 0 and starts timer"""
+
+        self.elapsed_timer.restart()
+        self.elapsed_timer_final = 0
+        self.elapsed_timer_started = True
+        self.elapsed_timer_ended = False
+        self.setValue(0)
+
+    def stopTiming(self):
+        """Stops timer"""
+        if self.elapsed_timer_ended:
+            return
+        self.elapsed_timer_ended = True
+        self.elapsed_timer_final = self.elapsed_timer.elapsed()
+        self.setValue(100)
+
+    @staticmethod
+    def formatTime(seconds: float) -> str:
+        """
+        Returns formatted time string
+
+        :param seconds: time in seconds
+        """
+
+        seconds = int(seconds)
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+
+        if hours:
+            return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+        return f'{minutes:02d}:{seconds:02d}'
+
+    def value(self) -> float:
+        """Returns value of progress bar as float"""
+        return self.val
+
+    def setValue(self, value: float):
+        """
+        Sets value of progress bar as float
+
+        :param value: value to set as float
+        """
+
+        self.val = value
+        super().setValue(int(value))
+
+    def paintEvent(self, event):
+        """Custom paint event to draw a progress bar"""
+
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+        elapsed = self.elapsed_timer_final / 1000 if self.elapsed_timer_ended else self.elapsed_timer.elapsed() / 1000
+
+        texts = [
+            (f'{self.val:.0f}%', Qt.AlignmentFlag.AlignHCenter)
+        ]
+
+        if self.elapsed_timer_started:
+            if self.val > 0:
+                remaining = max(0, elapsed * (100 / self.val - 1))
+                remaining_text = f'~{self.formatTime(remaining)}'
+            else:
+                remaining_text = '--:--'
+            texts.append((self.formatTime(elapsed), Qt.AlignmentFlag.AlignLeft))
+
+            if not self.elapsed_timer_ended:
+                texts.append((remaining_text, Qt.AlignmentFlag.AlignRight))
+
+        # shadow
+        for text, alignment in texts:
+            for dx in range(-self.shadow_size, self.shadow_size + 1):
+                for dy in range(-self.shadow_size, self.shadow_size + 1):
+                    painter.setPen(QColor(0, 0, 0, int(255 * (1 - abs(dx) / self.shadow_size))))
+                    painter.drawText(self.rect().adjusted(dx, dy, dx, dy), alignment | Qt.AlignmentFlag.AlignVCenter, text)
+
+        # text
+        painter.setPen(self.palette().color(QPalette.ColorRole.Text))
+        for text, alignment in texts:
+            painter.drawText(self.rect(), alignment | Qt.AlignmentFlag.AlignVCenter, text)
+
+        painter.end()
 
 
 class ListWidgetItem(QListWidgetItem):
@@ -1163,7 +1342,6 @@ class NoMessageToolbar(NavigationToolbar2QT):
 
         self.canvas.axes.view_init(self.canvas.elev, self.canvas.azim, self.canvas.roll)
         self.canvas.draw_idle()
-
 
 
 class TargetPreview(QWidget):

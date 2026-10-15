@@ -1,11 +1,14 @@
 from typing import List
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir, QPoint
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
 from GlobalConf import GlobalConf
+
 from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
+from Utility.Layouts import ProgressTabBar
 
 from Pages.ConfigurationPage import ConfigurationPage
 from Pages.ProgramPage import SimulationPage
@@ -127,7 +130,7 @@ class MainWindow(QMainWindow):
         self.menu_help.setToolTipsVisible(True)
 
         # Manual
-        self.manual_path = QDir.currentPath()
+        self.manual_path = Path(QDir.currentPath())
         self.action_manual = self.menu_help.addAction(QIcon(':/icons/book.png'), 'Manual')
         self.action_manual.triggered.connect(lambda: self.openUserManual())
 
@@ -154,6 +157,8 @@ class MainWindow(QMainWindow):
         #
 
         self.tab_simulations = QTabWidget(self)
+        self.tab_bar_simulations = ProgressTabBar(self)
+        self.tab_simulations.setTabBar(self.tab_bar_simulations)
         self.tab_simulations.currentChanged.connect(lambda index: self.tabChanged(index))
         self.setCentralWidget(self.tab_simulations)
 
@@ -242,7 +247,11 @@ class MainWindow(QMainWindow):
         title = sc.title
         if sc.running:
             title = f'{title} ⧖'
-        elif sc.unsaved_changes:
+            self.tab_bar_simulations.setProgress(index, sc.progress)
+        else:
+            self.tab_bar_simulations.setProgress(index, 0)
+
+        if sc.unsaved_changes:
             title = f'{title} *'
         self.tab_simulations.setTabText(index, title)
 
@@ -444,7 +453,7 @@ class MainWindow(QMainWindow):
     def openUserManual(self):
         """Opens the user-manual of the GUI"""
 
-        url = QUrl.fromLocalFile(f'{self.manual_path}/BCA-GUIDE_manual.pdf')
+        url = QUrl.fromLocalFile(str(self.manual_path / 'BCA-GUIDE_manual.pdf'))
         opened = QDesktopServices.openUrl(url)
 
         # if failed to open, try to download it

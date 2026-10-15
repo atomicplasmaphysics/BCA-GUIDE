@@ -15,31 +15,32 @@
 
 import sys
 from os import path, remove, listdir
+from pathlib import Path
 from shutil import move, rmtree
 from inspect import getfile, currentframe
 from platform import system
 
 import PyInstaller.__main__
 
-current_dir = path.dirname(path.abspath(getfile(currentframe())))
-parent_dir = path.dirname(current_dir)
+current_dir = Path(path.dirname(path.abspath(getfile(currentframe()))))
+parent_dir = Path(path.dirname(current_dir))
 sys.path.insert(0, parent_dir)
 
 
 import GlobalConf
 
-dist_path = f'{current_dir}/dist'
-build_path = f'{current_dir}/build'
+dist_path = current_dir / 'dist'
+build_path = current_dir / 'build'
 
 
 def clearFiles():
     """ Remove files (build- and dist-directories and any *.spec files) """
-    directories = [f'{current_dir}/build', f'{current_dir}/dist']
+    directories = [build_path, dist_path]
     for directory in directories:
         if path.exists(directory):
             rmtree(directory)
     files = listdir(current_dir)
-    files = [f'{current_dir}/{file}' for file in files if file.endswith('.spec')]
+    files = [current_dir / file for file in files if file.endswith('.spec')]
     for file in files:
         remove(file)
 
@@ -63,12 +64,12 @@ else:
     exe_name += f'_{system_name.lower()}.exe'
 divider = ';' if system_name == 'Windows' else ':'
 pyinstaller_parameters = [
-    f'{parent_dir}/main.py',
-    f'--icon={parent_dir}/icons/tu_logo.ico',
+    parent_dir / 'main.py',
+    f'--icon={parent_dir / 'icons' / 'tu_logo.ico'}',
     f'--name={exe_name}',
     '--windowed',
     '--clean',
-    f'--add-data={parent_dir}/Simulations/{divider}Simulations/',
+    f'--add-data={parent_dir / 'Simulations' / divider / 'Simulations' / ''}',
     '--onefile',
     f'--distpath={dist_path}',
     f'--workpath={build_path}'
@@ -78,8 +79,8 @@ pyinstaller_parameters.extend([f'--hidden-import={hidden}' for hidden in hidden_
 
 PyInstaller.__main__.run(pyinstaller_parameters)
 
-if path.exists(f'{current_dir}/dist/{exe_name}'):
-    move(f'{current_dir}/dist/{exe_name}', f'{parent_dir}/{exe_name}')
+if path.exists(dist_path / exe_name):
+    move(dist_path / exe_name, parent_dir / exe_name)
     clearFiles()
     print('\n\nSUCCESSFULLY created executable file ')
 

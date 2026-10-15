@@ -1,3 +1,6 @@
+from typing import Optional
+from pathlib import Path
+
 from urllib.parse import urlparse
 from urllib.request import urlretrieve
 
@@ -15,8 +18,10 @@ from Simulations.SimulationsList import SimulationsList
 
 from Utility.Layouts import InputHBoxLayout, FilePath
 
+from Utility.Functions import pathToStr
 
-def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: str, file_filter: str = ''):
+
+def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: Path | None, file_filter: str = '') -> Optional[Path]:
     """
     Dialog window for selecting a file
 
@@ -28,14 +33,14 @@ def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: str,
     """
 
     if for_saving:
-        full_file_path, _ = QFileDialog.getSaveFileName(parent, instruction, start_dir, file_filter)
+        full_file_path, _ = QFileDialog.getSaveFileName(parent, instruction, pathToStr(start_dir), file_filter)
     else:
-        full_file_path, _ = QFileDialog.getOpenFileName(parent, instruction, start_dir, file_filter)
+        full_file_path, _ = QFileDialog.getOpenFileName(parent, instruction, pathToStr(start_dir), file_filter)
 
     file_name = QFileInfo(full_file_path).baseName()
     if len(file_name) == 0:
         return None
-    return full_file_path
+    return Path(full_file_path)
 
 
 def showMessageBox(parent, icon, window_title: str, text: str, info_message: str = '', detailed_message: str = '',
@@ -82,7 +87,7 @@ class DownloadDialog(QDialog):
     :param expected_file_size: (optional) expected file size in bytes; needed for progressbar if total file size can not be determined on download
     """
 
-    def __init__(self, parent, url: str, path: str, name: str, expected_file_size: int = -1):
+    def __init__(self, parent, url: str, path: Path, name: str, expected_file_size: int = -1):
         super().__init__(parent)
 
         self.url = url
@@ -119,7 +124,7 @@ class DownloadDialog(QDialog):
         self.hlFolder = QHBoxLayout()
         self.openFolder = QPushButton('Open folder', self)
         self.openFolder.setToolTip('Open the default documentation folder in the file explorer')
-        self.openFolder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(self.path)))
+        self.openFolder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.path))))
         self.hlFolder.addWidget(self.openFolder)
         self.hlFolder.addStretch(1)
         self.layout.addLayout(self.hlFolder)
@@ -143,7 +148,7 @@ class DownloadDialog(QDialog):
 
     def tryDownloadFile(self):
         """Tries to download the file"""
-        urlretrieve(self.url, f'{self.path}/{self.name}', reporthook=self.updateProgress)
+        urlretrieve(self.url, self.path / self.name, reporthook=self.updateProgress)
         self.downloadProgress.setValue(100)
 
 
@@ -354,11 +359,10 @@ class PreferencesDialog(QDialog):
     def selectSaveFolder(self):
         """Select a default save folder"""
 
-        start_dir = GlobalConf.save_path
-        folder_dir = QFileDialog.getExistingDirectory(self, 'Select the default save folder', start_dir)
+        folder_dir = QFileDialog.getExistingDirectory(self, 'Select the default save folder', pathToStr(GlobalConf.save_path))
 
         if folder_dir:
-            self.save_path.setPath(folder_dir)
+            self.save_path.setPath(Path(folder_dir))
 
     def updatePreferences(self):
         """Updates all preferences"""

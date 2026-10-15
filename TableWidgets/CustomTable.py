@@ -51,7 +51,7 @@ class CustomRow(QObject):
 
     def __init__(self):
         super().__init__()
-        self.remove = QPushButton(QIcon(':/icons/delete.png'), '')
+        self.remove = QPushButton(QIcon(':/icons/close.png'), '')
         self.remove.setFixedSize(30, 30)
         self.remove.setAutoDefault(False)
         # Center the remove button by surrounding it with two stretches inside a horizontal layout
@@ -133,7 +133,7 @@ class CustomTable(QTableWidget):
         self.setCellWidget(0, 0, self.add_button)
         self.setSpan(0, 0, 1, len(self.header_labels))
 
-    def createRow(self, row_idx: int):
+    def createRow(self, row_idx: int) -> CustomRow:
         """
         Create row with index
 
@@ -142,7 +142,7 @@ class CustomTable(QTableWidget):
 
         raise NotImplementedError('Must override createRow()')
 
-    def addRow(self, update: bool = True, connect: bool = True):
+    def addRow(self, update: bool = True, connect: bool = True) -> CustomRow:
         """
         Add a new row
 

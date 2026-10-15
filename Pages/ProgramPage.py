@@ -1,21 +1,22 @@
 from __future__ import annotations
-from typing import List, Union, TYPE_CHECKING
+from typing import List, Union, Optional, Tuple, TYPE_CHECKING
 from enum import Enum, auto
 from platform import system
 from os import chdir
+from pathlib import Path
+from shutil import copy2
 from sys import exit
 from locale import getpreferredencoding
 from re import sub
-from subprocess import Popen, getstatusoutput
+from subprocess import Popen, getstatusoutput, CREATE_NEW_CONSOLE
 import logging
 
 
-from PyQt6.QtCore import Qt, QUrl, QDir, QFile, QFileInfo, QProcess, QTimer
+from PyQt6.QtCore import Qt, QUrl, QDir, QFile, QProcess, QTimer
 from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices, QPalette, QColor
 from PyQt6.QtWidgets import (
-    QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox,
-    QSizePolicy, QPushButton, QListWidget, QAbstractItemView, QProgressBar,
-    QMessageBox, QFileDialog, QScrollArea, QApplication
+    QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton,
+    QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication
 )
 
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
@@ -25,11 +26,11 @@ from Styles import Styles
 
 from Utility.Layouts import (
     TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview,
-    CrystalPreview
+    CrystalPreview, TimeProgressBar
 )
 from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
-from Utility.Functions import alphanumeric, inFileList, inFileDict
+from Utility.Functions import alphanumeric, inFileList, inFileDict, pathToStr
 from Utility.ModifyWidget import setWidgetHighlight
 
 from TableWidgets.CompTable import CompRow, CompTable, CompTableTarget
@@ -100,7 +101,7 @@ class SimulationPage(TabWithToolbar):
             exit('Provided evaluation class is not a <SimulationsOutput> class')
 
         if not self.simulation_configuration.base_save_folder:
-            self.simulation_configuration.base_save_folder = f'{GlobalConf.save_path}/{self.simulation_class.SaveFolder}'
+            self.simulation_configuration.base_save_folder = GlobalConf.save_path / self.simulation_class.SaveFolder
         self.run_status = SimulationPage.RunStatus.READY
 
         # update element data
@@ -166,7 +167,7 @@ class SimulationPage(TabWithToolbar):
         self.action_import.triggered.connect(lambda: self.importSettings())
 
         # Save
-        self.action_save = self.toolbar.addAction(QIcon(':/icons/save_new.png'), 'Save')
+        self.action_save = self.toolbar.addAction(QIcon(':/icons/save.png'), 'Save')
         self.action_save.setToolTip('<b>Save</b> the current settings of this simulation-tab to a simulation-tab input file')
         self.action_save.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_S))
         self.action_save.setEnabled(False)
@@ -210,7 +211,7 @@ class SimulationPage(TabWithToolbar):
         self.action_run.triggered.connect(lambda: self.runSimulation())
 
         # Run progress bar
-        self.run_progress = QProgressBar(self)
+        self.run_progress = TimeProgressBar(self)
         self.run_progress.setToolTip('The progress of the simulation')
         self.run_progress.setMinimumWidth(50)
         self.run_progress.setMaximumWidth(400)
@@ -925,6 +926,9 @@ class SimulationPage(TabWithToolbar):
         :param detached: (optional) if simulation should run in a detached window
         """
 
+        if not self.simulation_configuration.save_folder:
+            return
+
         # save files
         input_files = self.saveSettings()
         if not input_files:
@@ -932,11 +936,10 @@ class SimulationPage(TabWithToolbar):
         input_file = input_files[1]
 
         # delete all files except input files
-        files = []
-        for file in QDir(self.simulation_configuration.save_folder).entryInfoList(filters=QDir.Filter.Files):
-            file_name = file.fileName()
-            if not inFileList(file_name, input_files):
-                files.append(file)
+        files = [
+            file for file in self.simulation_configuration.save_folder.iterdir()
+            if file.is_file() and file.name not in input_files
+        ]
 
         if files and not GlobalConf.skip_delete_info:
             msg_box, result = showMessageBox(
@@ -945,7 +948,7 @@ class SimulationPage(TabWithToolbar):
                 'Attention!',
                 'Files in the working directory will be deleted',
                 info_message=f'In order to run the simulation, all non-input files in the working directory<br><br>{self.simulation_configuration.save_folder}<br><br>will be deleted automatically.',
-                detailed_message='Affected files:\n\n' + '\n'.join([file.fileName() for file in files]),
+                detailed_message='Affected files:\n\n' + '\n'.join(file.name for file in files),
                 standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
                 check_box_text='Do not show again'
             )
@@ -955,7 +958,7 @@ class SimulationPage(TabWithToolbar):
                 GlobalConf.skip_delete_info = True
 
         for file in files:
-            QFile(file.filePath()).remove()
+            file.unlink(missing_ok=True)
 
         # change working directory
         chdir(self.simulation_configuration.save_folder)
@@ -974,7 +977,8 @@ class SimulationPage(TabWithToolbar):
 
         if not detached:
             self.setProcessWidgetsEnabled(False)
-            self.run_progress.setValue(0)
+            self.run_progress.startTiming()
+            self.setProgressStatus(0)
             self.update_simulation_data.start(1000)
 
             # reset process
@@ -983,14 +987,14 @@ class SimulationPage(TabWithToolbar):
 
             # pipe in file if needed
             if qpipe:
-                self.process.setStandardInputFile(f'{self.simulation_configuration.save_folder}/{input_file}')
+                self.process.setStandardInputFile(pathToStr(self.simulation_configuration.save_folder / input_file))
             self.process.setProgram(qcmd)
             self.process.start()
 
         else:
             if system() == 'Windows':
-                cmd = f'start /wait cmd /k "{cmd}"'
-                Popen(cmd, shell=True)
+                # TODO: this does not work - fuck
+                Popen(['cmd', '/k', cmd], creationflags=CREATE_NEW_CONSOLE)
 
             elif system() == 'Linux':
                 terminal_cmds = [
@@ -1018,7 +1022,7 @@ class SimulationPage(TabWithToolbar):
 
             elif system() == 'Darwin':
                 cmd = f'''
-dir='{self.simulation_configuration.save_folder}'
+dir='{pathToStr(self.simulation_configuration.save_folder)}'
 cmd='{cmd}'
 osascript - "$dir" "$cmd" << EOF
     on run argv
@@ -1110,7 +1114,7 @@ EOF
         # reset file previews
         self.makePreview()
 
-    def loadSettings(self, path: Union[str, bool] = False, from_json: bool = True, unsaved_warning: bool = True) -> bool:
+    def loadSettings(self, path: Union[Path, None] = None, from_json: bool = True, unsaved_warning: bool = True) -> bool:
         """Loads settings and returns if it was successful"""
 
         # check for unsaved changes
@@ -1132,8 +1136,8 @@ EOF
                     return False
 
         # check if provided path should be loaded
-        if isinstance(path, str):
-            if not QDir().exists(path):
+        if isinstance(path, Path):
+            if not path.exists():
                 showMessageBox(
                     self,
                     QMessageBox.Icon.Warning,
@@ -1146,25 +1150,25 @@ EOF
 
         else:
             # create base save folder if it does not exist
-            QDir().mkpath(self.simulation_configuration.base_save_folder)
+            path = GlobalConf.save_path if GlobalConf.save_path and GlobalConf.save_path.is_dir() else self.simulation_configuration.base_save_folder
+            QDir().mkpath(str(path))
 
             file = selectFileDialog(
                 self,
                 False,
                 f'Load input file "{self.simulation_class.InputFilename}"',
-                self.simulation_configuration.base_save_folder,
+                path,
                 file_filter=f'Input files ({self.simulation_class.InputFilename})'
             )
-            folder = QFileInfo(file).canonicalPath()
-
-            if len(folder) == 0:
+            if file is None:
                 self.main_window.writeStatusBar('Loading aborted')
                 return False
-            self.simulation_configuration.save_folder = folder
+
+            self.simulation_configuration.save_folder = file.resolve().parent
 
         # name of save folder
-        save_folder_parts = self.simulation_configuration.save_folder.split('/')
-        if save_folder_parts:
+        if self.simulation_configuration.save_folder is not None:
+            save_folder_parts = self.simulation_configuration.save_folder.parts
             self.working_dir.setText(f'{save_folder_parts[-1]}')
 
         # update parameter lists
@@ -1175,7 +1179,7 @@ EOF
         arguments: Union[bool, str, SimulationArguments] = False
         json_loaded = False
         if from_json:
-            arguments = loadSimulationArguments(f'{self.simulation_configuration.save_folder}/input.json')
+            arguments = loadSimulationArguments(self.simulation_configuration.save_folder / 'input.json')
             if arguments:
                 json_loaded = True
 
@@ -1292,7 +1296,8 @@ EOF
             return False
 
         # select folder where imported file should be saved
-        QDir().mkpath(self.simulation_configuration.base_save_folder)
+        path = GlobalConf.save_path if GlobalConf.save_path else self.simulation_configuration.base_save_folder
+        QDir().mkpath(pathToStr(path))
 
         result = None
         folder = ''
@@ -1300,7 +1305,7 @@ EOF
             folder = QFileDialog.getExistingDirectory(
                 self,
                 'Select the folder where the imported files should be saved',
-                self.simulation_configuration.base_save_folder
+                path
             )
 
             if len(folder) == 0:
@@ -1323,8 +1328,8 @@ EOF
         self.simulation_configuration.save_folder = folder
 
         # copy input.json file
-        save_file_json = f'{self.simulation_configuration.save_folder}/input.json'
-        if QFile.exists(save_file_json):
+        save_file_json = self.simulation_configuration.save_folder / 'input.json'
+        if save_file_json.exists():
             QFile.remove(save_file_json)
         QFile().copy(import_file, save_file_json)
         self.main_window.writeStatusBar('Import successful')
@@ -1333,9 +1338,9 @@ EOF
         self.loadSettings(self.simulation_configuration.save_folder)
         return True
 
-    def saveSettings(self, new_folder: bool = False) -> Union[List[str], bool]:
+    def saveSettings(self, new_folder: bool = False) -> Optional[List[str]]:
         """
-        Saves settings and return list of created input files successful or False if not
+        Saves settings and return list of created input files if successful
 
         :param new_folder: create a new folder
         """
@@ -1356,7 +1361,7 @@ EOF
                 'Warning!',
                 'All elements must be defined in order to save the input file'
             )
-            return False
+            return None
 
         # check if crystal is fully defined
         if self.crystal_editor_button.isVisible() and self.crystal_editor_dialog.undefined_state:
@@ -1366,33 +1371,37 @@ EOF
                 'Warning!',
                 'Crystal must be defined in order to save the input file'
             )
-            return False
-
-        # create base save folder if it does not exist
-        QDir().mkpath(self.simulation_configuration.base_save_folder)
+            return None
 
         # check if save_folder exists if set
-        if self.simulation_configuration.save_folder:
-            if not QDir(self.simulation_configuration.save_folder).exists():
-                self.simulation_configuration.save_folder = ''
+        if self.simulation_configuration.save_folder and not self.simulation_configuration.save_folder.is_dir():
+                self.simulation_configuration.save_folder = None
 
         # check if save folder is set and let user set it if it does not exist
         if not self.simulation_configuration.save_folder or new_folder:
+
+            # create base save folder if it does not exist
+            path = self.simulation_configuration.base_save_folder if self.simulation_configuration.base_save_folder else GlobalConf.save_path
+            path.mkdir(parents=True, exist_ok=True)
+
             result = None
             folder = ''
+
             while result != QMessageBox.StandardButton.Yes:
                 folder = QFileDialog.getExistingDirectory(
                     self,
                     'Select the folder where the files will be saved',
-                    self.simulation_configuration.base_save_folder
+                    pathToStr(path)
                 )
 
                 if len(folder) == 0:
                     self.main_window.writeStatusBar('Saving aborted')
-                    return False
+                    return None
+
+                folder = Path(folder)
 
                 # check if folder contains no files
-                if not any([file_info.isFile() for file_info in QDir(folder).entryInfoList()]):
+                if not folder.exists() or not any(file.is_file() for file in folder.iterdir()):
                     break
 
                 _, result = showMessageBox(
@@ -1400,48 +1409,51 @@ EOF
                     QMessageBox.Icon.Warning,
                     'Warning!',
                     'This folder already contains files',
-                    info_message=f'Do you want to save the settings in\n"{folder}"?',
+                    info_message=f'Do you want to save the settings in\n"{pathToStr(folder)}"?',
                     standard_buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
 
-            self.simulation_configuration.save_folder = folder
+            self.simulation_configuration.save_folder = Path(folder)
 
         # copy all files into new folder
-        if new_folder:
-            files_info = QDir(old_save_folder).entryInfoList()
-            for file_info in files_info:
-                QFile(file_info.canonicalFilePath()).copy(f'{self.simulation_configuration.save_folder}/{file_info.fileName()}')
+        if new_folder and old_save_folder:
+            for file in old_save_folder.iterdir():
+                if file.is_file():
+                    copy2(file, self.simulation_configuration.save_folder / file.name)
 
         # save json simulation output
-        saveSimulationArguments(arguments, f'{self.simulation_configuration.save_folder}/input.json')
+        saveSimulationArguments(arguments, self.simulation_configuration.save_folder / 'input.json')
         filelist = ['input.json', file_name_input, file_name_crystal]
 
-        # save input and layer input (or remove if not needed)
-        path_input = f'{self.simulation_configuration.save_folder}/{file_name_input}'
-        path_layer = f'{self.simulation_configuration.save_folder}/{file_name_layer}'
+        # save input
+        path_input = self.simulation_configuration.save_folder / file_name_input
         with open(path_input, 'w', encoding='utf-8') as file:
             file.write(input_text)
 
-        # save crystal input (or remove if not needed) Simon 07.08.24
-        if crystal_text:
-            path_crystal = f'{self.simulation_configuration.save_folder}/{file_name_crystal}'
-            with open(path_crystal, 'w', encoding='utf-8') as file:
-                file.write(crystal_text)
-
-        if layer_text is not False:
+        # save layer input (or remove if not needed)
+        path_layer = self.simulation_configuration.save_folder / file_name_layer
+        if layer_text is not None:
             with open(path_layer, 'w', encoding='utf-8') as file:
                 file.write(layer_text)
             filelist.append(file_name_layer)
+        else:
+            path_layer.unlink(missing_ok=True)
 
-        elif QFile(path_layer).exists():
-            QFile(path_layer).remove()
+        # save crystal input (or remove if not needed)
+        # TODO: change for later SDtrimSP versions!
+        path_crystal = self.simulation_configuration.save_folder / file_name_crystal
+        if crystal_text is not None:
+            with open(path_crystal, 'w', encoding='utf-8') as file:
+                file.write(crystal_text)
+        else:
+            path_crystal.unlink(missing_ok=True)
 
         # open file
         if new_folder:
             self.loadSettings(self.simulation_configuration.save_folder, unsaved_warning=False)
 
         # update wording directory text
-        save_folder_parts = self.simulation_configuration.save_folder.split('/')
+        save_folder_parts = self.simulation_configuration.save_folder.parts
         self.working_dir.setText(f'{save_folder_parts[-1]}')
 
         # enable save as option
@@ -1453,11 +1465,11 @@ EOF
 
         return filelist
 
-    def makePreview(self):
+    def makePreview(self) -> Tuple[SimulationArguments, str, Optional[str], Optional[str]]:
         """
         Makes preview of the input and layer file
 
-        :return: input_file as string, layer_file as string if should be created or False
+        :return: input_file as string, layer_file as string if should be created or None, crystal_file as string if should be created or None
         """
 
         arguments = self.makeArguments()
@@ -1482,7 +1494,7 @@ EOF
         self.layer_file_preview.setPlainText(layer_file)
         self.crystal_file_preview.setPlainText(crystal_file)
 
-        return arguments, input_file, layer_file if create_layer_file else False, crystal_file if create_crystal_file else False
+        return arguments, input_file, layer_file if create_layer_file else None, crystal_file if create_crystal_file else None
 
     def makeArguments(self) -> SimulationArguments:
         """Returns <SimulationArguments> container with current parameters"""
@@ -1598,6 +1610,16 @@ EOF
         self.run_status_text.setStyleSheet(Styles.status_text_style + color_style)
         self.run_status_text.setToolTip(tooltip)
 
+    def setProgressStatus(self, progress: int):
+        """
+        Change progress of simulation page
+
+        :param progress: progress of simulation
+        """
+
+        self.simulation_configuration.progress = progress
+        self.main_window.simChanged(self.simulation_configuration)
+
     def processStarted(self):
         """Called when process of simulation is started"""
 
@@ -1624,10 +1646,10 @@ EOF
                 4: 'QProcess::ReadError',
                 5: 'QProcess::UnknownError'
             }
-            error = errors.get(error)
+            error = errors.get(error, 'unknown error')
 
         self.main_window.writeStatusBar(f'{self.simulation_configuration.program_name} ERROR: {error}')
-        self.simulation_output.appendPlainText(f'\n\nAn error occurred: {error}')
+        self.simulation_output.appendPlainText(f'\n\nAn error occurred: "{error}" with description: {self.process.errorString()}')
         self.setRunStatus(SimulationPage.RunStatus.ERROR)
 
         self.setProcessWidgetsEnabled(True)
@@ -1650,6 +1672,7 @@ EOF
         else:
             result = f'error with exit code: {exit_code}'
             status = SimulationPage.RunStatus.ERROR
+            self.simulation_output.appendPlainText(f'\n\nExit code: "{exit_code}"')
 
         self.main_window.writeStatusBar(f'{self.simulation_configuration.program_name} simulation {result}')
         self.setRunStatus(status)
@@ -1673,7 +1696,8 @@ EOF
         """Stops the simulation timer"""
 
         self.update_simulation_data.stop()
-        self.run_progress.setValue(100)
+        self.run_progress.stopTiming()
+        self.setProgressStatus(100)
         self.updateOutputFilesList()
         self.updateOutputParametersList(forced=True, in_loop=True)
 
@@ -1687,6 +1711,7 @@ EOF
         )
         if percent >= 0:
             self.run_progress.setValue(percent)
+            self.setProgressStatus(percent)
 
     def updateOutputFilesList(self):
         """Update list of output files"""
@@ -1716,15 +1741,17 @@ EOF
         skipped_files = ['input.json']
         skipped_files.extend(self.simulation_class.SkipList)
 
-        for file in QDir(self.simulation_configuration.save_folder).entryInfoList(filters=QDir.Filter.Files):
-            file_name = file.fileName()
-            if inFileList(file_name, skipped_files):
+        for file in self.simulation_configuration.save_folder.iterdir():
+            if not file.is_file():
                 continue
 
-            self.output_files_list.addItem(file.fileName())
+            if inFileList(file.name, skipped_files):
+                continue
+
+            self.output_files_list.addItem(file.name)
             item = self.output_files_list.item(self.output_files_list.count() - 1)
 
-            tooltip = inFileDict(file.fileName(), self.simulation_class.OutputTooltips)
+            tooltip = inFileDict(file.name, self.simulation_class.OutputTooltips)
             if tooltip is not False:
                 item.setToolTip(tooltip[1])
 
@@ -1735,7 +1762,8 @@ EOF
     def previewSelectedFile(self):
         """Preview the selected file"""
 
-        if self.outputFilePreview.verticalScrollBar().isSliderDown():
+        vertical_scrollbar = self.outputFilePreview.verticalScrollBar()
+        if vertical_scrollbar and vertical_scrollbar.isSliderDown():
             return
 
         selected_items = self.output_files_list.selectedItems()
@@ -1744,15 +1772,19 @@ EOF
             self.outputFilePreview.clear()
             return
 
-        file_path = f'{self.simulation_configuration.save_folder}/{selected_items[0].text()}'
+        if not self.simulation_configuration.save_folder:
+            return
+
+        file_path = self.simulation_configuration.save_folder / selected_items[0].text()
+        file_content = ''
         try:
             with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
                 file_content = file.read()
 
         except FileNotFoundError:
-            logging.info(f'Could not open file "{file_path}"!')
+            logging.info(f'Could not open file "{pathToStr(file_path)}"!')
             self.outputFilePreview.clear()
-            self.main_window.writeStatusBar(f'Failed to preview file "{file_path}"')
+            self.main_window.writeStatusBar(f'Failed to preview file "{pathToStr(file_path)}"')
             self.open_output_file_button.setEnabled(False)
             self.outputFilePreview.setPlainText('(-- FILE DOES NOT EXIST, PLEASE REFRESH LIST OF FILES --)')
             return
@@ -1828,7 +1860,7 @@ EOF
 
         # clear parameter list and plot window
         self.output_parameters_list.clear()
-        if not QDir().exists(self.simulation_configuration.save_folder):
+        if not self.simulation_configuration.save_folder or not self.simulation_configuration.save_folder.exists():
             return
         self.evaluation_class.listParameters(self.simulation_configuration.save_folder, self.output_parameters_list)
 
@@ -1863,7 +1895,7 @@ EOF
             self,
             True,
             'Save plot data as...',
-            f'{self.simulation_configuration.save_folder}/{title}.txt',
+            self.simulation_configuration.save_folder / f'{title}.txt',
             'Text files (*.txt)'
         )
         if file_path is None:

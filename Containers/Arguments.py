@@ -1,4 +1,5 @@
 from typing import List, Union
+from pathlib import Path
 from enum import Enum, auto
 from json import dump as json_dump, JSONEncoder, load as json_load
 from json.decoder import JSONDecodeError
@@ -447,7 +448,7 @@ class ArgumentEncoderJSON(JSONEncoder):
         return obj_dict
 
 
-def saveSimulationArguments(arguments: SimulationArguments, file: str):
+def saveSimulationArguments(arguments: SimulationArguments, file: Path):
     """
     Save all simulation arguments to file
 
@@ -480,7 +481,7 @@ def saveSimulationArguments(arguments: SimulationArguments, file: str):
         json_dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
 
 
-def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
+def loadSimulationArguments(file: Path) -> Union[bool, SimulationArguments]:
     """
     Load all simulation arguments from file
 
@@ -531,12 +532,12 @@ def loadSimulationArguments(file: str) -> Union[bool, SimulationArguments]:
             return default_value
         return getattr(cls, value, default_value)
 
-    # Try to read from json file
+    # Try to read from JSON file
     try:
         with open(file, 'r', encoding='utf-8', errors='replace') as conf_file:
             data = json_load(conf_file)
     except (FileNotFoundError, JSONDecodeError):
-        logging.info(f'Could not open file "{file}"!')
+        logging.info(f'Could not open json input file "{file}"!')
         return False
 
     # general data

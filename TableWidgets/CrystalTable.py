@@ -232,7 +232,7 @@ class CrystalTable(CustomTable):
 
         return self.component_row(self.target_elements)
 
-    def addRow(self, update: bool = True, connect: bool = True) -> Union[CrystalRow, bool]:
+    def addRow(self, update: bool = True, connect: bool = True) -> CrystalRow:
         """
         Add a new row
 
@@ -240,7 +240,7 @@ class CrystalTable(CustomTable):
         :param connect: if row should be connected
         """
 
-        row = super().addRow(update=update, connect=connect)
+        row: CrystalRow = super().addRow(update=update, connect=connect)
         row.coordinateChanged.connect(self.coordinateChanged.emit)
 
         row.elementChanged.connect(lambda element: self.elementChanged.emit(row, element))
