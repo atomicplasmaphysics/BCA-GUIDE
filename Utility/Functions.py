@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Optional
+from typing import Any, Iterable, List, Union, Tuple, Optional
 from datetime import datetime
 from pathlib import Path
 from re import sub, findall
@@ -104,22 +104,40 @@ def roundToStr(number: float) -> str:
     return f'{number:.2e}'
 
 
-# TODO: file = str | Path, match_file: str | Path
-def fileMatches(file: str, match_file: str) -> bool:
+def fileName(file: Union[str, Path]) -> str:
     """
-    Returns True if file matches the match_file, otherwise False. Also supports wildcards (*) in match_file
+    Returns the name of a file. Path objects are reduced to their final component, strings are returned unchanged
+
+    :param file: filename or Path object
+
+    :return: name of file
+    """
+
+    if isinstance(file, Path):
+        return file.name
+    return file
+
+
+def fileMatches(file: Union[str, Path], match_file: Union[str, Path]) -> bool:
+    """
+    Returns True if file matches the match_file, otherwise False. Also supports wildcards (*) in match_file.
+    Path objects are compared by their name only
 
     e.g.:
         fileMatches('test.txt', 'test.txt') -> True
         fileMatches('test.txt', 'te*.txt') -> True
         fileMatches('test.txt', '*st.txt') -> True
         fileMatches('test.txt', 'test.*') -> True
+        fileMatches(Path('folder/test.txt'), 'test.*') -> True
 
-    :param file: string to be checked against
-    :param match_file: string that should match
+    :param file: filename or Path to be checked against
+    :param match_file: filename or Path that should match
 
     :return: if match_file matches file
     """
+
+    file = fileName(file)
+    match_file = fileName(match_file)
 
     # no wildcard (*)
     if '*' not in match_file:
@@ -151,8 +169,7 @@ def fileMatches(file: str, match_file: str) -> bool:
     return True
 
 
-# TODO: file = str | Path, files_list: List[str] | List[Path] | Generator[Path]
-def inFileList(file: str, files_list: List[str]) -> bool:
+def inFileList(file: Union[str, Path], files_list: Iterable[Union[str, Path]]) -> bool:
     """
     Returns True if file is in files_list, otherwise False. Also supports wildcards (*) in file_list
 
@@ -161,8 +178,8 @@ def inFileList(file: str, files_list: List[str]) -> bool:
         inFileList('test.txt', ['t*.txt', ...]) -> True
         inFileList('test.txt', ['test.*', ...]) -> True
 
-    :param file: string to be checked against
-    :param files_list: list of strings that should match
+    :param file: filename or Path to be checked against
+    :param files_list: iterable of filenames or Paths that should match
 
     :return: if any element of files_list matches file
     """
@@ -173,8 +190,7 @@ def inFileList(file: str, files_list: List[str]) -> bool:
     return False
 
 
-# TODO: file = str | Path, files_list: dict[str|Path, Any]
-def inFileDict(file: str, files_dict: dict) -> Union[Tuple[str, str], bool]:
+def inFileDict(file: Union[str, Path], files_dict: dict) -> Union[Tuple[Union[str, Path], Any], bool]:
     """
     Returns key-value-pair if file is in files_dict(key), otherwise False. Also supports wildcards (*) in files_dict
 
@@ -183,8 +199,8 @@ def inFileDict(file: str, files_dict: dict) -> Union[Tuple[str, str], bool]:
         inFileDict('test.txt', {'t*.txt': 'xxx', ...}) -> ('t*.txt', 'xxx')
         inFileDict('test.txt', {'test.*': 'xxx', ...}) -> ('test.*', 'xxx')
 
-    :param file: string to be checked against
-    :param files_dict: dictionary with keys acting as list of strings that should match
+    :param file: filename or Path to be checked against
+    :param files_dict: dictionary with keys (filenames or Paths) acting as list that should match
 
     :return: (key, value) of corresponding entry in files_dict
              or False
@@ -195,48 +211,48 @@ def inFileDict(file: str, files_dict: dict) -> Union[Tuple[str, str], bool]:
     return False
 
 
-# TODO: file = str | Path, files_list: List[str] | List[Path] | Generator[Path]
-def getFileNameFromFileList(file: str, files_list: List[str]) -> str:
+def getFileNameFromFileList(file: Union[str, Path], files_list: Iterable[Union[str, Path]]) -> str:
     """
-    Returns first filename in files_list that matches file. File supports wildcards (*)
+    Returns name of first file in files_list that matches file. File supports wildcards (*).
+    files_list can also be a generator of Paths, e.g. folder.iterdir()
 
     e.g.:
         getFileNameFromFileList('test.txt', ['test.txt', ...]) -> 'test.txt'
         getFileNameFromFileList('test2.txt', ['test.txt', ...]) -> ''
         getFileNameFromFileList('t*.txt', ['test.txt', ...]) -> 'test.txt'
-        getFileNameFromFileList('test.*', ['test.txt', ...]) -> 'test.txt'
+        getFileNameFromFileList('test.*', [Path('folder/test.txt'), ...]) -> 'test.txt'
 
-    :param file: string to be matched
-    :param files_list: list of strings to be matched against
+    :param file: filename to be matched
+    :param files_list: iterable of filenames or Paths to be matched against
 
-    :return: matching string in files_list
+    :return: name of matching file in files_list
              or ''
     """
 
     for check_file in files_list:
         if fileMatches(check_file, file):
-            return check_file
+            return fileName(check_file)
     return ''
 
 
-# TODO: file = str | Path, files_list: List[str] | List[Path] | Generator[Path]
-def getFilesNameFromFileList(file: str, files_list: List[str]) -> List[str]:
+def getFilesNameFromFileList(file: Union[str, Path], files_list: Iterable[Union[str, Path]]) -> List[str]:
     """
-    Returns all filenames in files_list that matches file. File supports wildcards (*)
+    Returns names of all files in files_list that match file. File supports wildcards (*).
+    files_list can also be a generator of Paths, e.g. folder.iterdir()
 
     e.g.:
-        getFileNameFromFileList('test*.txt', ['test1.txt', 'test2.txt' ...]) -> ['test1.txt', 'test2.txt']
+        getFilesNameFromFileList('test*.txt', ['test1.txt', 'test2.txt' ...]) -> ['test1.txt', 'test2.txt']
 
-    :param file: string to be matched
-    :param files_list: list of strings to be matched against
+    :param file: filename to be matched
+    :param files_list: iterable of filenames or Paths to be matched against
 
-    :return: list of strings from files_list that fulfill the match
+    :return: list of names from files_list that fulfill the match
     """
 
     matches = []
     for check_file in files_list:
         if fileMatches(check_file, file):
-            matches.append(check_file)
+            matches.append(fileName(check_file))
     return matches
 
 

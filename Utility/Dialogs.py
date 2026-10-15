@@ -367,7 +367,8 @@ class PreferencesDialog(QDialog):
     def updatePreferences(self):
         """Updates all preferences"""
 
-        GlobalConf.save_path = self.save_path.path
+        if self.save_path.path is not None:
+            GlobalConf.save_path = self.save_path.path
 
         GlobalConf.skip_element_info = self.skip_element_info.isChecked()
         GlobalConf.skip_delete_info = self.skip_delete_info.isChecked()

@@ -16,7 +16,7 @@ class GlobalConf:
 
     # path of save folder
     save_path_name = 'save_path'
-    save_path: Path = Path(settings.value(save_path_name, defaultValue=Path(QDir.currentPath()) / 'saves', type=str))
+    save_path: Path = Path(settings.value(save_path_name, defaultValue=str(Path(QDir.currentPath()) / 'saves'), type=str) or Path(QDir.currentPath()) / 'saves')
     save_path_exists = bool(settings.value(save_path_name, defaultValue='', type=str))
 
     # language
@@ -65,7 +65,7 @@ class GlobalConf:
     def updateSettings():
         """Updates and saves settings object with general variables"""
         update_dict = {
-            GlobalConf.save_path_name: GlobalConf.save_path,
+            GlobalConf.save_path_name: str(GlobalConf.save_path),
             GlobalConf.use_default_language_name: GlobalConf.use_default_language,
             GlobalConf.skip_element_info_name: GlobalConf.skip_element_info,
             GlobalConf.skip_delete_info_name: GlobalConf.skip_delete_info,

@@ -2340,6 +2340,9 @@ class SimulationsAnalysis(QObject):
                  numpy.array of data in file
         """
 
+        if self.save_folder is None or not self.save_folder.is_dir():
+            return None
+
         file = getFileNameFromFileList(filename, self.save_folder.iterdir())
         if not file:
             return None

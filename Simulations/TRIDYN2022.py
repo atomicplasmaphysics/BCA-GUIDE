@@ -3450,13 +3450,16 @@ Wolfhard Möller
                  False if no documentation can be found
         """
 
+        if folder is None or not folder.is_dir():
+            return False
+
         # pdf should have 'userguide' in title and not be in any subdirectory
         files = [
             file for file in folder.iterdir()
             if file.is_file() and file.suffix.lower() == '.pdf' and 'userguide' in file.name.lower()
         ]
         if files:
-            return  folder / files[0]
+            return files[0]
 
         return False
 
@@ -3846,6 +3849,10 @@ fout {idfout} {iddout} {idqout}{output}
         input_file = getFileNameFromFileList(self.InputFilename, folder.iterdir())
         layer_file = getFileNameFromFileList(self.LayerFilename, folder.iterdir())
 
+        if not input_file:
+            logging.info(f'Could not find input file "{self.InputFilename}" in "{pathToStr(folder)}"!')
+            return False
+
         # get all contents from input file
         try:
             with open(folder / input_file, 'r', encoding='utf-8', errors='replace') as file:
@@ -4163,6 +4170,9 @@ fout {idfout} {iddout} {idqout}{output}
 
             try:
                 # get all contents from layer file
+                if not layer_file:
+                    raise FileNotFoundError(self.LayerFilename)
+
                 with open(folder / layer_file, 'r', encoding='utf-8', errors='replace') as file:
                     last_content = []
                     last_abundances = False

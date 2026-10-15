@@ -2005,17 +2005,20 @@ Andreas Mutzke
                  False if no documentation can be found
         """
 
+        if folder is None or not folder.is_dir():
+            return False
+
         # check for pdf file in doc folder
         doc_folder = folder / 'doc'
         if doc_folder.is_dir():
             files = [file for file in doc_folder.iterdir() if file.is_file() and file.suffix.lower() == '.pdf']
             if files:
-                return doc_folder / files[0]
+                return files[0]
 
         # check for pdf files in main folder
         files = [file for file in folder.iterdir() if file.is_file() and file.suffix.lower() == '.pdf']
         if files:
-            return folder / files[0]
+            return files[0]
 
         # no pdf documentation found, but downloadDoc method is implemented
         return True

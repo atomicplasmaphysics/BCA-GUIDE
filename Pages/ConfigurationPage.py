@@ -6,7 +6,7 @@ from json import dump, load
 from json.decoder import JSONDecodeError
 import logging
 
-from PyQt6.QtCore import Qt, QTimer, QDir, QFileInfo
+from PyQt6.QtCore import Qt, QTimer, QDir
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
     QSplitter, QWidget, QPushButton, QListWidget, QLabel, QListWidgetItem,
@@ -412,9 +412,7 @@ class ConfigurationPage(TabWithToolbar):
                 save_file,
                 file_filter='Configuration Files (*.json)'
             )
-            # TODO: pathlib
-            folder = QFileInfo(pathToStr(save_file)).canonicalPath()
-            if save_file is None or not len(folder):
+            if save_file is None:
                 self.main_window.writeStatusBar('Loading configuration file aborted')
                 return
 
@@ -458,7 +456,7 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         config_path = GlobalConf.save_path / 'config'
-        QDir().mkpath(str(config_path))
+        config_path.mkdir(parents=True, exist_ok=True)
 
         if autosave:
             save_file = config_path / 'autosave.json'
@@ -472,8 +470,7 @@ class ConfigurationPage(TabWithToolbar):
                 save_file,
                 file_filter='Configuration Files (*.json)'
             )
-            folder = QFileInfo(save_file).canonicalPath()
-            if len(folder) == 0:
+            if save_file is None:
                 self.main_window.writeStatusBar('Saving configuration file aborted')
                 return
 
@@ -859,12 +856,12 @@ class ConfigurationPage(TabWithToolbar):
         if not start_dir:
             start_dir = Path(QDir.currentPath())
 
-        folder_dir = Path(QFileDialog.getExistingDirectory(self, f'Select the "{simulation}" save folder', str(start_dir)))
-        if not folder_dir.is_dir():
+        folder_dir = QFileDialog.getExistingDirectory(self, f'Select the "{simulation}" save folder', pathToStr(start_dir))
+        if len(folder_dir) == 0:
             self.main_window.writeStatusBar('Save folder selection aborted')
             return None
         self.main_window.writeStatusBar('Save folder successfully located')
-        return folder_dir
+        return Path(folder_dir)
 
     def saveFolderChanged(self):
         """

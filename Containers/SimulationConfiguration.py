@@ -58,7 +58,7 @@ class SimulationConfiguration:
         self.base_save_folder = base_save_folder
         self.save_folder = save_folder
 
-    def edit(self, title: str, folder: str, binary: str, version: str, base_save_folder: Path):
+    def edit(self, title: str, folder: Path, binary: Path, version: str, base_save_folder: Path | None):
         """
         Sets main parameters of simulation
 

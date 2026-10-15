@@ -12,7 +12,7 @@ from subprocess import Popen, getstatusoutput, CREATE_NEW_CONSOLE
 import logging
 
 
-from PyQt6.QtCore import Qt, QUrl, QDir, QFile, QProcess, QTimer
+from PyQt6.QtCore import Qt, QUrl, QProcess, QTimer
 from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices, QPalette, QColor
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton,
@@ -247,7 +247,7 @@ class SimulationPage(TabWithToolbar):
         # Open working directory button
         self.open_working_dir = self.toolbar.addAction(QIcon(':/icons/open_workdir.png'), 'Open working directory')
         self.open_working_dir.setToolTip('Open the working directory in the file explorer')
-        self.open_working_dir.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(self.simulation_configuration.save_folder)))
+        self.open_working_dir.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.simulation_configuration.save_folder))))
 
         # Open docs button
         self.action_open_documentation = self.toolbar.addAction(QIcon(':/icons/book.png'), 'Simulation documentation')
@@ -896,7 +896,7 @@ class SimulationPage(TabWithToolbar):
             )
 
         # try to open documentation
-        elif not docs_path or not QFile(docs_path).exists() or not QDesktopServices.openUrl(QUrl.fromUserInput(docs_path)):
+        elif not isinstance(docs_path, Path) or not docs_path.is_file() or not QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(docs_path))):
             self.updateDocs(disable=True)
 
     def updateDocs(self, disable: bool = False):
@@ -1078,7 +1078,7 @@ EOF
         self.action_save.setEnabled(False)
 
         # reset save folder
-        self.simulation_configuration.save_folder = ''
+        self.simulation_configuration.save_folder = None
         self.working_dir.setText('unknown')
 
         # reset parameter lists
@@ -1151,7 +1151,7 @@ EOF
         else:
             # create base save folder if it does not exist
             path = GlobalConf.save_path if GlobalConf.save_path and GlobalConf.save_path.is_dir() else self.simulation_configuration.base_save_folder
-            QDir().mkpath(str(path))
+            path.mkdir(parents=True, exist_ok=True)
 
             file = selectFileDialog(
                 self,
@@ -1297,23 +1297,25 @@ EOF
 
         # select folder where imported file should be saved
         path = GlobalConf.save_path if GlobalConf.save_path else self.simulation_configuration.base_save_folder
-        QDir().mkpath(pathToStr(path))
+        path.mkdir(parents=True, exist_ok=True)
 
         result = None
-        folder = ''
+        folder = None
         while result != QMessageBox.StandardButton.Yes:
-            folder = QFileDialog.getExistingDirectory(
+            folder_str = QFileDialog.getExistingDirectory(
                 self,
                 'Select the folder where the imported files should be saved',
-                path
+                pathToStr(path)
             )
 
-            if len(folder) == 0:
+            if len(folder_str) == 0:
                 self.main_window.writeStatusBar('Import aborted')
                 return False
 
+            folder = Path(folder_str)
+
             # check if folder contains no files
-            if not any([file_info.isFile() for file_info in QDir(folder).entryInfoList()]):
+            if not folder.exists() or not any(file.is_file() for file in folder.iterdir()):
                 break
 
             _, result = showMessageBox(
@@ -1321,17 +1323,16 @@ EOF
                 QMessageBox.Icon.Warning,
                 'Warning!',
                 'This folder already contains files',
-                info_message=f'Do you want to save the settings in\n"{folder}"?',
+                info_message=f'Do you want to save the settings in\n"{pathToStr(folder)}"?',
                 standard_buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
 
         self.simulation_configuration.save_folder = folder
 
         # copy input.json file
-        save_file_json = self.simulation_configuration.save_folder / 'input.json'
-        if save_file_json.exists():
-            QFile.remove(save_file_json)
-        QFile().copy(import_file, save_file_json)
+        save_file_json = folder / 'input.json'
+        if import_file.resolve() != save_file_json.resolve():
+            copy2(import_file, save_file_json)
         self.main_window.writeStatusBar('Import successful')
 
         # open file
@@ -1724,7 +1725,7 @@ EOF
         if self.tab_widget.currentIndex() != 3:
             return
 
-        if not self.simulation_configuration.save_folder:
+        if not self.simulation_configuration.save_folder or not self.simulation_configuration.save_folder.is_dir():
             self.output_files_list.clear()
             return
 
@@ -1831,9 +1832,12 @@ EOF
     def openSelectedOutputFile(self):
         """Opens the selected output file"""
 
-        file_path = f'{self.simulation_configuration.save_folder}/{self.output_files_list.selectedItems()[0].text()}'
-        if not QFile.exists(file_path) or not QDesktopServices.openUrl(QUrl.fromUserInput(file_path)):
-            self.main_window.writeStatusBar(f'Failed to open file "{file_path}"')
+        if not self.simulation_configuration.save_folder:
+            return
+
+        file_path = self.simulation_configuration.save_folder / self.output_files_list.selectedItems()[0].text()
+        if not file_path.is_file() or not QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(file_path))):
+            self.main_window.writeStatusBar(f'Failed to open file "{pathToStr(file_path)}"')
 
     def updateOutputParametersList(self, forced: bool = False, in_loop: bool = False):
         """

@@ -1,7 +1,7 @@
 from typing import List
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QCoreApplication, QFileInfo, QUrl, QDir, QPoint
+from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
@@ -348,10 +348,10 @@ class MainWindow(QMainWindow):
             'Load input file',
             GlobalConf.save_path
         )
-        folder = QFileInfo(file).canonicalPath()
-        if len(folder) == 0:
+        if file is None:
             self.writeStatusBar('Loading aborted')
             return
+        folder = file.resolve().parent
 
         # load file in all simulation tabs
         for sc in self.simulation_configs:
