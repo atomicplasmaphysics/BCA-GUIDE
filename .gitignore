@@ -4,3 +4,5 @@
 /tools/
 /Simulation Programs/
 /save/
+__pycache__/
+.pytest_cache/

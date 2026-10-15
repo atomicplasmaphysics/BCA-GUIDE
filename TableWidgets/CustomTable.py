@@ -1,8 +1,9 @@
 from typing import List, Union
 
 from PyQt6.QtCore import pyqtSignal, QObject
-from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox
+
+from Utility.Icons import getIcon
 
 
 class CustomRowField:
@@ -51,7 +52,7 @@ class CustomRow(QObject):
 
     def __init__(self):
         super().__init__()
-        self.remove = QPushButton(QIcon(':/icons/close.png'), '')
+        self.remove = QPushButton(getIcon('close'), '')
         self.remove.setFixedSize(30, 30)
         self.remove.setAutoDefault(False)
         # Center the remove button by surrounding it with two stretches inside a horizontal layout
@@ -120,7 +121,7 @@ class CustomTable(QTableWidget):
         self.horizontal_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.horizontal_header.setMinimumSectionSize(40)
 
-        self.add_button = QPushButton(QIcon(':/icons/add.png'), '')
+        self.add_button = QPushButton(getIcon('add'), '')
         self.add_button.setFixedSize(30, 30)
         self.add_button.setAutoDefault(False)
         self.add_button.clicked.connect(lambda: self.addRow())

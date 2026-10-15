@@ -8,12 +8,13 @@ from shutil import copy2
 from sys import exit
 from locale import getpreferredencoding
 from re import sub
-from subprocess import Popen, getstatusoutput, CREATE_NEW_CONSOLE
+from subprocess import Popen, getstatusoutput
+import subprocess
 import logging
 
 
 from PyQt6.QtCore import Qt, QUrl, QProcess, QTimer
-from PyQt6.QtGui import QIcon, QKeySequence, QDesktopServices, QPalette, QColor
+from PyQt6.QtGui import QKeySequence, QDesktopServices, QPalette, QColor
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton,
     QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication
@@ -32,6 +33,7 @@ from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
 from Utility.Functions import alphanumeric, inFileList, inFileDict, pathToStr
 from Utility.ModifyWidget import setWidgetHighlight
+from Utility.Icons import getIcon
 
 from TableWidgets.CompTable import CompRow, CompTable, CompTableTarget
 from TableWidgets.TargetTable import TargetLayersTable
@@ -100,8 +102,6 @@ class SimulationPage(TabWithToolbar):
         if not isinstance(self.evaluation_class, SimulationsOutput):
             exit('Provided evaluation class is not a <SimulationsOutput> class')
 
-        if not self.simulation_configuration.base_save_folder:
-            self.simulation_configuration.base_save_folder = GlobalConf.save_path / self.simulation_class.SaveFolder
         self.run_status = SimulationPage.RunStatus.READY
 
         # update element data
@@ -149,32 +149,32 @@ class SimulationPage(TabWithToolbar):
         #
 
         # New
-        self.action_new = self.toolbar.addAction(QIcon(':/icons/new.png'), 'New')
+        self.action_new = self.toolbar.addAction(getIcon('new'), 'New')
         self.action_new.setToolTip('<b>Reset</b> this simulation-tab and the input fields to their default states')
         self.action_new.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_N))
         self.action_new.triggered.connect(lambda: self.resetSettings())
 
         # Open
-        self.action_open = self.toolbar.addAction(QIcon(':/icons/open.png'), 'Open')
+        self.action_open = self.toolbar.addAction(getIcon('open'), 'Open')
         self.action_open.setToolTip('<b>Open</b> an existing simulation input setting')
         self.action_open.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_O))
         self.action_open.triggered.connect(lambda: self.loadSettings())  # self.loadSettings(from_json=False)
 
         # Import
-        self.action_import = self.toolbar.addAction(QIcon(':/icons/convert.png'), 'Convert')
+        self.action_import = self.toolbar.addAction(getIcon('convert'), 'Convert')
         self.action_import.setToolTip('<b>Convert</b> simulation input setting')
         self.action_import.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_I))
         self.action_import.triggered.connect(lambda: self.importSettings())
 
         # Save
-        self.action_save = self.toolbar.addAction(QIcon(':/icons/save.png'), 'Save')
+        self.action_save = self.toolbar.addAction(getIcon('save'), 'Save')
         self.action_save.setToolTip('<b>Save</b> the current settings of this simulation-tab to a simulation-tab input file')
         self.action_save.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_S))
         self.action_save.setEnabled(False)
         self.action_save.triggered.connect(lambda: self.saveSettings())
 
         # Save as
-        self.action_save_as = self.toolbar.addAction(QIcon(':/icons/save_as.png'), 'Save as')
+        self.action_save_as = self.toolbar.addAction(getIcon('save_as'), 'Save as')
         self.action_save_as.setToolTip('<b>Save</b> the current settings of this simulation-tab under a different name and/or in a different location')
         self.action_save_as.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_S))
         self.action_save_as.setEnabled(False)
@@ -184,7 +184,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Preferences
-        self.action_preferences = self.toolbar.addAction(QIcon(':/icons/preferences.png'), 'Preferences')
+        self.action_preferences = self.toolbar.addAction(getIcon('preferences'), 'Preferences')
         self.action_preferences.setToolTip('Open the <b>general settings</b> of this simulation configuration')
         self.action_preferences.setShortcut(QKeySequence.StandardKey.Preferences)
         self.action_preferences.triggered.connect(lambda: self.main_window.switchSettingsTab(self.simulation_configuration))
@@ -193,9 +193,9 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Status
-        self.pixmap_ok = QIcon(':/icons/okay.png').pixmap(32)
-        self.pixmap_warning = QIcon(':/icons/warning.png').pixmap(32)
-        self.pixmap_error = QIcon(':/icons/error.png').pixmap(32)
+        self.pixmap_ok = getIcon('okay').pixmap(32)
+        self.pixmap_warning = getIcon('warning').pixmap(32)
+        self.pixmap_error = getIcon('error').pixmap(32)
         self.run_status_icon = QLabel('')
         self.toolbar.addWidget(self.run_status_icon)
         self.run_status_text = QLabel('')
@@ -205,7 +205,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Run
-        self.action_run = self.toolbar.addAction(QIcon(':/icons/play.png'), 'Run')
+        self.action_run = self.toolbar.addAction(getIcon('play'), 'Run')
         self.action_run.setToolTip('Save the current settings and <b>run the simulation</b> on the input file')
         self.action_run.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_R))
         self.action_run.triggered.connect(lambda: self.runSimulation())
@@ -218,7 +218,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addWidget(self.run_progress)
 
         # Run abort
-        self.action_abort = self.toolbar.addAction(QIcon(':/icons/abort.png'), 'Abort')
+        self.action_abort = self.toolbar.addAction(getIcon('abort'), 'Abort')
         self.action_abort.setToolTip('<b>Abort</b> the currently active simulation')
         self.action_abort.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_P))
         self.action_abort.setEnabled(False)
@@ -226,7 +226,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Run detached
-        self.action_run_detached = self.toolbar.addAction(QIcon(':/icons/play_detached.png'), 'Run detached')
+        self.action_run_detached = self.toolbar.addAction(getIcon('play_detached'), 'Run detached')
         self.action_run_detached.setToolTip('Save the current settings and <b>run the simulation</b> on the input file in detached mode.\nThe simulation is run in a separate window, and the GUI can be closed')
         self.action_run_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_detached.triggered.connect(lambda: self.runSimulation(detached=True))
@@ -245,12 +245,12 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addWidget(self.working_dir)
 
         # Open working directory button
-        self.open_working_dir = self.toolbar.addAction(QIcon(':/icons/open_workdir.png'), 'Open working directory')
+        self.open_working_dir = self.toolbar.addAction(getIcon('open_workdir'), 'Open working directory')
         self.open_working_dir.setToolTip('Open the working directory in the file explorer')
         self.open_working_dir.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.simulation_configuration.save_folder))))
 
         # Open docs button
-        self.action_open_documentation = self.toolbar.addAction(QIcon(':/icons/book.png'), 'Simulation documentation')
+        self.action_open_documentation = self.toolbar.addAction(getIcon('book'), 'Simulation documentation')
         self.action_open_documentation.setShortcut(QKeySequence.StandardKey.HelpContents)
         self.updateDocs()
         self.action_open_documentation.triggered.connect(self.openDocs)
@@ -390,12 +390,12 @@ class SimulationPage(TabWithToolbar):
 
         self.crystal_editor_button = QPushButton('Edit Crystal')
         self.crystal_editor_button.setToolTip('Click to change crystal parameters')
-        self.crystal_editor_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        self.crystal_editor_groupbox_vbox.addWidget(self.crystal_editor_button)
+        self.crystal_editor_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.crystal_editor_groupbox_vbox.addWidget(self.crystal_editor_button, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.crystal_editor_button.clicked.connect(lambda _: self.openCrystalEditorDialog())
 
-        self.crystal_preview = CrystalPreview(self, axes_equal_radius=0.5)
+        self.crystal_preview = CrystalPreview(self)
         self.crystal_preview.setToolTip('Preview of crystal structure')
         self.crystal_editor_groupbox_vbox.addWidget(self.crystal_preview)
 
@@ -417,7 +417,7 @@ class SimulationPage(TabWithToolbar):
         #
         # Additional settings
         self.additional_settings_vbox = VBoxTitleLayout(self, 'Additional Settings', add_stretch=False)
-        self.check_settings_button = QPushButton(QIcon(':/icons/error_check.png'), '', self)
+        self.check_settings_button = QPushButton(getIcon('error_check'), '', self)
         self.check_settings_button.setMaximumWidth(50)
         self.check_settings_button.setToolTip('Check the settings for validity')
         self.check_settings_button.clicked.connect(lambda: self.checkAdditionalSettings())
@@ -442,20 +442,16 @@ class SimulationPage(TabWithToolbar):
         self.settings_group_settings = QGroupBox(self)
         self.settings_group_settings.setLayout(self.settings_group_layout_settings)
 
-        self.settings_group_settings_palette = self.settings_group_settings.palette()
-        self.settings_group_settings_palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
-        self.settings_group_settings.setPalette(self.settings_group_settings_palette)
-
-        self.settings_scroll_area_palette = self.settings_scroll_area.palette()
-        self.settings_scroll_area_palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
-        self.settings_scroll_area.setPalette(self.settings_scroll_area_palette)
-
         self.settings_scroll_area.setWidgetResizable(True)
         self.settings_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.settings_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.settings_scroll_area.setMinimumWidth(self.settings_group_settings.sizeHint().width() + self.settings_scroll_area.verticalScrollBar().sizeHint().width())
         self.settings_scroll_area.setStyleSheet('QScrollArea { border: none; }')
         self.settings_scroll_area.setWidget(self.settings_group_settings)
+
+        # transparent background of scroll area; do not set a palette here, since it would not follow theme changes
+        self.settings_scroll_area.viewport().setAutoFillBackground(False)
+        self.settings_group_settings.setAutoFillBackground(False)
         self.simulation_settings_vbox.addWidget(self.settings_scroll_area)
         self.settings_parent_settings.setLayout(self.simulation_settings_vbox)
         self.settings_tab_splitter.addWidget(self.settings_parent_settings)
@@ -510,11 +506,11 @@ class SimulationPage(TabWithToolbar):
         # List of output files
         self.parent_widget_output_list = QWidget(self)
         self.output_list_vbox = VBoxTitleLayout(self, 'List of files', add_stretch=False)
-        self.refresh_output_files_button = QPushButton(QIcon(':/icons/refresh.png'), '', self)
+        self.refresh_output_files_button = QPushButton(getIcon('refresh'), '', self)
         self.refresh_output_files_button.setMaximumWidth(50)
         self.refresh_output_files_button.setToolTip('Refresh the list')
         self.output_list_vbox.hl.addWidget(self.refresh_output_files_button)
-        self.open_output_file_button = QPushButton(QIcon(':/icons/open_external.png'), '', self)
+        self.open_output_file_button = QPushButton(getIcon('open_external'), '', self)
         self.open_output_file_button.setMaximumWidth(50)
         self.open_output_file_button.setToolTip('Open the selected file with the standard text editor')
         self.open_output_file_button.setEnabled(False)
@@ -562,11 +558,11 @@ class SimulationPage(TabWithToolbar):
         # Available data for plotting
         self.parent_widget_plot_list = QWidget(self)
         self.plot_list_vbox = VBoxTitleLayout(self, 'Available data for plotting', add_stretch=False)
-        self.refresh_output_parameters_button = QPushButton(QIcon(':/icons/refresh.png'), '', self)
+        self.refresh_output_parameters_button = QPushButton(getIcon('refresh'), '', self)
         self.refresh_output_parameters_button.setMaximumWidth(50)
         self.refresh_output_parameters_button.setToolTip('Refresh the list')
         self.plot_list_vbox.hl.addWidget(self.refresh_output_parameters_button)
-        self.save_plot_button = QPushButton(QIcon(':/icons/save.png'), '', self)
+        self.save_plot_button = QPushButton(getIcon('save'), '', self)
         self.save_plot_button.setMaximumWidth(50)
         self.save_plot_button.setToolTip('Save the data of the selected plot')
         self.save_plot_button.clicked.connect(self.savePlot)
@@ -597,7 +593,8 @@ class SimulationPage(TabWithToolbar):
             self.main_window,
             self.simulation_configuration,
             [row.get('symbol') for row in self.table_target.getArguments()],  # TODO: this should be list of <Element> not strings
-            table_target=self.table_target
+            table_target=self.table_target,
+            element_data=self.simulation_class.element_data
         )
 
         #
@@ -993,8 +990,14 @@ class SimulationPage(TabWithToolbar):
 
         else:
             if system() == 'Windows':
-                # TODO: this does not work - fuck
-                Popen(['cmd', '/k', cmd], creationflags=CREATE_NEW_CONSOLE)
+                # pass a single command string, since a list would escape the quotes in cmd with backslashes, which cmd.exe does not understand
+                # cmd.exe removes the first and last quote of the command after /k
+                title = sub(r'[&|<>^"%]', '', self.simulation_configuration.title)
+                Popen(
+                    f'cmd /k "title {title} & {cmd}"',
+                    creationflags=getattr(subprocess, 'CREATE_NEW_CONSOLE', 0),
+                    cwd=self.simulation_configuration.save_folder
+                )
 
             elif system() == 'Linux':
                 terminal_cmds = [
@@ -1150,7 +1153,7 @@ EOF
 
         else:
             # create base save folder if it does not exist
-            path = GlobalConf.save_path if GlobalConf.save_path and GlobalConf.save_path.is_dir() else self.simulation_configuration.base_save_folder
+            path = self.simulation_configuration.getBaseSaveFolder()
             path.mkdir(parents=True, exist_ok=True)
 
             file = selectFileDialog(
@@ -1296,7 +1299,7 @@ EOF
             return False
 
         # select folder where imported file should be saved
-        path = GlobalConf.save_path if GlobalConf.save_path else self.simulation_configuration.base_save_folder
+        path = self.simulation_configuration.getBaseSaveFolder()
         path.mkdir(parents=True, exist_ok=True)
 
         result = None
@@ -1374,6 +1377,17 @@ EOF
             )
             return None
 
+        # crystals from table.crystal are only supported for a homogeneous target
+        if self.crystal_editor_button.isVisible() and self.crystal_editor_dialog.table_mode and arguments.structure and len(arguments.structure) > 1:
+            showMessageBox(
+                self,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'Crystals are only supported for a target with one layer',
+                'Please remove the additional layers in the target structure or disable the crystal'
+            )
+            return None
+
         # check if save_folder exists if set
         if self.simulation_configuration.save_folder and not self.simulation_configuration.save_folder.is_dir():
                 self.simulation_configuration.save_folder = None
@@ -1382,7 +1396,7 @@ EOF
         if not self.simulation_configuration.save_folder or new_folder:
 
             # create base save folder if it does not exist
-            path = self.simulation_configuration.base_save_folder if self.simulation_configuration.base_save_folder else GlobalConf.save_path
+            path = self.simulation_configuration.getBaseSaveFolder()
             path.mkdir(parents=True, exist_ok=True)
 
             result = None
@@ -1424,7 +1438,7 @@ EOF
 
         # save json simulation output
         saveSimulationArguments(arguments, self.simulation_configuration.save_folder / 'input.json')
-        filelist = ['input.json', file_name_input, file_name_crystal]
+        filelist = ['input.json', file_name_input]
 
         # save input
         path_input = self.simulation_configuration.save_folder / file_name_input
@@ -1446,6 +1460,7 @@ EOF
         if crystal_text is not None:
             with open(path_crystal, 'w', encoding='utf-8') as file:
                 file.write(crystal_text)
+            filelist.append(file_name_crystal)
         else:
             path_crystal.unlink(missing_ok=True)
 
@@ -1514,7 +1529,7 @@ EOF
         additional = self.additional_settings.toPlainText().split('\n')
 
         crystal_args = self.crystal_editor_dialog.getArguments()
-        crystal_rows = self.crystal_editor_dialog.table_crystal.getArguments()
+        crystal_rows = self.crystal_editor_dialog.getRowArguments()
         target_args = self.general_target_settings.getArguments(miller_ind=crystal_args.miller_ind)
 
         arguments = SimulationArguments(

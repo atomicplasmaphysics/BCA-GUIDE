@@ -1,16 +1,17 @@
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING
 from platform import system
 from pathlib import Path
+from re import findall
 from json import dump, load
 from json.decoder import JSONDecodeError
 import logging
 
 from PyQt6.QtCore import Qt, QTimer, QDir
-from PyQt6.QtGui import QIcon, QKeySequence, QPixmap
+from PyQt6.QtGui import QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
     QSplitter, QWidget, QPushButton, QListWidget, QLabel, QListWidgetItem,
-    QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy
+    QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy, QAbstractItemView
 )
 
 from GlobalConf import GlobalConf
@@ -19,6 +20,8 @@ from Styles import Styles
 from Utility.Layouts import TabWithToolbar, VBoxTitleLayout, InputHBoxLayout, LineEdit, FilePath, ComboBox
 from Utility.Dialogs import showMessageBox, selectFileDialog
 from Utility.Functions import pathToStr
+from Utility.ModifyWidget import setWidgetHighlight
+from Utility.Icons import getIcon
 
 from Pages.ProgramPage import SimulationPage
 
@@ -44,6 +47,7 @@ class ConfigurationPage(TabWithToolbar):
         super().__init__()
         self.main_window = main_window
         self.detected_program = 0
+        self.detected_version_name = ''
 
         #
         # VARIABLES
@@ -57,19 +61,19 @@ class ConfigurationPage(TabWithToolbar):
         #
 
         # New
-        self.action_new = self.toolbar.addAction(QIcon(':/icons/new.png'), 'New')
+        self.action_new = self.toolbar.addAction(getIcon('new'), 'New')
         self.action_new.setToolTip('Reset all configured Simulations')
         self.action_new.setShortcut(QKeySequence.StandardKey.New)
         self.action_new.triggered.connect(lambda: self.clearAll())
 
         # Open
-        self.action_open = self.toolbar.addAction(QIcon(':/icons/open.png'), 'Open')
+        self.action_open = self.toolbar.addAction(getIcon('open'), 'Open')
         self.action_open.setToolTip('Open saved simulation configurations')
         self.action_open.setShortcut(QKeySequence.StandardKey.Open)
         self.action_open.triggered.connect(lambda: self.open())
 
         # Save
-        self.action_save = self.toolbar.addAction(QIcon(':/icons/save.png'), 'Save')
+        self.action_save = self.toolbar.addAction(getIcon('save'), 'Save')
         self.action_save.setToolTip('Save all listed simulation configurations')
         self.action_save.setShortcut(QKeySequence.StandardKey.Save)
         self.action_save.triggered.connect(lambda: self.save())
@@ -80,13 +84,13 @@ class ConfigurationPage(TabWithToolbar):
         self.toolbar.addWidget(self.empty_space)
 
         # Run
-        self.action_run = self.toolbar.addAction(QIcon(':/icons/play.png'), 'Run')
+        self.action_run = self.toolbar.addAction(getIcon('play'), 'Run')
         self.action_run.setToolTip('Run the selected simulation(s)')
         self.action_run.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_R))
         self.action_run.triggered.connect(lambda: self.runSelected())
 
         # Run detached
-        self.action_run_detached = self.toolbar.addAction(QIcon(':/icons/play_detached.png'), 'Run detached')
+        self.action_run_detached = self.toolbar.addAction(getIcon('play_detached'), 'Run detached')
         self.action_run_detached.setToolTip('Run the selected simulation(s) in detached mode.\nThe simulation(s) is(are) run in a separate window, and the GUI can be closed')
         self.action_run_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_detached.triggered.connect(lambda: self.runSelected(detached=True))
@@ -143,6 +147,7 @@ class ConfigurationPage(TabWithToolbar):
         self.program.currentIndexChanged.connect(self.getVersions)
         self.program.currentIndexChanged.connect(self.unsavedConfigView)
         self.program.currentIndexChanged.connect(self.saveFolderChanged)
+        self.program.currentIndexChanged.connect(lambda _: self.updateVersionHighlight())
         self.simulation_configuration_group.addLayout(self.layout_program)
 
         # Simulation version
@@ -158,6 +163,7 @@ class ConfigurationPage(TabWithToolbar):
         )
         self.layout_versions.setEnabled(False)
         self.versions.currentIndexChanged.connect(self.unsavedConfigView)
+        self.versions.currentIndexChanged.connect(lambda _: self.updateVersionHighlight())
         self.simulation_configuration_group.addLayout(self.layout_versions)
 
         # Simulation path
@@ -166,7 +172,7 @@ class ConfigurationPage(TabWithToolbar):
             function_loc=lambda: self.selectSimFolder(
                 simulation=self.program_names[self.program.currentIndex()]
             ),
-            icon_loc=QIcon(':/icons/open.png'),
+            icon_loc=getIcon('open'),
             parent=self
         )
         self.layout_simulation_folder = InputHBoxLayout(
@@ -184,7 +190,7 @@ class ConfigurationPage(TabWithToolbar):
             function_loc=lambda: self.selectSimBinary(
                 simulation=self.program_names[self.program.currentIndex()]
             ),
-            icon_loc=QIcon(':/icons/open.png'),
+            icon_loc=getIcon('open'),
             parent=self
         )
         self.layout_simulation_binary = InputHBoxLayout(
@@ -198,17 +204,18 @@ class ConfigurationPage(TabWithToolbar):
 
         # Base save folder path
         self.base_save_folder = FilePath(
-            placeholder='Select the main save folder for the simulation',
+            placeholder='Automatic',
             function_loc=lambda: self.selectSaveFolder(
                 simulation=self.program_names[self.program.currentIndex()]
             ),
-            icon_loc=QIcon(':/icons/open.png'),
+            icon_loc=getIcon('open'),
+            clearable=True,
             parent=self
         )
         self.layout_base_save_folder = InputHBoxLayout(
             'Save folder (optional):',
             self.base_save_folder,
-            tooltip='Path of the root folder for saves of this simulation. If left empty the folder will be chosen automatically',
+            tooltip='Path of the root folder for saves of this simulation. If left empty, the default save folder from the preferences is used',
             split=split
         )
         self.base_save_folder.path_display.textChanged.connect(self.unsavedConfigView)
@@ -267,13 +274,11 @@ class ConfigurationPage(TabWithToolbar):
         # LIST OF SIMULATION CONFIGURATIONS
         #
 
-        # TODO: make configurations movable
-
         self.simulation_configuration_list_vbox = VBoxTitleLayout(self, 'List of Simulation Configurations', add_stretch=False)
         self.simulation_configuration_list_group = QVBoxLayout()
 
         # Information
-        self.simulation_configuration_list_label = QLabel('Click to edit configuration')
+        self.simulation_configuration_list_label = QLabel('Click to edit configuration, drag to reorder')
         self.simulation_configuration_list_label.setMaximumHeight(20)
         self.simulation_configuration_list_group.addWidget(self.simulation_configuration_list_label, Qt.AlignmentFlag.AlignLeft)
 
@@ -282,6 +287,9 @@ class ConfigurationPage(TabWithToolbar):
         self.simulation_configuration_list.setStyleSheet(Styles.list_style)
         self.simulation_configuration_list_group.addWidget(self.simulation_configuration_list)
         self.simulation_configuration_list.currentItemChanged.connect(lambda list_item: self.loadConfigView(list_item))
+        self.simulation_configuration_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.simulation_configuration_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.simulation_configuration_list.model().rowsMoved.connect(lambda *_: QTimer.singleShot(0, self.configListReordered))
 
         # List configurations
         self.simulation_configuration_list.addItem(self.new_configuration_text)
@@ -484,15 +492,37 @@ class ConfigurationPage(TabWithToolbar):
     def listConfigView(self):
         """List configuration from self.mainWindow.simConfigs dictionary"""
         self.simulation_configuration_list.clear()
-        self.simulation_configuration_list.addItem(self.new_configuration_text)
+        new_item = QListWidgetItem(self.new_configuration_text)
+        new_item.setFlags(new_item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled & ~Qt.ItemFlag.ItemIsDropEnabled)
+        self.simulation_configuration_list.addItem(new_item)
         for sc in self.main_window.simulation_configs:
             item = QListWidgetItem(sc.title)
+            item.setFlags((item.flags() | Qt.ItemFlag.ItemIsDragEnabled) & ~Qt.ItemFlag.ItemIsDropEnabled)
             item.setCheckState(Qt.CheckState.Unchecked)
-            item.setToolTip('Selecting simulations allows for simultaneous running')
+            item.setToolTip('Selecting simulations allows for simultaneous running. Drag to reorder')
             self.simulation_configuration_list.addItem(item)
 
         self.main_window.updateTabs()
         self.simulation_configuration_list.setCurrentRow(0)
+
+    def configListReordered(self):
+        """Applies the order of the configuration list (changed by drag and drop) to the configurations and tabs"""
+
+        # the "Add new configuration" entry always stays on top
+        for i in range(self.simulation_configuration_list.count()):
+            if self.simulation_configuration_list.item(i).text() == self.new_configuration_text:
+                if i != 0:
+                    self.simulation_configuration_list.insertItem(0, self.simulation_configuration_list.takeItem(i))
+                break
+
+        titles = [self.simulation_configuration_list.item(i).text() for i in range(1, self.simulation_configuration_list.count())]
+        configs_by_title = {sc.title: sc for sc in self.main_window.simulation_configs}
+        if sorted(titles) != sorted(configs_by_title.keys()):
+            return
+
+        self.main_window.simulation_configs[:] = [configs_by_title[title] for title in titles]
+        self.main_window.updateTabs()
+        self.save(autosave=True, no_config=not GlobalConf.keep_configurations_info)
 
     def selectConfigView(self, list_name: str):
         """
@@ -730,6 +760,8 @@ class ConfigurationPage(TabWithToolbar):
         self.simulation_binary.setPath(None, ssh=False)
         self.saveFolderChanged()
         self.detected_simulation.setText('<b>unknown</b>')
+        self.detected_version_name = ''
+        self.updateVersionHighlight()
         self.description_logo.hide()
         self.description_label.setText('no description')
         self.save_configuration_button.setText(self.save_configuration_button_text)
@@ -800,7 +832,31 @@ class ConfigurationPage(TabWithToolbar):
             return None
         folder_dir = Path(folder_dir)
 
-        self.tryParseSimVersion(folder=folder_dir)
+        # a previously selected binary outside of the new folder is ignored for the detection
+        binary = self.simulation_binary.path
+        binary_in_folder = binary is not None and binary.is_relative_to(folder_dir)
+        self.tryParseSimVersion(folder=folder_dir, binary=binary if binary_in_folder else None, ignore_binary=not binary_in_folder)
+
+        # automatically select the binary if no binary inside the selected folder is chosen yet
+        if not binary_in_folder:
+            program_idx = self.detected_program if self.detected_version_name else self.program.currentIndex()
+            found_binary = SimulationsList().simulation_program_list[program_idx].findBinary(folder_dir)
+            if found_binary is not None:
+                self.simulation_binary.setPath(found_binary, ssh=False)
+                self.tryParseSimVersion(folder=folder_dir, binary=found_binary)
+                self.selectDetectedVersion()
+                self.main_window.writeStatusBar(f'{simulation} folder successfully located, binary "{found_binary.name}" selected automatically')
+                return folder_dir
+
+            # the previous binary belongs to another folder
+            if binary is not None:
+                self.simulation_binary.setPath(None, ssh=False)
+                self.tryParseSimVersion(folder=folder_dir, ignore_binary=True)
+                self.selectDetectedVersion()
+                self.main_window.writeStatusBar(f'{simulation} folder successfully located, but no binary was found. Please select the binary')
+                return folder_dir
+
+        self.selectDetectedVersion()
         self.main_window.writeStatusBar(f'{simulation} folder successfully located')
         return folder_dir
 
@@ -841,6 +897,7 @@ class ConfigurationPage(TabWithToolbar):
 
         file_path = Path(file_path)
         self.tryParseSimVersion(binary=file_path)
+        self.selectDetectedVersion()
         self.main_window.writeStatusBar(f'{simulation} binary successfully located')
         return file_path
 
@@ -851,10 +908,10 @@ class ConfigurationPage(TabWithToolbar):
 
         # Starting directory
         start_dir = self.base_save_folder.path
-        if not start_dir:
+        if start_dir is None or not start_dir.is_dir():
+            start_dir = self.defaultSaveFolder()
+        if not start_dir.is_dir():
             start_dir = GlobalConf.save_path
-        if not start_dir:
-            start_dir = Path(QDir.currentPath())
 
         folder_dir = QFileDialog.getExistingDirectory(self, f'Select the "{simulation}" save folder', pathToStr(start_dir))
         if len(folder_dir) == 0:
@@ -868,28 +925,113 @@ class ConfigurationPage(TabWithToolbar):
         Update save folder if other simulation is selected
         """
 
-        default_save_folder = SimulationsList().simulation_program_list[self.program.currentIndex()].SaveFolder
-        self.base_save_folder.setPath(GlobalConf.save_path / default_save_folder, ssh=False)
+        self.base_save_folder.setPath(None, ssh=False)
+        self.updateSaveFolderPlaceholder()
 
-    def tryParseSimVersion(self, folder: Optional[Path] = None, binary: Optional[Path] = None):
-        """Try to get Simulation name and version"""
+    def updateSaveFolderPlaceholder(self):
+        """Shows the automatically used save folder as placeholder of the save folder field"""
+
+        self.base_save_folder.path_display.setPlaceholderText(f'Automatic: {pathToStr(self.defaultSaveFolder())}')
+
+    def defaultSaveFolder(self) -> Path:
+        """Returns the default save folder of the selected simulation program, which depends on the preferences"""
+
+        return GlobalConf.save_path / SimulationsList().simulation_program_list[self.program.currentIndex()].SaveFolder
+
+    def tryParseSimVersion(self, folder: Optional[Path] = None, binary: Optional[Path] = None, ignore_binary: bool = False):
+        """
+        Try to get Simulation name and version
+
+        :param folder: (optional) folder of simulation, otherwise the selected folder is used
+        :param binary: (optional) binary of simulation, otherwise the selected binary is used
+        :param ignore_binary: (optional) do not use the selected binary if no binary is provided
+        """
 
         if folder is None:
             folder = self.simulation_folder.path
-        if binary is None:
+        if binary is None and not ignore_binary:
             binary = self.simulation_binary.path
         simulation_programs = SimulationsList().simulation_program_list
         version = 'unknown'
         self.detected_program = 0
+        self.detected_version_name = ''
 
         for i, simulation_program in enumerate(simulation_programs):
             curr_version = simulation_program.getVersionName(folder, binary)
             if curr_version:
                 version = curr_version
                 self.detected_program = i
+                self.detected_version_name = curr_version
                 break
 
         self.detected_simulation.setText(f'<b>{version}</b>')
+        self.updateVersionHighlight()
+
+    def detectedVersionIndex(self) -> Tuple[int, bool]:
+        """
+        Returns the index of the selectable version that suits the detected version best and if it matches exactly.
+        If the detected version is not listed, the highest listed version below it is used (or the lowest listed version)
+
+        :return: (index or -1 if nothing is detected, exact match)
+        """
+
+        if not self.detected_version_name or self.detected_program != self.program.currentIndex():
+            return -1, False
+
+        version_numbers = findall(r'\d+(?:\.\d+)?', self.detected_version_name)
+        if not version_numbers:
+            return -1, False
+        detected = version_numbers[0]
+
+        candidates = []
+        for i in range(self.versions.count()):
+            for version in self.versions.itemText(i).split(','):
+                version = version.strip()
+                if version == detected:
+                    return i, True
+                try:
+                    candidates.append((float(version), i))
+                except ValueError:
+                    pass
+
+        if not candidates:
+            return -1, False
+
+        detected_value = float(detected)
+        lower = [candidate for candidate in candidates if candidate[0] <= detected_value]
+        if lower:
+            return max(lower)[1], False
+        return min(candidates)[1], False
+
+    def selectDetectedVersion(self):
+        """Selects the version that suits the detected version best, if there is one"""
+
+        index, _ = self.detectedVersionIndex()
+        if index >= 0:
+            self.versions.setCurrentIndex(index)
+        self.updateVersionHighlight()
+
+    def updateVersionHighlight(self):
+        """Highlights the selected program and version if they do not coincide with the detected simulation"""
+
+        if not hasattr(self, 'detected_simulation'):
+            return
+
+        program_mismatch = bool(self.detected_version_name) and self.detected_program != self.program.currentIndex()
+        setWidgetHighlight(self.program, program_mismatch)
+        self.program.setToolTip(
+            f'Detected simulation "{self.detected_version_name}" does not belong to the selected program' if program_mismatch else ''
+        )
+
+        index, exact = self.detectedVersionIndex()
+        version_mismatch = index >= 0 and self.versions.currentIndex() != index
+        setWidgetHighlight(self.versions, version_mismatch)
+        if version_mismatch:
+            self.versions.setToolTip(f'Detected simulation "{self.detected_version_name}" suits "{self.versions.itemText(index)}" better than the selected version')
+        elif index >= 0 and not exact:
+            self.versions.setToolTip(f'Detected simulation "{self.detected_version_name}" is not listed explicitly, the closest supported version is selected')
+        else:
+            self.versions.setToolTip('')
 
     def runSelected(self, detached=False):
         """

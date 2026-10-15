@@ -1,0 +1,14 @@
+data_Mg
+_cell_length_a 3.209
+_cell_length_b 3.209
+_cell_length_c 5.211
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 120
+loop_
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Mg1 0.3333 0.6667 0.25
+Mg2 0.6667 0.3333 0.75

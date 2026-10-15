@@ -1,5 +1,6 @@
 from typing import Any, Iterable, List, Union, Tuple, Optional
 from datetime import datetime
+from platform import system
 from pathlib import Path
 from re import sub, findall
 import logging
@@ -443,6 +444,64 @@ def readlines(file, *args, comments: Union[str, List[str], None] = None, strip_l
             lines.append(line)
 
     return lines
+
+def isNativeExecutable(file: Path) -> bool:
+    """
+    Returns True if file is an executable binary for the current operating system.
+    The check is based on the file header, since the file extension is not reliable (e.g. linux binaries named *.exe)
+
+    :param file: path to file
+    """
+
+    magic_numbers = {
+        'Windows': (b'MZ',),
+        'Linux': (b'\x7fELF',),
+        'Darwin': (b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe', b'\xca\xfe\xba\xbe', b'\xfe\xed\xfa\xcf'),
+    }.get(system(), ())
+
+    # on Windows, libraries (*.dll) have the same header as executables
+    if system() == 'Windows' and file.suffix.lower() != '.exe':
+        return False
+
+    try:
+        if not file.is_file():
+            return False
+        with open(file, 'rb') as f:
+            header = f.read(4)
+    except OSError:
+        return False
+
+    return any(header.startswith(magic) for magic in magic_numbers)
+
+
+def findExecutables(folder: Path, max_depth: int = 3, skip_folders: Iterable[str] = ()) -> List[Path]:
+    """
+    Returns all executable binaries for the current operating system in folder and its subfolders
+
+    :param folder: folder to search in
+    :param max_depth: (optional) maximum depth of subfolders
+    :param skip_folders: (optional) names of folders that are not searched (case-insensitive)
+    """
+
+    skip = {name.lower() for name in skip_folders}
+    executables = []
+
+    def search(current: Path, depth: int):
+        try:
+            entries = sorted(current.iterdir())
+        except OSError:
+            return
+        for entry in entries:
+            if entry.is_dir():
+                if depth < max_depth and entry.name.lower() not in skip:
+                    search(entry, depth + 1)
+            elif isNativeExecutable(entry):
+                executables.append(entry)
+
+    if folder is not None and folder.is_dir():
+        search(folder, 0)
+    return executables
+
 
 def pathToStr(path: Path | None) -> str:
     """

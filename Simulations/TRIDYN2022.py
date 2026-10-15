@@ -1360,7 +1360,7 @@ class CompRowBeamSettings(CompRow):
         # cutoff energy
         self.cutoff_energy = QWidget()
         self.cutoff_energy.setContentsMargins(0, 0, 0, 0)
-        self.cutoff_energy.setStyleSheet('border: 1px solid black;')
+        self.cutoff_energy.setStyleSheet('border: 1px solid palette(mid);')
         self.cutoff_energy_hbox = QHBoxLayout()
         self.cutoff_energy_hbox.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.cutoff_energy_hbox.setContentsMargins(5, 0, 0, 0)
@@ -1373,7 +1373,7 @@ class CompRowBeamSettings(CompRow):
             decimals=self.element_precision
         )
         self.cutoff_energy_input.setEnabled(False)
-        self.cutoff_energy_input.setStyleSheet('border: none; border-right: 1px solid black;')
+        self.cutoff_energy_input.setStyleSheet('border: none; border-right: 1px solid palette(mid);')
         self.cutoff_energy_hbox.addWidget(self.cutoff_energy_input, stretch=10)
 
         self.cutoff_energy_checkbox.toggled.connect(self.checkCutoffEnergy)
@@ -3157,6 +3157,7 @@ Wolfhard Möller
 <a href="https://www.hzdr.de/">https://www.hzdr.de/</a>
     '''
     SaveFolder = 'TRIDYN'
+    BinaryKeywords = ['tridyn']
     InputFilename = '*.in'
     LayerFilename = '*.lay'
     ExampleAdditionalSetting = 'e.g. dsrf 10'
@@ -3428,8 +3429,8 @@ Wolfhard Möller
         """
 
         # check on path or binary path
-        version = findall(r'(?<=tridyn\.)\d+', pathToStr(binary).lower())
-        version.extend(findall(r'(?<=tridyn\.)\d+', pathToStr(folder).lower()))
+        version = findall(r'(?<=tridyn)[._ -]?(\d{4})', pathToStr(binary).lower())
+        version.extend(findall(r'(?<=tridyn)[._ -]?(\d{4})', pathToStr(folder).lower()))
 
         if version:
             return f'TRIDYN {version[0]}'

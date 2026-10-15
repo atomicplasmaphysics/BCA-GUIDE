@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from urllib.request import urlretrieve
 
 from PyQt6.QtCore import QFileInfo, Qt, QUrl
-from PyQt6.QtGui import QFont, QDesktopServices, QPixmap, QIcon
+from PyQt6.QtGui import QFont, QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox, QMessageBox, QDialog, QFileDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QProgressBar, QGridLayout, QStackedWidget,
@@ -19,6 +19,7 @@ from Simulations.SimulationsList import SimulationsList
 from Utility.Layouts import InputHBoxLayout, FilePath
 
 from Utility.Functions import pathToStr
+from Utility.Icons import getIcon, getPixmap
 
 
 def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: Path | None, file_filter: str = '') -> Optional[Path]:
@@ -220,19 +221,19 @@ class ManualDialog(QDialog):
                 '2) Open the input file in simulation X'
             ))
             label_open = QLabel('', self)
-            label_open.setPixmap(QPixmap(':/icons/open.png').scaled(icon_size, icon_size, transformMode=Qt.TransformationMode.SmoothTransformation))
+            label_open.setPixmap(getPixmap('open', icon_size))
             self.layout.addWidget(label_open)
             self.layout.addWidget(QLabel(
                 '3) Save the simulation X'
             ))
             label_save = QLabel('', self)
-            label_save.setPixmap(QPixmap(':/icons/save.png').scaled(icon_size, icon_size, transformMode=Qt.TransformationMode.SmoothTransformation))
+            label_save.setPixmap(getPixmap('save', icon_size))
             self.layout.addWidget(label_save)
             self.layout.addWidget(QLabel(
                 '4) Change to simulation Y and click the convert button'
             ))
             label_import = QLabel('', self)
-            label_import.setPixmap(QPixmap(':/icons/convert.png').scaled(icon_size, icon_size, transformMode=Qt.TransformationMode.SmoothTransformation))
+            label_import.setPixmap(getPixmap('convert', icon_size))
             self.layout.addWidget(label_import)
             self.layout.addWidget(QLabel(
                 '5) Navigate to the folder, where simulation X was saved and select the <b>input.json</b> file<br>' +
@@ -305,17 +306,30 @@ class PreferencesDialog(QDialog):
         self.save_path = FilePath(
             placeholder='Select path to the default save folder',
             function_loc=self.selectSaveFolder,
-            icon_loc=QIcon(':/icons/open.png'),
+            icon_loc=getIcon('open'),
             parent=self
         )
         self.layout_save_path = InputHBoxLayout(
-            'Simulation folder:',
+            'Default save folder:',
             self.save_path,
             tooltip='The path to the default save folder, where all output data will be stored',
             split=0
         )
         self.save_path.setPath(GlobalConf.save_path)
         self.layout.addLayout(self.layout_save_path)
+
+        # Theme
+        self.theme = QComboBox(self)
+        for key, label in GlobalConf.THEMES.items():
+            self.theme.addItem(label, key)
+        self.theme.setCurrentIndex(max(0, self.theme.findData(GlobalConf.theme)))
+        self.layout_theme = InputHBoxLayout(
+            'Theme:',
+            self.theme,
+            tooltip='Color theme of the GUI. "System" follows the theme of the operating system',
+            split=0
+        )
+        self.layout.addLayout(self.layout_theme)
 
         # Default element table warning
         self.skip_element_info = QCheckBox('Skip the element table warning when the used simulation does not provide used element data', self)
@@ -378,6 +392,13 @@ class PreferencesDialog(QDialog):
 
         GlobalConf.use_default_language = self.use_default_language.isChecked()
         GlobalConf.setLanguage()
+
+        theme = self.theme.currentData()
+        if theme != GlobalConf.theme:
+            GlobalConf.theme = theme
+            GlobalConf.setValue(GlobalConf.theme_name, theme)
+            if hasattr(self.parent(), 'applyTheme'):
+                self.parent().applyTheme()
 
         self.accept()
 

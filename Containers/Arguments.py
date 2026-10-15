@@ -55,6 +55,7 @@ class ArgumentValues:
         HELIUM = auto()
         ZIEGLER = auto()
         LINDHARD_SCHARFF_AND_ZIEGLER = auto()
+        TABULATED = auto()
 
     class InteractionPotential(Enum):
         """Interaction potential"""

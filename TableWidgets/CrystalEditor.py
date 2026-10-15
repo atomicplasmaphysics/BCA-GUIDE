@@ -1,11 +1,15 @@
 # TODO: this is not a very general class for different simulation codes, but rather only SDTrimSP...
 #   we should create a base class and nest simulation code specific layouts into this at some point
 
-from typing import List
+from typing import List, Optional
+from pathlib import Path
 
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton
+from PyQt6.QtWidgets import (
+    QDialog, QHBoxLayout, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton, QComboBox, QLabel,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QLayout
+)
 
 import numpy as np
 
@@ -18,14 +22,29 @@ from Utility.Layouts import (
     CrystalPreview, NoMessageToolbar
 )
 from Utility.Functions import getPeriodicCoords
-from Utility.ModifyWidget import setWidgetHighlight, setWidgetBackground
+from Utility.ModifyWidget import setWidgetHighlight
+from Utility.Icons import getIcon
 
 from Containers.SimulationConfiguration import SimulationConfiguration
-from Containers.Element import Element
-from Containers.Arguments import GeneralCrystalArguments, SimulationArguments
-from Containers.Crystal import MillerIndex, BasisVector
+from Containers.Element import Element, Elements
+from Containers.Arguments import GeneralCrystalArguments, SimulationArguments, CrystalRowArguments
+from Containers.Crystal import MillerIndex, BasisVector, Coordinate
+from Containers.CrystalTableFile import CrystalTableFile, CrystalTableError, TableCrystal
 
 from Simulations.SDTrimSP import DefaultValues
+
+from TableWidgets.CrystalTableDialog import NewCrystalDialog
+
+
+def setLayoutVisible(layout: QLayout, visible: bool):
+    """Shows or hides all widgets in a layout (recursively)"""
+
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        if item.widget() is not None:
+            item.widget().setVisible(visible)
+        elif item.layout() is not None:
+            setLayoutVisible(item.layout(), visible)
 
 
 class CrystalEditorDialog(QDialog):
@@ -36,6 +55,9 @@ class CrystalEditorDialog(QDialog):
     :param simulation_configuration: <SimulationConfiguration>
     :param target_elements: list of elements
     :param table_target: <CompTable>
+    :param element_data: (optional) <Elements> of the simulation, used for elements that are not in the target
+
+    Since SDTrimSP 7.02 crystals are selected from the crystal table "tables/table.crystal" (table mode).
     """
 
     crystalDefinedChanged = pyqtSignal(bool)
@@ -48,12 +70,19 @@ class CrystalEditorDialog(QDialog):
         parent,
         simulation_configuration: SimulationConfiguration,
         target_elements: List[Element],
-        table_target: CompTable
+        table_target: CompTable,
+        element_data: Optional[Elements] = None
     ):
         super().__init__(parent)
 
         self.crystal_name = DefaultValues.crystal_name
         self.lattice_id = DefaultValues.lattice_id
+        self.element_data = element_data
+
+        # since 7.02 the crystals are defined in tables/table.crystal
+        self.table_mode = DefaultValues(simulation_configuration.version).crystal_table
+        self.table_file: Optional[CrystalTableFile] = None
+        self.table_crystal_selected: Optional[TableCrystal] = None
 
         self.target_elements = target_elements
         self.table_target = table_target
@@ -78,7 +107,6 @@ class CrystalEditorDialog(QDialog):
         self.orientation_parameter_vbox = QVBoxLayout()
         self.orientation_parameter_vbox.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.orientation_hbox.addLayout(self.orientation_parameter_vbox)
-        self.orientation_parameter_vbox.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Miller indices Layout
         self.miller_indices_vbox = VBoxTitleLayout(self, 'Miller indices', spacing=2, add_stretch=False)
@@ -232,7 +260,6 @@ class CrystalEditorDialog(QDialog):
             show_surface=True,
             show_legend=True,
             atom_size=100,
-            axes_equal_radius=0.25,
             width=6,
             height=10,
             disable_interaction=False
@@ -264,21 +291,21 @@ class CrystalEditorDialog(QDialog):
         # Default buttons
         self.bcc_para_button = QPushButton('bcc')
         self.bcc_para_button.setAutoDefault(False)
-        self.bcc_para_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.bcc_para_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.default_para_hbox.addWidget(self.bcc_para_button)
         self.bcc_para_button.clicked.connect(lambda: self.setBccParameter())
         self.bcc_para_button.setToolTip('Creates a bcc structure using the first element in the available element list')
 
         self.fcc_para_button = QPushButton('fcc')
         self.fcc_para_button.setAutoDefault(False)
-        self.fcc_para_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.fcc_para_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.default_para_hbox.addWidget(self.fcc_para_button)
         self.fcc_para_button.clicked.connect(lambda: self.setFccParameter())
         self.fcc_para_button.setToolTip('Creates a fcc structure using the first element in the available element list')
 
         self.hex_para_button = QPushButton('hex')
         self.hex_para_button.setAutoDefault(False)
-        self.hex_para_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.hex_para_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.default_para_hbox.addWidget(self.hex_para_button)
         self.hex_para_button.clicked.connect(lambda: self.setHexParameter())
         self.hex_para_button.setToolTip('Creates a hex structure using the first element in the available element list')
@@ -327,7 +354,6 @@ class CrystalEditorDialog(QDialog):
             self,
             show_basis_vecs=True,
             atom_size=100,
-            axes_equal_radius=0.5,
             width=6,
             height=10,
             disable_interaction=False
@@ -337,6 +363,218 @@ class CrystalEditorDialog(QDialog):
         self.output_plot_toolbar_crystal_preview = NoMessageToolbar(self.crystal_preview, self)
         self.preview_plot_vbox.addWidget(self.crystal_preview, stretch=1)
         self.preview_plot_vbox.addWidget(self.output_plot_toolbar_crystal_preview)
+
+        if self.table_mode:
+            self.setupTableMode()
+
+    def setupTableMode(self):
+        """Replaces the definition of the unit cell by a selection of crystals from tables/table.crystal"""
+
+        # hide widgets that are defined in table.crystal
+        for layout in [self.basis_vectors_vbox, self.default_para_vbox, self.crystal_table_vbox]:
+            setLayoutVisible(layout, False)
+        for layout in [self.layout_impact_parameter, self.layout_lattice_constant, *self.layout_matrices]:
+            setLayoutVisible(layout, False)
+
+        self.table_vbox = VBoxTitleLayout(self, 'Crystal from table.crystal', spacing=2, add_stretch=False)
+        self.lattice_parameter_vbox.insertLayout(0, self.table_vbox)
+
+        self.table_group_box = QGroupBox(self)
+        self.table_vbox.addWidget(self.table_group_box)
+        table_layout = QVBoxLayout()
+        self.table_group_box.setLayout(table_layout)
+
+        selection_layout = QHBoxLayout()
+        self.table_crystals = QComboBox(self)
+        self.table_crystals.setToolTip('<i>name_cryst1</i><br>Crystal from tables/table.crystal of the simulation')
+        self.table_crystals.currentIndexChanged.connect(lambda _: self.tableCrystalChanged())
+        self.layout_table_crystals = InputHBoxLayout('Crystal:', self.table_crystals, split=0)
+        selection_layout.addLayout(self.layout_table_crystals, stretch=1)
+
+        self.new_crystal_button = QPushButton(getIcon('add'), ' New crystal...')
+        self.new_crystal_button.setAutoDefault(False)
+        self.new_crystal_button.setToolTip('Create a new crystal or import one from a CIF or VASP file and add it to table.crystal')
+        self.new_crystal_button.clicked.connect(self.newTableCrystal)
+        selection_layout.addWidget(self.new_crystal_button)
+        table_layout.addLayout(selection_layout)
+
+        self.table_crystal_info = QLabel('')
+        self.table_crystal_info.setWordWrap(True)
+        self.table_crystal_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        table_layout.addWidget(self.table_crystal_info)
+
+        self.table_atoms = QTableWidget(0, 4, self)
+        self.table_atoms.setHorizontalHeaderLabels(['Element', 'x', 'y', 'z'])
+        self.table_atoms.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table_atoms.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table_atoms.setToolTip('Atoms of the selected crystal (relative coordinates), defined in table.crystal')
+        table_layout.addWidget(self.table_atoms)
+
+        self.crystal_dyn = InputHBoxLayout(
+            'Dynamic amorphization of the crystal',
+            None,
+            checkbox=DefaultValues.l_crystal_dyn,
+            tooltip='<i>l_crystal_dyn</i><br>If checked the amorphization of the crystal is calculated'
+        )
+        table_layout.addLayout(self.crystal_dyn)
+
+        self.table_crystal_validation = QLabel('')
+        self.table_crystal_validation.setWordWrap(True)
+        self.table_crystal_validation.setStyleSheet('color: #bf3e2f;')
+        table_layout.addWidget(self.table_crystal_validation)
+
+        self.loadCrystalTable()
+
+    def crystalTablePath(self) -> Optional[Path]:
+        """Returns path to table.crystal of the simulation"""
+
+        folder = self.simulation_configuration.folder
+        if folder is None:
+            return None
+        return folder / 'tables' / 'table.crystal'
+
+    def loadCrystalTable(self, select: Optional[str] = None):
+        """
+        (Re)loads table.crystal of the simulation
+
+        :param select: (optional) name of crystal to select, otherwise the current crystal stays selected
+        """
+
+        if not self.table_mode:
+            return
+
+        if select is None and self.table_crystal_selected is not None:
+            select = self.table_crystal_selected.name
+
+        path = self.crystalTablePath()
+        self.table_file = None
+        error = ''
+        try:
+            if path is None:
+                raise CrystalTableError('No simulation folder defined')
+            self.table_file = CrystalTableFile(path)
+        except CrystalTableError as table_error:
+            error = str(table_error)
+
+        self.table_crystals.blockSignals(True)
+        self.table_crystals.clear()
+        if self.table_file is not None:
+            for crystal in self.table_file.crystals:
+                self.table_crystals.addItem(f'{crystal.name}  ({crystal.compositionStr()})', crystal.name)
+            if select is not None:
+                index = self.table_crystals.findData(select)
+                if index >= 0:
+                    self.table_crystals.setCurrentIndex(index)
+        self.table_crystals.blockSignals(False)
+        self.new_crystal_button.setEnabled(self.table_file is not None)
+
+        if error:
+            self.table_crystal_info.setText(f'<span style="color: #bf3e2f;">Could not read table.crystal: {error}</span>')
+        self.tableCrystalChanged()
+
+    def newTableCrystal(self):
+        """Opens the dialog to create a new crystal in table.crystal"""
+
+        if self.table_file is None:
+            return
+
+        symbols = []
+        if self.element_data is not None:
+            symbols = [element.symbol for element in self.element_data.elements]
+        symbols += [element.symbol for element in self.available_elements]
+
+        dialog = NewCrystalDialog(self, self.table_file, symbols)
+        if dialog.exec() and dialog.created_crystal is not None:
+            self.loadCrystalTable(select=dialog.created_crystal.name)
+
+    def elementFromSymbol(self, symbol: str) -> Optional[Element]:
+        """Returns the element with given symbol from the target elements or the element data"""
+
+        for element in self.available_elements:
+            if element.symbol == symbol:
+                return element
+        if self.element_data is not None:
+            return self.element_data.elementFromSymbol(symbol)
+        return None
+
+    def tableCrystalChanged(self):
+        """Updates info, atoms, previews and validation if another crystal of table.crystal is selected"""
+
+        name = self.table_crystals.currentData()
+        crystal = self.table_file.crystal(name) if self.table_file is not None and name is not None else None
+        self.table_crystal_selected = crystal
+        self.table_atoms.setRowCount(0)
+
+        errors = []
+        crystal_coordinates_dict = {}
+        if crystal is None:
+            if self.table_file is not None:
+                self.table_crystal_info.setText('No crystal selected')
+            errors.append('Select a crystal from table.crystal')
+        else:
+            structure = self.table_file.structure(crystal.structure)
+            structure_name = structure.name if structure is not None else f'{crystal.structure} (missing)'
+            self.table_crystal_info.setText(
+                f'<b>{crystal.name}</b>: {crystal.compositionStr()}, structure {structure_name}<br>'
+                f'dx = dy = {crystal.dx:g} Å, dz = {crystal.dz:g} Å, density = {crystal.density:g} at./Å³<br>'
+                f'ΔH_f = {crystal.deltahf:g} eV, p_max = {crystal.p_max:g} Å, matrix {crystal.matrix_id}x{crystal.matrix_id}x{crystal.matrix_id}'
+            )
+
+            if structure is not None:
+                for element, position in zip(crystal.elements, structure.positions):
+                    row = self.table_atoms.rowCount()
+                    self.table_atoms.insertRow(row)
+                    self.table_atoms.setItem(row, 0, QTableWidgetItem(element))
+                    for column, value in enumerate(position, start=1):
+                        self.table_atoms.setItem(row, column, QTableWidgetItem(f'{value:.4f}'))
+
+            target_symbols = [element.symbol for element in self.available_elements]
+            missing = [symbol for symbol in crystal.distinctElements() if symbol not in target_symbols]
+            if missing:
+                errors.append(f'The target must contain the element(s) {", ".join(missing)} of the crystal')
+            if len(crystal.distinctElements()) > 1:
+                ratios = ', '.join(f'{element}: {count / len(crystal.elements):.4g}' for element, count in crystal.composition().items())
+                self.table_crystal_info.setText(
+                    self.table_crystal_info.text()
+                    + f'<br><i>The target composition of these elements must match the crystal ({ratios})</i>'
+                )
+
+            _, coordinates = self.table_file.basisAndCoordinates(crystal)
+            for symbol, positions in coordinates.items():
+                element = self.elementFromSymbol(symbol)
+                if element is None:
+                    continue
+                crystal_coordinates_dict[element] = np.vstack([getPeriodicCoords(position) for position in positions])
+
+        self.table_crystal_validation.setText('<br>'.join(errors))
+        self.undefined_state = bool(errors)
+        self.crystalDefinedChanged.emit(self.undefined_state)
+
+        basis_vecs = np.identity(3)
+        if crystal is not None and crystal.dx > 0:
+            basis_vecs = np.diag([1., 1., crystal.dz / crystal.dx])
+
+        for preview in (self.orientation_preview, self.crystal_preview):
+            preview.updateParams(basis_vecs=basis_vecs, crystal_coords=crystal_coordinates_dict)
+        self.crystalBasisChanged.emit(basis_vecs)
+        self.crystalCoordsChanged.emit(crystal_coordinates_dict)
+
+    def getRowArguments(self) -> List[CrystalRowArguments]:
+        """Returns the atoms of the crystal as list of <CrystalRowArguments>"""
+
+        if not self.table_mode:
+            return self.table_crystal.getArguments()
+
+        rows = []
+        crystal = self.table_crystal_selected
+        if crystal is None or self.table_file is None:
+            return rows
+        structure = self.table_file.structure(crystal.structure)
+        if structure is None:
+            return rows
+        for element, position in zip(crystal.elements, structure.positions):
+            rows.append(CrystalRowArguments(symbol=element, coord=Coordinate(list(position))))
+        return rows
 
     def reset(self):
         """Resets the crystal parameters and table"""
@@ -362,6 +600,14 @@ class CrystalEditorDialog(QDialog):
 
         # Reset crystal table
         self.table_crystal.resetTable()
+
+        # select first crystal of table.crystal
+        if self.table_mode:
+            self.crystal_dyn.reset()
+            self.table_crystal_selected = None
+            self.loadCrystalTable()
+            if self.table_crystals.count():
+                self.table_crystals.setCurrentIndex(0)
 
     def resetMatrix(self, selected_matrix: int) -> bool:
         """Select given matrix"""
@@ -401,10 +647,18 @@ class CrystalEditorDialog(QDialog):
             row.setAvailableElements(self.available_elements)
             row.blockSignals(False)
 
+        if self.table_mode:
+            self.tableCrystalChanged()
+            return
+
         self.table_crystal.coordinateChanged.emit()
 
     def crystalCoordinatesChanged(self):
         """Gets called if any crystal coordinate was changed"""
+
+        # in table mode the coordinates are defined in table.crystal
+        if self.table_mode:
+            return
 
         crystal_coordinates_dict = {}
         total_coord_list = []
@@ -416,7 +670,7 @@ class CrystalEditorDialog(QDialog):
         for row in self.table_crystal.getRows():
             element = row.getSelectedElement()
             if element not in self.available_elements:
-                setWidgetBackground(row.element_combobox, True)
+                setWidgetHighlight(row.element_combobox, True)
                 self.undefined_state = True
                 continue
             coord = np.array([coord_inp.value() for coord_inp in row.coords])
@@ -443,7 +697,7 @@ class CrystalEditorDialog(QDialog):
             total_coord_list.append(coords)
             crystal_coordinates_dict[element] = coord_list
 
-            setWidgetBackground(row.element_combobox, not row.element_combobox.currentIndex())
+            setWidgetHighlight(row.element_combobox, not row.element_combobox.currentIndex())
 
         self.crystalDefinedChanged.emit(self.undefined_state)
 
@@ -468,6 +722,10 @@ class CrystalEditorDialog(QDialog):
 
     def basisVecsChanged(self):
         """Gets called if basis vectors were changed"""
+
+        # in table mode the basis vectors are defined in table.crystal
+        if self.table_mode:
+            return
 
         basis_vecs = np.array([
             [widget.value() for widget in self.basis_vecs[0]],
@@ -503,6 +761,26 @@ class CrystalEditorDialog(QDialog):
     def getArguments(self) -> GeneralCrystalArguments:
         """" get <GeneralCrystalArgument> """
 
+        if self.table_mode:
+            crystal = self.table_crystal_selected
+            dx = crystal.dx if crystal is not None else DefaultValues.lattice_constant
+            dz = crystal.dz if crystal is not None else DefaultValues.lattice_constant
+            return GeneralCrystalArguments(
+                name=crystal.name if crystal is not None else '',
+                lattice_id=1,
+                lattice_constant=dx,
+
+                basis_vec_a1=BasisVector([1, 0, 0]),
+                basis_vec_a2=BasisVector([0, 1, 0]),
+                basis_vec_a3=BasisVector([0, 0, dz / dx if dx else 1]),
+                miller_ind=MillerIndex([widget.value() for widget in self.miller_ind]),
+
+                beam_dy=self.beam_dy.value(),
+                beam_dz=self.beam_dz.value(),
+                crystal_dyn=self.crystal_dyn.checkbox.isChecked(),
+                table_crystal=True
+            )
+
         return GeneralCrystalArguments(
             name=self.crystal_name,
             lattice_id=self.lattice_id,
@@ -530,6 +808,9 @@ class CrystalEditorDialog(QDialog):
         if not isinstance(assumed, list):
             assumed = []
         not_loadable = []
+
+        if self.table_mode:
+            return self.loadTableArguments(crystal_args, assumed)
 
         # name
         crystal_name = crystal_args.name
@@ -632,6 +913,52 @@ class CrystalEditorDialog(QDialog):
             not_loadable.append('matrix_id')
 
         return not_loadable
+
+    def loadTableArguments(self, crystal_args: GeneralCrystalArguments, assumed: list) -> List[str]:
+        """Loads the crystal arguments in table mode. Returns list of not loadable parameters (default used)"""
+
+        not_loadable = []
+
+        # crystal from table.crystal
+        self.loadCrystalTable()
+        index = self.table_crystals.findData(crystal_args.name)
+        if index < 0 or 'name' in assumed:
+            self.layout_table_crystals.mark()
+            not_loadable.append(f'crystal "{crystal_args.name}" (not found in table.crystal)')
+        else:
+            self.table_crystals.setCurrentIndex(index)
+
+        # miller indices
+        miller_ind = crystal_args.miller_ind
+        if 'miller_indices_list' in assumed:
+            miller_ind = DefaultValues.miller_ind
+            self.layout_miller_ind.mark()
+            not_loadable.append('miller_indices_list')
+        for widget, val in zip(self.miller_ind, miller_ind):
+            widget.setValue(val)
+
+        # beam parameters
+        for key, widget, layout in [('beam_dy', self.beam_dy, self.layout_beam_dy), ('beam_dz', self.beam_dz, self.layout_beam_dz)]:
+            value = crystal_args.optional.get(key, getattr(DefaultValues, key))
+            if key in assumed:
+                value = getattr(DefaultValues, key)
+                layout.mark()
+                not_loadable.append(key)
+            widget.setValue(value)
+
+        # dynamic amorphization
+        crystal_dyn = crystal_args.optional.get('crystal_dyn', DefaultValues.l_crystal_dyn)
+        self.crystal_dyn.checkbox.setChecked(bool(crystal_dyn))
+
+        self.tableCrystalChanged()
+        return not_loadable
+
+    def open(self):
+        """Opens the dialog, in table mode table.crystal is reloaded (it might have changed)"""
+
+        if self.table_mode:
+            self.loadCrystalTable()
+        super().open()
 
     def setBasisSpinboxes(self, a: List[List[float]]):
         """

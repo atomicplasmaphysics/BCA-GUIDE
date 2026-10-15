@@ -1,5 +1,6 @@
 from typing import Union, Tuple, Optional, List, Callable
 from pathlib import Path
+from re import findall, sub
 import logging
 
 import numpy as np
@@ -10,7 +11,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
 from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout, InputHBoxLayout
 from Utility.Indexing import RepeatingList, ElementList
-from Utility.Functions import getFileNameFromFileList, fileToNpArray, pathToStr
+from Utility.Functions import getFileNameFromFileList, fileToNpArray, pathToStr, findExecutables
 
 from TableWidgets.CompTable import CompRow
 from TableWidgets.CrystalTable import CrystalRow
@@ -1802,6 +1803,10 @@ class SimulationsInput:
     About = 'No information available'
     # save folder name of simulation
     SaveFolder = 'default'
+    # keywords that are expected in the name of the binary
+    BinaryKeywords: List[str] = []
+    # folders that are not searched for binaries
+    BinarySkipFolders: List[str] = ['src', 'case', 'cases', 'doc', 'tables', 'examples']
     # input file name
     InputFilename = 'input'
     # layer file name
@@ -1849,6 +1854,42 @@ class SimulationsInput:
         """
 
         return False
+
+    @classmethod
+    def findBinary(cls, folder: Optional[Path]) -> Optional[Path]:
+        """
+        Searches the most likely binary of the simulation in folder.
+        Binaries containing BinaryKeywords in their name, sequential builds (*.SEQ folders), plain names and higher numbers in the name are preferred
+
+        :param folder: main folder of simulation
+
+        :return: path to binary or None if no binary was found
+        """
+
+        if folder is None:
+            return None
+
+        executables = findExecutables(folder, skip_folders=cls.BinarySkipFolders)
+        if not executables:
+            return None
+
+        def rank(binary: Path):
+            name = binary.name.lower()
+            parent = binary.parent.name.lower()
+            score = 0
+            if any(keyword.lower() in name for keyword in cls.BinaryKeywords):
+                score += 4
+            if 'seq' in parent:
+                score += 2
+            if any(word in parent for word in ('pro', 'mpi', 'par')):
+                score -= 1
+            if any(word in name for word in ('ncp', 'test', 'debug')):
+                score -= 2
+            numbers = [int(number) for number in findall(r'\d+', name)]
+            name_length = len(sub(r'\d+', '', binary.stem))  # prefer plain names over variants, e.g. SDTrimSP over SDTrimSP_nqxm5000
+            return score, -name_length, max(numbers, default=0), -len(binary.relative_to(folder).parts)
+
+        return max(executables, key=rank)
 
     @staticmethod
     def getDoc(folder: Path, binary: Path, version: str) -> Union[Path, bool]:

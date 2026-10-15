@@ -76,7 +76,7 @@ Upon opening the GUI, the *Configurations* tab needs to be configured for the de
 2) Select **TRIDYN 2022** in the list of *Simulation programs*.
 3) Select version **2022** in the list of *Simulation versions*.
 4) Select the *Simulation folder* of TRIDYN 2022: `Simulation Programs\TRIDYN\Tridyn2022`
-5) Select the *Simulation binary* of TRIDYN 2022: `...\tridyn2022.exe` (Windows) or `...\tridyn2022l` (Linux)
+5) The *Simulation binary* of TRIDYN 2022 is selected automatically: `...\tridyn2022w.exe` (Windows) or `...\tridyn2022l` (Linux). Otherwise, select it manually
 6) Check that the *Detected simulation* reads **TRIDYN 2022**
 7) Confirm and add the new configuration by pressing *Save configuration*
 
@@ -86,6 +86,23 @@ Upon opening the GUI, the *Configurations* tab needs to be configured for the de
 2) Select **SDTrimSP** in the list of *Simulation programs*.
 3) Select **6.01, 6.06** in the list of *Simulation versions*.
 4) Select the *Simulation folder* of SDTrimSP v.6.01: `Simulation Programs\SDTrimSP\SDTrimSP_6.01_Windows`
-5) Select the *Simulation binary* of SDTrimSP v.6.01: `...\bin\windows.SEQ\SDTRIM.SP.6.01x64.exe`
+5) The *Simulation binary* of SDTrimSP v.6.01 is selected automatically: `...\bin\windows.SEQ\SDTRIM.SP.6.01x64.exe`. Otherwise, select it manually
 6) Check that the *Detected simulation* reads **SDTrimSP v.6.01**
 7) Confirm and add the new configuration by pressing *Save configuration*
+
+## Tests
+
+The tests are found in the folder `tests` and need the packages in `requirements-dev.txt` (`pip install -r requirements-dev.txt`).
+The GUI is tested without showing windows; the settings and saves of the user are not changed.
+
+```
+python -m pytest                 # all tests except the simulation runs
+python -m pytest --simulations   # also runs a short simulation with every program found in "Simulation Programs"
+```
+
+The simulation runs (Ar, 2 keV, 60° on Au with 1000 histories, with and without crystal) check that all outputs of each
+simulation version can be shown and plotted in the GUI.
+
+## Third-party resources
+
+- Icons: [Lucide](https://lucide.dev) (ISC License, Copyright (c) Lucide Contributors 2022, portions Copyright (c) Cole Bemis 2013-2022 as part of Feather (MIT))

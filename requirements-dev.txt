@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8.0
+# only needed to rebuild resources.py (python setup/build_resources.py)
+pyside6>=6.5.0

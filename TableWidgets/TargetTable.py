@@ -1,12 +1,13 @@
 from typing import List
 
-from PyQt6.QtGui import QRegularExpressionValidator, QIcon
+from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtCore import pyqtSignal, QRegularExpression
 from PyQt6.QtWidgets import QLineEdit, QPushButton, QWidget, QHBoxLayout, QVBoxLayout
 
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Functions import limitSum
 from Utility.Layouts import SpinBox, DoubleSpinBox, SpinBoxRange
+from Utility.Icons import getIcon
 
 from TableWidgets.CustomTable import CustomTable, CustomRow
 
@@ -52,10 +53,10 @@ class TargetLayersRow(CustomRow):
         self.edit_button_hl.addWidget(self.remove)
         self.edit_button_hl.addStretch(1)
 
-        self.move_top = QPushButton(QIcon(':/icons/up.png'), '')
+        self.move_top = QPushButton(getIcon('up'), '')
         self.move_top.setToolTip('Move this layer up')
 
-        self.move_bottom = QPushButton(QIcon(':/icons/down.png'), '')
+        self.move_bottom = QPushButton(getIcon('down'), '')
         self.move_bottom.setToolTip('Move this layer down')
 
         self.move_top_bottom_button = QWidget()

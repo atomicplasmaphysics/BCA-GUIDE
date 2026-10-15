@@ -3,7 +3,7 @@ from typing import List, Union, Optional
 from PyQt6.QtCore import pyqtSignal
 
 from Utility.Functions import limitSum
-from Utility.ModifyWidget import setWidgetBackground
+from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Layouts import ComboBox, DoubleSpinBox, SpinBoxRange
 
 from TableWidgets.CustomTable import CustomRowField, CustomRow, CustomTable
@@ -70,7 +70,7 @@ class CrystalRow(CustomRow):
         )
 
         self.element_combobox.currentIndexChanged.connect(self.coordinateChanged.emit)
-        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetBackground(self.element_combobox, False)
+        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetHighlight(self.element_combobox, False)
 
         self.coords = [DoubleSpinBox(
             default=0,
@@ -137,7 +137,7 @@ class CrystalRow(CustomRow):
         symbol = arguments.get('symbol')
         if 'symbol' in assumed or symbol not in self.available_elements_symbols:
             self.element_combobox.setCurrentIndex(0)
-            setWidgetBackground(self.element_combobox, True)
+            setWidgetHighlight(self.element_combobox, True)
         else:
             self.element_combobox.setValue(symbol, from_entries=True)
 

@@ -9,6 +9,7 @@ from GlobalConf import GlobalConf
 
 from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
 from Utility.Layouts import ProgressTabBar
+from Utility.Icons import getIcon
 
 from Pages.ConfigurationPage import ConfigurationPage
 from Pages.ProgramPage import SimulationPage
@@ -42,6 +43,7 @@ class MainWindow(QMainWindow):
         QCoreApplication.setApplicationName(GlobalConf.title)
 
         self.window_title = GlobalConf.title
+        self.theme_before_srim = 'system'
 
         #
         # MENU BAR
@@ -53,19 +55,19 @@ class MainWindow(QMainWindow):
         self.menu_file.setToolTipsVisible(True)
 
         # Save all
-        self.action_save_all = self.menu_file.addAction(QIcon(':/icons/save.png'), 'Save all')
+        self.action_save_all = self.menu_file.addAction(getIcon('save'), 'Save all')
         self.action_save_all.setToolTip('Save configuration for all tabs')
         self.action_save_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_S))
         self.action_save_all.triggered.connect(lambda: self.menuSave())
 
         # Open all - not needed
-        # self.action_open_all = self.menu_file.addAction(QIcon(':/icons/open.png'), 'Open all')
+        # self.action_open_all = self.menu_file.addAction(getIcon('open'), 'Open all')
         # self.action_open_all.setToolTip('Open one configuration for all tabs')
         # self.action_open_all.setShortcut(QKeySequence(Qt.CTRL + Qt.ALT + Qt.Key_O))
         # self.action_open_all.triggered.connect(lambda: self.menuOpen())
 
         # Reset all
-        self.action_reset_all = self.menu_file.addAction(QIcon(':/icons/refresh.png'), 'Reset all')
+        self.action_reset_all = self.menu_file.addAction(getIcon('refresh'), 'Reset all')
         self.action_reset_all.setToolTip('Resets configuration for all tabs')
         self.action_reset_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_N))
         self.action_reset_all.triggered.connect(lambda: self.menuReset())
@@ -73,7 +75,7 @@ class MainWindow(QMainWindow):
         self.menu_file.addSeparator()
 
         # Close all
-        self.action_close_all = self.menu_file.addAction(QIcon(':/icons/close.png'), 'Close all tabs')
+        self.action_close_all = self.menu_file.addAction(getIcon('close'), 'Close all tabs')
         self.action_close_all.setToolTip('Closes all tabs')
         self.action_close_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_W))
         self.action_close_all.triggered.connect(lambda: self.menuCloseAll())
@@ -81,10 +83,10 @@ class MainWindow(QMainWindow):
         self.menu_file.addSeparator()
 
         # Preferences
-        self.action_preferences = self.menu_file.addAction(QIcon(':/icons/preferences.png'), 'Preferences')
+        self.action_preferences = self.menu_file.addAction(getIcon('preferences'), 'Preferences')
         self.action_preferences.setToolTip('Open preferences dialog')
         self.action_preferences.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_H))
-        self.action_preferences.triggered.connect(lambda: PreferencesDialog(self).open())
+        self.action_preferences.triggered.connect(self.openPreferences)
 
         self.menu_file.addSeparator()
 
@@ -99,7 +101,7 @@ class MainWindow(QMainWindow):
         self.menu_simulation.setToolTipsVisible(True)
 
         # Close current tab
-        self.closeAction = self.menu_simulation.addAction(QIcon(':/icons/close.png'), 'Close current tab')
+        self.closeAction = self.menu_simulation.addAction(getIcon('close'), 'Close current tab')
         self.closeAction.setToolTip('Closes currently active tab')
         self.closeAction.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_W))
         self.closeAction.setDisabled(True)
@@ -108,19 +110,19 @@ class MainWindow(QMainWindow):
         self.menu_simulation.addSeparator()
 
         # Run all tabs
-        self.action_run_all = self.menu_simulation.addAction(QIcon(':/icons/play.png'), 'Run all tabs')
+        self.action_run_all = self.menu_simulation.addAction(getIcon('play'), 'Run all tabs')
         self.action_run_all.setToolTip('Runs all opened tab')
         self.action_run_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_R))
         self.action_run_all.triggered.connect(lambda: self.menuRun())
 
         # Run all tabs detached
-        self.action_run_all_detached = self.menu_simulation.addAction(QIcon(':/icons/play_detached.png'), 'Run all tabs detached')
+        self.action_run_all_detached = self.menu_simulation.addAction(getIcon('play_detached'), 'Run all tabs detached')
         self.action_run_all_detached.setToolTip('Runs all opened tab in detached mode')
         self.action_run_all_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_all_detached.triggered.connect(lambda: self.menuRun(detached=True))
 
         # Abort all tabs
-        self.action_abort_all = self.menu_simulation.addAction(QIcon(':/icons/abort.png'), 'Abort all tabs')
+        self.action_abort_all = self.menu_simulation.addAction(getIcon('abort'), 'Abort all tabs')
         self.action_abort_all.setToolTip('Aborts all running tabs')
         self.action_abort_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_P))
         self.action_abort_all.triggered.connect(lambda: self.menuAbort())
@@ -131,18 +133,18 @@ class MainWindow(QMainWindow):
 
         # Manual
         self.manual_path = Path(QDir.currentPath())
-        self.action_manual = self.menu_help.addAction(QIcon(':/icons/book.png'), 'Manual')
+        self.action_manual = self.menu_help.addAction(getIcon('book'), 'Manual')
         self.action_manual.triggered.connect(lambda: self.openUserManual())
 
         # Manual
-        self.action_manual = self.menu_help.addAction(QIcon(':/icons/help.png'), 'Quick Manual')
+        self.action_manual = self.menu_help.addAction(getIcon('help'), 'Quick Manual')
         self.action_manual.triggered.connect(lambda: ManualDialog(self).show())
 
         self.menu_help.addSeparator()
 
-        # SRIM Mode
+        # SRIM Mode (easter egg, also selectable as theme in the preferences)
         self.action_srim = self.menu_help.addAction('Enable SRIM Mode')
-        self.action_srim.triggered.connect(lambda: self.enableSrimMode())
+        self.action_srim.triggered.connect(lambda: self.toggleSrimMode())
 
         self.menu_help.addSeparator()
 
@@ -167,6 +169,11 @@ class MainWindow(QMainWindow):
         self.addSimulationTab(self.simulation_configuration_page, 'Configurations')
         self.simulation_configuration_page.open(default=True)
 
+        # apply the theme from the preferences
+        if GlobalConf.theme == 'srim':
+            self.theme_before_srim = 'system'
+        self.applyTheme()
+
         #
         # STATUS BAR
         #
@@ -176,8 +183,6 @@ class MainWindow(QMainWindow):
         #
         # Setup window location and signals
         #
-
-        # TODO: also store display where GUI was displayed
 
         self.tab_simulations.currentChanged.connect(lambda index: self.writeWindowTitleTab(index))
 
@@ -189,8 +194,10 @@ class MainWindow(QMainWindow):
             self.resize(width, height)
             frame_geometry = self.frameGeometry()
             center_point = QPoint(x, y)
-            if x == y == 0:
-                center_point = QGuiApplication.primaryScreen().availableVirtualGeometry().center()
+
+            # the stored center also defines the display; if this display is not available anymore, use the primary display
+            if (x == y == 0) or QGuiApplication.screenAt(center_point) is None:
+                center_point = QGuiApplication.primaryScreen().availableGeometry().center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 
@@ -326,6 +333,14 @@ class MainWindow(QMainWindow):
             if sc not in self.simulation_configs:
                 self.removeSimulationTab(sc.tab_widget)
 
+        # keep order of tabs in sync with order of configurations (first tab is the configuration page)
+        for i, sc in enumerate(self.simulation_configs):
+            index = self.tab_simulations.indexOf(sc.tab_widget)
+            if index != i + 1:
+                self.tab_bar_simulations.moveTab(index, i + 1)
+        for sc in self.simulation_configs:
+            self.simChanged(sc)
+
         self.old_simulation_configs = self.simulation_configs.copy()
 
     def menuSave(self):
@@ -450,6 +465,13 @@ class MainWindow(QMainWindow):
             if sc.running:
                 sc.tab_widget.process.kill()
 
+    def openPreferences(self):
+        """Opens the preferences dialog"""
+
+        dialog = PreferencesDialog(self)
+        dialog.finished.connect(lambda _: self.simulation_configuration_page.updateSaveFolderPlaceholder())
+        dialog.open()
+
     def openUserManual(self):
         """Opens the user-manual of the GUI"""
 
@@ -467,11 +489,39 @@ class MainWindow(QMainWindow):
             )
             dialog.open()
 
-    def enableSrimMode(self):
+    def toggleSrimMode(self):
         """Toggles SRIM Mode"""
-        self.app.setWindowIcon(QIcon(':/icons/tu_logo_loco.png'))
-        self.setStyleSheet('background: url(:/icons/clouds.png) repeat center center fixed; background-color: #2db9ff;')
-        self.window_title = 'BCA-SRIM'
+
+        if GlobalConf.theme == 'srim':
+            GlobalConf.theme = self.theme_before_srim
+        else:
+            self.theme_before_srim = GlobalConf.theme
+            GlobalConf.theme = 'srim'
+        GlobalConf.setValue(GlobalConf.theme_name, GlobalConf.theme)
+        self.applyTheme()
+
+    def applyTheme(self):
+        """Applies the theme selected in GlobalConf.theme (system, light, dark or srim)"""
+
+        color_schemes = {
+            'system': Qt.ColorScheme.Unknown,
+            'light': Qt.ColorScheme.Light,
+            'dark': Qt.ColorScheme.Dark,
+            'srim': Qt.ColorScheme.Light,
+        }
+        self.app.styleHints().setColorScheme(color_schemes.get(GlobalConf.theme, Qt.ColorScheme.Unknown))
+
+        if GlobalConf.theme == 'srim':
+            self.app.setWindowIcon(QIcon(':/icons/tu_logo_loco.png'))
+            self.setStyleSheet('background: url(:/icons/clouds.png) repeat center center fixed; background-color: #2db9ff;')
+            self.window_title = 'BCA-SRIM'
+            self.action_srim.setText('Disable SRIM Mode')
+        else:
+            self.app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
+            self.setStyleSheet('')
+            self.window_title = GlobalConf.title
+            self.action_srim.setText('Enable SRIM Mode')
+
         self.writeWindowTitleTab(self.tab_simulations.currentIndex())
 
     def closeEvent(self, event: QCloseEvent):

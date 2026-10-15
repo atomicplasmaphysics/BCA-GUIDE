@@ -1,4 +1,5 @@
 from typing import Tuple, Union
+import logging
 
 from Utility.Layouts import MplCanvas
 from Utility.Functions import setDictIfNotExists
@@ -99,7 +100,6 @@ class MplCanvasSettings:
                 pass
 
             # apply all call lists
-            # TODO: catch errors, print and reraise them
             for call in self.fig.get_calls():
                 self.apply_call(canvas.fig, call)
 
@@ -124,8 +124,16 @@ class MplCanvasSettings:
         :param call: call that is applied
         """
 
-        if call[0] == 'func':
-            func = getattr(obj, call[1])
-            func(*call[2], **call[3])
-        elif call[0] == 'set':
-            setattr(obj, call[1], call[2])
+        try:
+            if call[0] == 'func':
+                func = getattr(obj, call[1])
+                func(*call[2], **call[3])
+            elif call[0] == 'set':
+                setattr(obj, call[1], call[2])
+        except Exception as error:
+            if call[0] == 'func':
+                description = f'{call[1]}(args={call[2]}, kwargs={call[3]})'
+            else:
+                description = f'{call[1]} = {call[2]!r}'
+            logging.error(f'Failed to apply "{description}" on <{type(obj).__name__}>: {error}')
+            raise

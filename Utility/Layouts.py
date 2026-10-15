@@ -4,12 +4,12 @@ from pathlib import Path
 
 from Styles import Styles
 
-from PyQt6.QtCore import Qt, QSize, QRect, QElapsedTimer
-from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QTextCursor, QIcon, QPalette, QPixmap
+from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QElapsedTimer, QEvent, QTimer
+from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle
+    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle, QSizePolicy
 )
 
 import numpy as np
@@ -18,8 +18,14 @@ from matplotlib import rc_context
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from matplotlib.colors import same_color
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle, FancyBboxPatch
+from matplotlib.spines import Spine
+from matplotlib.text import Text
 
 from Utility.ModifyWidget import setWidgetBackground
+from Utility.Icons import ICON_COLORS, getIcon
 from Utility.Functions import getUniqueColor, setDictIfNotExists
 
 from Containers.Element import Element
@@ -591,6 +597,7 @@ class FilePath(QWidget):
     :param function_ssh: (optional) function that will be called when ssh button is pressed.
                                     Return value of the function will be displayed.
     :param icon_ssh: (optional) icon of pushbutton for ssh file
+    :param clearable: (optional) adds a button to clear the path
     """
 
     def __init__(
@@ -600,6 +607,7 @@ class FilePath(QWidget):
         icon_loc: QIcon = None,
         function_ssh: Callable = None,
         icon_ssh: QIcon = None,
+        clearable: bool = False,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -643,6 +651,16 @@ class FilePath(QWidget):
             self.layout.addWidget(self.button_ssh, Qt.AlignmentFlag.AlignRight)
 
             self.button_ssh.clicked.connect(self.select_path_ssh)
+
+        self.button_clear = None
+        if clearable:
+            self.button_clear = QPushButton()
+            self.button_clear.setIcon(getIcon('close'))
+            self.button_clear.setToolTip('Clear the path')
+            self.button_clear.setMinimumSize(40, 10)
+            self.button_clear.setMaximumSize(40, 30)
+            self.layout.addWidget(self.button_clear, Qt.AlignmentFlag.AlignRight)
+            self.button_clear.clicked.connect(lambda: self.setPath(None))
 
     def setPath(self, path: Optional[Path], ssh: bool = False):
         """Sets a path and whether it is ssh"""
@@ -748,6 +766,7 @@ class VBoxTitleLayout(QVBoxLayout):
 
         self.title = QLabel(self.title_str, self.parent)
         self.title.setStyleSheet(title_style)
+        self.title.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.hl.addWidget(self.title)
 
         if isinstance(add_stretch, bool) and add_stretch:
@@ -847,17 +866,21 @@ class TimeProgressBar(QProgressBar):
     Progress bar ranges from 0 to 100
 
     :param parent: parent widget
-    :param shadow_size: size of shadow
+    :param color: (optional) color of the filled part
+    :param bar_height: (optional) height of the bar in pixels
     """
 
     def __init__(
         self,
         parent,
-        shadow_size: int = 2
+        color: QColor = QColor(Styles.green_hex),
+        bar_height: int = 22
     ):
         super().__init__(parent)
 
-        self.shadow_size = shadow_size
+        self.color = color
+        self.bar_height = bar_height
+        self.setFixedHeight(bar_height)
 
         self.setRange(0, 100)
         self.val = 0
@@ -916,41 +939,67 @@ class TimeProgressBar(QProgressBar):
         super().setValue(int(value))
 
     def paintEvent(self, event):
-        """Custom paint event to draw a progress bar"""
-
-        super().paintEvent(event)
+        """Custom paint event to draw a rounded progress bar with elapsed time, percentage and remaining time"""
 
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
 
+        palette = self.palette()
+        text_color = palette.color(QPalette.ColorRole.WindowText)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.height() / 2
+
+        # track
+        track_color = QColor(text_color)
+        track_color.setAlphaF(0.12)
+        track_path = QPainterPath()
+        track_path.addRoundedRect(rect, radius, radius)
+        painter.fillPath(track_path, track_color)
+
+        # filled part
+        fill_width = rect.width() * max(0., min(100., self.val)) / 100
+        fill_rect = QRectF(rect.x(), rect.y(), fill_width, rect.height())
+        if fill_width > 0:
+            painter.save()
+            painter.setClipRect(fill_rect)
+            painter.fillPath(track_path, self.color if self.isEnabled() else palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText))
+            painter.restore()
+
+        # texts
         elapsed = self.elapsed_timer_final / 1000 if self.elapsed_timer_ended else self.elapsed_timer.elapsed() / 1000
-
-        texts = [
-            (f'{self.val:.0f}%', Qt.AlignmentFlag.AlignHCenter)
-        ]
-
+        texts = [(f'{self.val:.0f}%', Qt.AlignmentFlag.AlignHCenter, True)]
         if self.elapsed_timer_started:
-            if self.val > 0:
-                remaining = max(0, elapsed * (100 / self.val - 1))
-                remaining_text = f'~{self.formatTime(remaining)}'
-            else:
-                remaining_text = '--:--'
-            texts.append((self.formatTime(elapsed), Qt.AlignmentFlag.AlignLeft))
-
+            texts.append((self.formatTime(elapsed), Qt.AlignmentFlag.AlignLeft, False))
             if not self.elapsed_timer_ended:
-                texts.append((remaining_text, Qt.AlignmentFlag.AlignRight))
+                if self.val > 0:
+                    remaining_text = f'~{self.formatTime(max(0., elapsed * (100 / self.val - 1)))} left'
+                else:
+                    remaining_text = '--:-- left'
+                texts.append((remaining_text, Qt.AlignmentFlag.AlignRight, False))
 
-        # shadow
-        for text, alignment in texts:
-            for dx in range(-self.shadow_size, self.shadow_size + 1):
-                for dy in range(-self.shadow_size, self.shadow_size + 1):
-                    painter.setPen(QColor(0, 0, 0, int(255 * (1 - abs(dx) / self.shadow_size))))
-                    painter.drawText(self.rect().adjusted(dx, dy, dx, dy), alignment | Qt.AlignmentFlag.AlignVCenter, text)
+        text_rect = rect.adjusted(radius, 0, -radius, 0)
+        font = QFont(self.font())
+        font.setPointSizeF(max(7., font.pointSizeF() * 0.9))
+        font_bold = QFont(font)
+        font_bold.setBold(True)
 
-        # text
-        painter.setPen(self.palette().color(QPalette.ColorRole.Text))
-        for text, alignment in texts:
-            painter.drawText(self.rect(), alignment | Qt.AlignmentFlag.AlignVCenter, text)
+        # text on top of the filled part: dark on light fill colors, white on dark fill colors (relative luminance)
+        luminance = 0.2126 * self.color.redF() ** 2.2 + 0.7152 * self.color.greenF() ** 2.2 + 0.0722 * self.color.blueF() ** 2.2
+        fill_text_color = QColor('#10240f') if luminance > 0.25 else QColor(Styles.white_hex)
+
+        # draw texts twice: in text color outside and in fill text color on top of the filled part
+        empty_rect = QRectF(rect.x() + fill_width, rect.y(), rect.width() - fill_width, rect.height())
+        for clip_rect, color in ((empty_rect, text_color), (fill_rect, fill_text_color)):
+            if clip_rect.width() <= 0:
+                continue
+            painter.save()
+            painter.setClipRect(clip_rect)
+            painter.setPen(color)
+            for text, alignment, bold in texts:
+                painter.setFont(font_bold if bold else font)
+                painter.drawText(text_rect, alignment | Qt.AlignmentFlag.AlignVCenter, text)
+            painter.restore()
 
         painter.end()
 
@@ -1036,7 +1085,6 @@ class ListWidget(QListWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.itemSelectionChanged.connect(self.executeFunction)
-        self.font_color = self.palette().color(QPalette.ColorRole.Text)
 
     def executeFunction(self):
         """Executes function from ListWidgetItem if set"""
@@ -1050,9 +1098,7 @@ class ListWidget(QListWidget):
         super().addItem(ListWidgetItem('', selectable=False))
 
     def addItem(self, item: ListWidgetItem):
-        """Adds an item"""
-        if not item.grey:
-            item.setForeground(self.font_color)
+        """Adds an item, the text color of non-grey items follows the palette"""
         super().addItem(item)
 
 
@@ -1087,9 +1133,7 @@ class FileEditor(QPlainTextEdit):
     :param offset: (optional) offset for line numbers
     :param highlighting: (optional) enables highlighting of current selected line
     :param color_line_number: (optional) color of line number area
-    :param color_line_number_dark: (optional) color of line number area in dark mode
-    :param color_highlight: (optional) color of highlighting line
-    :param color_highlight_dark: (optional) color of highlighting line in dark mode
+    The colors of the line number area and the line highlighting are derived from the current palette
     """
 
     def __init__(
@@ -1099,25 +1143,12 @@ class FileEditor(QPlainTextEdit):
         readonly: bool = True,
         mono: bool = True,
         offset: int = 0,
-        highlighting: bool = True,
-        color_line_number: QColor = QColor('#EEEEEE'),
-        color_line_number_dark: QColor = QColor('#464646'),
-        color_highlight: QColor = QColor('#FFFEC8'),
-        color_highlight_dark: QColor = QColor('#00003F')
+        highlighting: bool = True
     ):
         super().__init__(parent)
         self.line_numbering = line_numbering
         self.offset = offset
-
-        # check color palette and decide if dark or light mode
-        if self.palette().color(QPalette.ColorRole.Text).black() == 255:
-            self.color_line_number = color_line_number
-            self.color_highlight = color_highlight
-            self.pen_color = Qt.GlobalColor.black
-        else:
-            self.color_line_number = color_line_number_dark
-            self.color_highlight = color_highlight_dark
-            self.pen_color = Qt.GlobalColor.white
+        self.highlighting = highlighting
 
         self.line_number_area = LineNumberArea(self)
 
@@ -1175,8 +1206,10 @@ class FileEditor(QPlainTextEdit):
         if not self.line_numbering:
             return
 
+        palette = self.palette()
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), self.color_line_number)
+        painter.fillRect(event.rect(), palette.color(QPalette.ColorRole.AlternateBase))
+        pen_color = palette.color(QPalette.ColorRole.PlaceholderText)
 
         block = self.firstVisibleBlock()
         block_number = block.blockNumber()
@@ -1187,7 +1220,7 @@ class FileEditor(QPlainTextEdit):
         height = self.fontMetrics().height()
         while block.isValid() and (top <= event.rect().bottom()):
             if block.isVisible() and (bottom >= event.rect().top()):
-                painter.setPen(self.pen_color)
+                painter.setPen(pen_color)
                 painter.drawText(
                     0,
                     int(top),
@@ -1201,6 +1234,14 @@ class FileEditor(QPlainTextEdit):
             top = bottom
             bottom = top + self.blockBoundingRect(block).height()
             block_number += 1
+
+    def changeEvent(self, event):
+        """Updates the colors that depend on the palette, if the theme changes"""
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+            if self.highlighting and self.extraSelections():
+                self.highlightCurrentLine()
+            self.line_number_area.update()
 
     def highlightCurrentLine(self):
         """Highlight current line"""
@@ -1220,8 +1261,10 @@ class FileEditor(QPlainTextEdit):
             selection.cursor = new_text_cursor
             selections.append(selection)
 
+        color_highlight = QColor(self.palette().color(QPalette.ColorRole.Highlight))
+        color_highlight.setAlpha(45)
         for selection in selections:
-            selection.format.setBackground(self.color_highlight)
+            selection.format.setBackground(color_highlight)
             selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
 
         self.setExtraSelections(selections)
@@ -1251,7 +1294,8 @@ class MplCanvas(FigureCanvasQTAgg):
         disable_interaction: bool = False
     ):
         self.disable_interaction = disable_interaction
-        self.pal = parent.palette() if parent is not None else QApplication.instance().palette()
+        # matplotlib sets an own (white) palette for the canvas, so the application palette is used
+        self.pal = QApplication.palette()
 
         # get QT colors
         self.bg_color = self.pal.color(QPalette.ColorRole.Window).name()
@@ -1293,6 +1337,60 @@ class MplCanvas(FigureCanvasQTAgg):
             'figure.edgecolor': self.bg_color,
             'legend.frameon': False,
         }
+
+    def event(self, event):
+        """Updates the colors of the figure, if the theme changes (after the application palette is updated)"""
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+            QTimer.singleShot(0, self.updateThemeColors)
+        return super().event(event)
+
+    def updateThemeColors(self) -> bool:
+        """
+        Updates the colors of the figure to the current palette.
+        Elements that use the old background or foreground color get the new colors
+
+        :return: True if colors changed
+        """
+
+        # matplotlib sets an own (white) palette for the canvas, so the application palette is used
+        palette = QApplication.palette()
+        bg_color = palette.color(QPalette.ColorRole.Window).name()
+        fg_color = palette.color(QPalette.ColorRole.WindowText).name()
+        if bg_color == self.bg_color and fg_color == self.fg_color:
+            return False
+
+        old_bg, old_fg = self.bg_color, self.fg_color
+        self.bg_color, self.fg_color = bg_color, fg_color
+        if 'facecolor' in self.palette_kwargs:
+            self.palette_kwargs['facecolor'] = bg_color
+
+        def replace(color, setter):
+            if same_color(color, old_fg):
+                setter(fg_color)
+            elif same_color(color, old_bg):
+                setter(bg_color)
+
+        self.fig.set_facecolor(bg_color)
+        self.fig.set_edgecolor(bg_color)
+        for artist in self.fig.findobj():
+            if isinstance(artist, Text):
+                replace(artist.get_color(), artist.set_color)
+            elif isinstance(artist, Line2D):
+                replace(artist.get_color(), artist.set_color)
+                replace(artist.get_markeredgecolor(), artist.set_markeredgecolor)
+            elif isinstance(artist, (Spine, Rectangle, FancyBboxPatch)):
+                replace(artist.get_edgecolor(), artist.set_edgecolor)
+                replace(artist.get_facecolor(), artist.set_facecolor)
+        for axes in self.fig.axes:
+            replace(axes.get_facecolor(), axes.set_facecolor)
+            axes.tick_params(which='both', colors=fg_color, labelcolor=fg_color)
+
+        try:
+            self.draw_idle()
+        except RuntimeError:
+            # widget was already deleted
+            return False
+        return True
 
     def clear(self):
         """Clears fig and resets axes"""
@@ -1357,7 +1455,6 @@ class TargetPreview(QWidget):
         self.antialiased = True
         self.setBackgroundRole(QPalette.ColorRole.Base)
         self.setAutoFillBackground(True)
-        self.pen = QPen(self.palette().color(QPalette.ColorRole.Text))
 
         self.font = QFont()
         self.font_metrics = QFontMetrics(self.font)
@@ -1420,7 +1517,7 @@ class TargetPreview(QWidget):
         """
 
         painter = QPainter(self)
-        painter.setPen(self.pen)
+        painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Text)))
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialiased)
 
         x_coord = self.x_margin
@@ -1497,7 +1594,7 @@ class CrystalPreview(MplCanvas):
     :param show_legend: (optional) show legend
     :param atom_size: (optional) size of atoms
     :param line_width: (optional) line width
-    :param axes_equal_radius: (optional) radius of equal axis
+    :param zoom: (optional) zoom of the 3D view, 1 fits all plotted objects into the canvas
     :param elev: (optional) camera elevation
     :param azim: (optional) camera azimuthal
     :param roll: (optional) camera roll
@@ -1525,7 +1622,7 @@ class CrystalPreview(MplCanvas):
         show_legend: bool = False,
         atom_size: int = 50,
         line_width: float = 1,
-        axes_equal_radius: float = 1,
+        zoom: float = 1,
         elev: Optional[float] = -160,
         azim: Optional[float] = -120,
         roll: Optional[float] = None,
@@ -1554,7 +1651,8 @@ class CrystalPreview(MplCanvas):
 
         self.atom_size = atom_size
         self.line_width = line_width
-        self.axes_equal_radius = axes_equal_radius
+        self.zoom = zoom
+        self.plotted_points: List[np.ndarray] = []
 
         self.elev = elev
         self.azim = azim
@@ -1572,30 +1670,56 @@ class CrystalPreview(MplCanvas):
 
         super().__init__(parent, **kwargs)
 
+        self.setAccentColors()
+
         self.axes.view_init(self.elev, self.azim, self.roll)
 
         self._updatePlot()
 
+    def setAccentColors(self):
+        """Sets the theme aware colors of vectors, beam and surface"""
+
+        dark_theme = QColor(self.bg_color).lightness() < 128
+        self.color_basis_vecs = ICON_COLORS['blue'][dark_theme]
+        self.color_beam = ICON_COLORS['red'][dark_theme]
+        self.color_coord_system = ICON_COLORS['orange'][dark_theme]
+        self.color_surface = ICON_COLORS['blue'][dark_theme]
+
+    def updateThemeColors(self) -> bool:
+        """Redraws the preview in the colors of the current palette"""
+
+        if not super().updateThemeColors():
+            return False
+        self.setAccentColors()
+        self._updatePlot()
+        return True
+
     def _setAxesEqual(self):
-        # TODO: this does not really work
-        """Make axes of 3D plot have equal scale so that spheres appear as spheres, cubes as cubes, etc."""
+        """
+        Make axes of 3D plot have equal scale so that spheres appear as spheres, cubes as cubes, etc.
+        The limits are a cube around all plotted points, which fills the whole canvas
+        """
 
-        x_limits = self.axes.get_xlim3d()
-        y_limits = self.axes.get_ylim3d()
-        z_limits = self.axes.get_zlim3d()
+        if self.plotted_points:
+            points = np.vstack(self.plotted_points)
+            lower, upper = points.min(axis=0), points.max(axis=0)
+        else:
+            lower, upper = np.zeros(3), np.ones(3)
 
-        x_range = abs(x_limits[1] - x_limits[0])
-        x_middle = (x_limits[0] + x_limits[1]) / 2
-        y_range = abs(y_limits[1] - y_limits[0])
-        y_middle = (y_limits[0] + y_limits[1]) / 2
-        z_range = abs(z_limits[1] - z_limits[0])
-        z_middle = (z_limits[0] + z_limits[1]) / 2
+        middle = (lower + upper) / 2
+        radius = max(np.max(upper - lower) / 2, 1e-6)
 
-        plot_radius = self.axes_equal_radius * max([x_range, y_range, z_range])
+        self.axes.set_xlim3d([middle[0] - radius, middle[0] + radius])
+        self.axes.set_ylim3d([middle[1] - radius, middle[1] + radius])
+        self.axes.set_zlim3d([middle[2] - radius, middle[2] + radius])
+        self.axes.set_box_aspect((1, 1, 1), zoom=self.zoom)
+        self.axes.set_position((0, 0, 1, 1))
 
-        self.axes.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
-        self.axes.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
-        self.axes.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+    def _addPlottedPoints(self, *points: np.ndarray):
+        """Remembers plotted points for the calculation of the axes limits"""
+
+        for point in points:
+            self.plotted_points.append(np.atleast_2d(point))
 
     def _plotVec3(self, vector: np.ndarray, startpoint: np.ndarray = np.zeros(3), label: Optional[str] = None, label_pos: Optional[np.ndarray] = None, **plot_kwargs):
         """
@@ -1615,6 +1739,7 @@ class CrystalPreview(MplCanvas):
         plot_params.update(plot_kwargs)
 
         self.axes.quiver(*startpoint, *vector, **plot_params)
+        self._addPlottedPoints(startpoint, startpoint + vector)
         if label is not None:
             if label_pos is None:
                 label_pos = startpoint + (vector - startpoint) / 2
@@ -1648,15 +1773,16 @@ class CrystalPreview(MplCanvas):
                 if any(np.allclose(neighbor, w) for w in vertices):
                     edges.append((v, neighbor))
 
+        self._addPlottedPoints(*vertices)
         for v1, v2 in edges:
             self.axes.plot([v1[0], v2[0]], [v1[1], v2[1]], [v1[2], v2[2]], **plot_params)
 
     def _plotCoordSystem(self):
         """Plot the coordinate system"""
 
-        self._plotVec3(np.array([0, 0, 1.5]), color='y', label='${X}$', label_pos=np.array([0, 0.1, 1.5]))
-        self._plotVec3(np.array([1.5, 0, 0]), color='y', label='${Y}$', label_pos=np.array([1.5, 0.1, 0]))
-        self._plotVec3(np.array([0, 1.5, 0]), color='y', label='${Z}$', label_pos=np.array([0, 1.5, 0.1]))
+        self._plotVec3(np.array([0, 0, 1.5]), color=self.color_coord_system, label='${X}$', label_pos=np.array([0, 0.1, 1.5]))
+        self._plotVec3(np.array([1.5, 0, 0]), color=self.color_coord_system, label='${Y}$', label_pos=np.array([1.5, 0.1, 0]))
+        self._plotVec3(np.array([0, 1.5, 0]), color=self.color_coord_system, label='${Z}$', label_pos=np.array([0, 1.5, 0.1]))
 
     def _plotBasisVecs(self, rotated: bool = True):
         """
@@ -1671,7 +1797,7 @@ class CrystalPreview(MplCanvas):
             basis_vecs = basis_vecs @ self.miller_rot_mat
 
         for basis_vec, label in zip(basis_vecs, labels):
-            self._plotVec3(basis_vec, color='b', label=label)
+            self._plotVec3(basis_vec, color=self.color_basis_vecs, label=label)
 
     def _plotCoords(self, rotated: bool = True):
         """
@@ -1687,6 +1813,7 @@ class CrystalPreview(MplCanvas):
             coords = coords @ self.basis_vecs
             if rotated:
                 coords = coords @ self.miller_rot_mat
+            self._addPlottedPoints(coords)
             self.axes.scatter(
                 coords[:, 0], coords[:, 1], coords[:, 2],
                 c=color, s=self.atom_size / 3 * (1 + element.atomic_nr / 50), label=element.symbol
@@ -1694,11 +1821,11 @@ class CrystalPreview(MplCanvas):
 
     def _plotBeam(self):
         """Plots the beam"""
-        self._plotVec3(np.array([0, 0, 1]), startpoint=np.array([0, 0, -1]), color='r', label='${beam}$', label_pos=np.array([0., 0.1, -0.5]))
+        self._plotVec3(np.array([0, 0, 1]), startpoint=np.array([0, 0, -1]), color=self.color_beam, label='${beam}$', label_pos=np.array([0., 0.1, -0.5]))
 
     def _plotSurface(self):
         """Plot surface"""
-        self.axes.plot_surface(self.surf_xx, self.surf_yy, self.surf_z, alpha=0.2)
+        self.axes.plot_surface(self.surf_xx, self.surf_yy, self.surf_z, color=self.color_surface, alpha=0.15, shade=False)
 
     def _calcMillerRotMat(self):
         """Calculates rotation matrix based on miller indices"""
@@ -1730,6 +1857,7 @@ class CrystalPreview(MplCanvas):
         roll = self.axes.roll
 
         self.clear()
+        self.plotted_points = []
         self.axes.view_init(elev, azim, roll)
         self.draw_idle()
         self.axes.set_axis_off()

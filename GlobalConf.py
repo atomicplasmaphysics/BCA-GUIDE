@@ -11,6 +11,9 @@ class GlobalConf:
     # title
     title = 'BCA-GUIDE'
 
+    # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
+    version = '1.5.04'
+
     # settings object
     settings = QSettings('TU Wien', title)
 
@@ -18,6 +21,18 @@ class GlobalConf:
     save_path_name = 'save_path'
     save_path: Path = Path(settings.value(save_path_name, defaultValue=str(Path(QDir.currentPath()) / 'saves'), type=str) or Path(QDir.currentPath()) / 'saves')
     save_path_exists = bool(settings.value(save_path_name, defaultValue='', type=str))
+
+    # theme: one of THEMES
+    THEMES = {
+        'system': 'System (default)',
+        'light': 'Light',
+        'dark': 'Dark',
+        'srim': 'SRIM (easter egg)',
+    }
+    theme_name = 'theme'
+    theme = settings.value(theme_name, defaultValue='system', type=str)
+    if theme not in THEMES:
+        theme = 'system'
 
     # language
     language = 'en'
@@ -66,6 +81,7 @@ class GlobalConf:
         """Updates and saves settings object with general variables"""
         update_dict = {
             GlobalConf.save_path_name: str(GlobalConf.save_path),
+            GlobalConf.theme_name: GlobalConf.theme,
             GlobalConf.use_default_language_name: GlobalConf.use_default_language,
             GlobalConf.skip_element_info_name: GlobalConf.skip_element_info,
             GlobalConf.skip_delete_info_name: GlobalConf.skip_delete_info,

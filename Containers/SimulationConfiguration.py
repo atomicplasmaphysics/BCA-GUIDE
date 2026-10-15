@@ -2,6 +2,10 @@ from __future__ import annotations
 from typing import Union, TYPE_CHECKING
 from pathlib import Path
 
+from PyQt6.QtCore import QDir
+
+from GlobalConf import GlobalConf
+
 from Simulations.SimulationsList import SimulationsList
 
 from Utility.Functions import pathToStr
@@ -20,7 +24,7 @@ class SimulationConfiguration:
     :param folder: path to main folder for simulation
     :param binary: path to binary file for simulation
     :param version: version number of simulation
-    :param base_save_folder: (optional) general save folder
+    :param base_save_folder: (optional) general save folder, if None the default save folder from the preferences is used
     :param save_folder: (optional) specific save folder
     """
 
@@ -75,6 +79,13 @@ class SimulationConfiguration:
         self.version = version
         self.base_save_folder = base_save_folder
         self.changed = True
+
+    def getBaseSaveFolder(self) -> Path:
+        """Returns the base save folder of this configuration, or the default save folder from the preferences if none is set"""
+
+        if self.base_save_folder is not None:
+            return self.base_save_folder
+        return GlobalConf.save_path / self.program_class.SaveFolder
 
     def save(self, no_config=False) -> dict:
         """
@@ -152,6 +163,13 @@ class SimulationConfiguration:
                 save_folder = None
         else:
             save_folder = None
+
+        # base save folders that equal an automatic default are not stored, so that the preferences are used
+        if base_save_folder is not None:
+            save_folder_name = SimulationsList().simulation_program_list[program_idx].SaveFolder
+            default_folders = [GlobalConf.save_path / save_folder_name, Path(QDir.currentPath()) / 'saves' / save_folder_name]
+            if any(base_save_folder.resolve() == default_folder.resolve() for default_folder in default_folders):
+                base_save_folder = None
 
         sc = SimulationConfiguration(title, program_idx, folder, binary, version)
         sc.base_save_folder = base_save_folder

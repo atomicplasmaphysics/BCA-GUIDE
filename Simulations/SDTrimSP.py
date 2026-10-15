@@ -44,6 +44,22 @@ class Versions:
     V_700 = '7.00, 7.01'  # introduction of crystal input files
     V_702 = '7.02, 7.05'  # introduction of global crystal files
 
+    # versions in chronological order
+    ORDER = [V_601, V_609, V_700, V_702]
+
+    @staticmethod
+    def atLeast(version: str, minimum: str) -> bool:
+        """
+        Returns True if version is equal to or newer than minimum
+
+        :param version: version of simulation
+        :param minimum: minimum version
+        """
+
+        if version not in Versions.ORDER or minimum not in Versions.ORDER:
+            return False
+        return Versions.ORDER.index(version) >= Versions.ORDER.index(minimum)
+
 
 class DefaultValues(GeneralDefaultValues):
     """
@@ -118,14 +134,17 @@ class DefaultValues(GeneralDefaultValues):
     lattice_constant = 1
 
     def __init__(self, version: str):
-        if version in [Versions.V_609, Versions.V_700]:
+        # defaults according to the documentation (doc/default_init.txt, doc/tri.inp.txt) of each version
+        if Versions.atLeast(version, Versions.V_609):
             self.isbv = 8
             self.inel0 = 7
 
-        if version in [Versions.V_700]:
+        # crystal input
+        if Versions.atLeast(version, Versions.V_700):
             self.enable_crystal = True
 
-        #TODO: defaults for Version.V_702
+        # since 7.02 crystals are selected from tables/table.crystal and crystal.inp is not used anymore
+        self.crystal_table = Versions.atLeast(version, Versions.V_702)
 
 
 class DictLookup:
@@ -196,25 +215,21 @@ class DictLookup:
     }
 
     def __init__(self, version: str):
-        if version == Versions.V_609:
+        # since 6.09: isbv=5 and isbv=7 do not work anymore, isbv=4 is used for compounds, isbv=8 is new
+        if Versions.atLeast(version, Versions.V_609):
             self.isbv = {
                 ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC: 1,
                 ArgumentValues.SurfaceBindingModel.AVERAGE: 2,
                 ArgumentValues.SurfaceBindingModel.ELEMENT_PAIRS: 3,
-                ArgumentValues.SurfaceBindingModel.COMPOUNDS: 5,
-                ArgumentValues.SurfaceBindingModel.FILE: 6,
-                ArgumentValues.SurfaceBindingModel.ELECTRONEGATIVITY: 7,
-                ArgumentValues.SurfaceBindingModel.TABLE: 8
-            }
-        if version == Versions.V_700:
-            self.isbv = {
-                ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC: 1,
-                ArgumentValues.SurfaceBindingModel.AVERAGE: 2,
-                ArgumentValues.SurfaceBindingModel.ELEMENT_PAIRS: 3,
-                ArgumentValues.SurfaceBindingModel.SOLID_SOLID: 4,
+                ArgumentValues.SurfaceBindingModel.COMPOUNDS: 4,
                 ArgumentValues.SurfaceBindingModel.FILE: 6,
                 ArgumentValues.SurfaceBindingModel.TABLE: 8
             }
+
+        # since 7.00: tabulated stopping power (inel0=8)
+        if Versions.atLeast(version, Versions.V_700):
+            self.inel0 = dict(DictLookup.inel0)
+            self.inel0[ArgumentValues.InelasticLossModel.TABULATED] = 8
 
 
 class HlBeamSettings(HlGeneralBeamSettings):
@@ -949,40 +964,8 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         ]
         self.surface_binding_model_disabled_list = []
 
-        if self.version == Versions.V_609:
-            self.surface_binding_model_entries = [
-                'element-specific',
-                'average for all elements',
-                'element-pair averages',
-                'compounds only',
-                '(not supported)',
-                'from mat_surfb.inp',
-                'from electronegativity',
-                'from table1a'
-            ]
-            self.surface_binding_model_entries_save = [
-                ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC,
-                ArgumentValues.SurfaceBindingModel.AVERAGE,
-                ArgumentValues.SurfaceBindingModel.ELEMENT_PAIRS,
-                ArgumentValues.SurfaceBindingModel.COMPOUNDS,
-                -1,
-                ArgumentValues.SurfaceBindingModel.FILE,
-                ArgumentValues.SurfaceBindingModel.ELECTRONEGATIVITY,
-                ArgumentValues.SurfaceBindingModel.TABLE
-            ]
-            self.surface_binding_model_entries_tooltips = [
-                'sbv(ip,jp)=e_surfb(jp) for ip=jp',
-                'sbv(ip,jp)=e_surfb(jp) for all ip, jp',
-                'sbv(ip,jp)=0., if e_surfb(ip)=0 or e_surfb(jp)=0\nelse: sbv(ip,jp)=0.5*(e_surfb(ip)+e_surfb(jp))',
-                'e_bulkb(compound)=deltaH_f\nsbv(ip,jp)=e_surfb(jp) for ip=jp, =0 else',
-                '',
-                'input of given matrix of the surface-bindig-energy: "mat_surfb.inp"',
-                'calculate according to "Kudriavtsev"',
-                'e_surfb=0, e_bulkb=Es, e_cutoff=Es/3\ne_bulkb(compound)=Es+deltaH_f'
-            ]
-            self.surface_binding_model_disabled_list = [4]
-
-        if self.version == Versions.V_700:
+        # since 6.09: isbv=5 and isbv=7 do not work anymore
+        if Versions.atLeast(self.version, Versions.V_609):
             self.surface_binding_model_entries = [
                 'element-specific',
                 'average for all elements',
@@ -1518,10 +1501,18 @@ class CompRowBeamSettings(CompRow):
             'Values are calculated for each element based on values taken from "table6a" and "table6b"'
         ]
 
-        if self.version in [Versions.V_609, Versions.V_700]:
+        if Versions.atLeast(self.version, Versions.V_609):
             self.inelastic_loss_model_entries.append('LZ7')
             self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER)
             self.inelastic_loss_model_tooltips.append('Combination of Lindhard-Scharff and Ziegler-Biersack with corretion')
+
+        if Versions.atLeast(self.version, Versions.V_700):
+            self.inelastic_loss_model_entries.append('tabulated')
+            self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.TABULATED)
+            self.inelastic_loss_model_tooltips.append(
+                'Manually tabulated stopping power from database "tbsp.db" in the tables-directory.\n'
+                'For SDTrimSP >= 7.07 add "tbsp_binary = .true." (or "tbsp_ascii = .true." for "tbsp.ascii") to the additional settings'
+            )
 
         self.inelastic_loss_model = ComboBox(
             default=self.default_values.inel0,
@@ -1904,6 +1895,7 @@ Andreas Mutzke
 <a href="https://www.ipp.mpg.de">https://www.ipp.mpg.de/</a>
     '''
     SaveFolder = 'SDTrimSP'
+    BinaryKeywords = ['sdtrim']
     InputFilename = 'tri.inp'
     CrystalFilename = 'crystal.inp'
     LayerFilename = 'layer.inp'
@@ -2058,7 +2050,7 @@ Andreas Mutzke
         # get compounds
         # open compound file and read contents
         self.CompoundList = []
-        if version in [Versions.V_700, Versions.V_702]:
+        if Versions.atLeast(version, Versions.V_700):
             compound_table2 = folder / 'tables' / 'table.compound'
             try:
                 for line in readlines(compound_table2, 'r', comments=['', '!'], encoding='utf-8', errors='replace'):
@@ -2091,7 +2083,7 @@ Andreas Mutzke
                 logging.info(f'Could not open compound table (3 elements) "{compound_table3}"!')
 
         # update number of components
-        if version in [Versions.V_609, Versions.V_700, Versions.V_702]:
+        if Versions.atLeast(version, Versions.V_609):
             self.MaxComponents = 11
 
         # update OutputTooltips
@@ -2165,7 +2157,6 @@ Andreas Mutzke
                     for i in range(no_coords):
                         coords.append(Coordinate([float(coord) for coord in lines[j + i].split()[:3]]))
                     crystal_structures.append(coords)
-
 
             except (FileNotFoundError, ValueError, IndexError):
                 logging.info(f'Could not open or read crystal table "{crystal_table}"!')
@@ -2616,10 +2607,29 @@ Andreas Mutzke
         miller_ind = arguments.target_args.get('miller_ind')
 
         crystal_settings = ''
-        if self.default_values.enable_crystal:
+        crystal_flag = bool(arguments.target_args.get('crystal_flag', False))
+        if self.default_values.enable_crystal and self.default_values.crystal_table:
+            # since 7.02: crystal from tables/table.crystal (one crystal for the whole target)
+            crystal_settings = '''
+text = "--- crystal ---"
+    l_crystal = .false.
+'''
+            crystal_args = arguments.crystal_args
+            if crystal_flag and crystal_args is not None:
+                crystal_settings = f'''
+text = "--- crystal ---"
+    l_crystal = .true.
+    l_crystal_dyn = .{str(bool(crystal_args.get('crystal_dyn', False))).lower()}.
+    l_crystal1 = .true.
+    name_cryst1 = '{crystal_args.name}'
+    miller_ind1 = {crystal_args.miller_ind.crystal_inp_str()}
+    dy_crystal_beam = {float(crystal_args.get('beam_dy', 0) or 0)}
+    dz_crystal_beam = {float(crystal_args.get('beam_dz', 0) or 0)}
+'''
+        elif self.default_values.enable_crystal:
             crystal_settings = f'''
 text = "--- crystal ---"
-    l_crystal = .{str(arguments.target_args.get('crystal_flag', False)).lower()}.
+    l_crystal = .{str(crystal_flag).lower()}.
     miller_ind = {miller_ind.crystal_inp_str()}
 '''
 
@@ -2802,6 +2812,10 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         title = arguments.settings.title
         crystal = arguments.crystal_args
         if not crystal:
+            return ''
+
+        # since 7.02 crystals are defined in tables/table.crystal, there is no crystal.inp
+        if DefaultValues(version).crystal_table:
             return ''
 
         name = crystal.name
@@ -3045,7 +3059,21 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         if self.default_values.enable_crystal:
             l_crystal = getValueBool(contents.get('l_crystal'), default_values.l_crystal)
 
-        if l_crystal:
+        table_crystal = None
+        if l_crystal and default_values.crystal_table:
+            # since 7.02: crystal from tables/table.crystal
+            miller_ind = MillerIndex(getValueList(contents.get('miller_ind1'), SafeInt, 0, 'miller_indices_list', assumed_cls=assumed))
+            contents.get('l_crystal1')
+            table_crystal = {
+                'name': str(contents.get('name_cryst1') or '').strip().strip('"\''),
+                'crystal_dyn': getValueBool(contents.get('l_crystal_dyn'), default_values.l_crystal_dyn),
+                'beam_dy': getValue(contents.get('dy_crystal_beam'), float, default_values.beam_dy, 'beam_dy', assumed_cls=assumed),
+                'beam_dz': getValue(contents.get('dz_crystal_beam'), float, default_values.beam_dz, 'beam_dz', assumed_cls=assumed),
+            }
+            if not table_crystal['name']:
+                assumed.assumed('name')
+
+        elif l_crystal:
             miller_ind = MillerIndex(getValueList(contents.get('miller_ind'), SafeInt, 0, 'miller_indices_list', assumed_cls=assumed))
 
         # get rid of 'tableinp' since it is not used
@@ -3233,7 +3261,22 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         crystal_args = None
         crystal_rows = None
 
-        if l_crystal:
+        if table_crystal is not None:
+            crystal_args = GeneralCrystalArguments(
+                name=table_crystal['name'],
+                lattice_id=default_values.lattice_id,
+                lattice_constant=default_values.lattice_constant,
+                basis_vec_a1=default_values.basis_vec_a1,
+                basis_vec_a2=default_values.basis_vec_a2,
+                basis_vec_a3=default_values.basis_vec_a3,
+                miller_ind=miller_ind,
+                beam_dy=table_crystal['beam_dy'],
+                beam_dz=table_crystal['beam_dz'],
+                crystal_dyn=table_crystal['crystal_dyn'],
+                table_crystal=True
+            )
+
+        elif l_crystal:
             """
             open file
             get rid of lines starting with # and skip empty lines

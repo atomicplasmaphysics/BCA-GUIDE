@@ -33,9 +33,8 @@ from MainWindow import MainWindow
 from Utility.Layouts import SplashPixmap
 from Utility.Logger import setupLogging
 
-# TODO: simulation folder in preferences is not preferred when open file dialog is selected!
-# TODO: path objects from "import os.path"
-# TODO: when selecting simulation folder automatically search for any .exe if in windows and ELF file if in linux/mac(?)
+# TODO: make tabs detachable -> open them in their own window, such that multiple simulations can be seen at the same time
+
 
 def main():
     """
@@ -43,7 +42,7 @@ def main():
     """
 
     # set up logging level
-    setupLogging(logging.INFO)  #TODO: set back to logging.WARNING
+    setupLogging(logging.WARNING)
 
     # ctypes.windll only works in Windows
     if system() == 'Windows':
@@ -64,7 +63,7 @@ def main():
     # show splashscreen on startup
     pixmap = SplashPixmap(
         image=':/icons/splash.png',
-        text='v. 1.5.01',
+        text=f'v. {GlobalConf.version}',
         box=QRect(530, 65, 90, 25),
         align=Qt.AlignmentFlag.AlignLeft,
         color=QColor('#154167'),
