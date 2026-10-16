@@ -204,7 +204,9 @@ class InputHBoxLayouts(QHBoxLayout):
         :param state: True - hide; False - show
         """
 
-        self.label.setHidden(state)
+        # layouts with a checkbox have no label
+        if self.label is not None:
+            self.label.setHidden(state)
 
         if len(self.widgets_list):
             for widget in self.widgets_list:
@@ -1912,6 +1914,11 @@ class CrystalPreview(MplCanvas):
 
         if self.show_surface:
             self._plotSurface()
+
+        # matplotlib keeps 3D axes square in the middle of the canvas and clips lines, atoms and surfaces to this
+        # square (texts are not clipped), so after rotating, panning or zooming only the labels would be visible outside
+        for artist in self.axes.get_children():
+            artist.set_clip_on(False)
 
     def updateParams(
         self,

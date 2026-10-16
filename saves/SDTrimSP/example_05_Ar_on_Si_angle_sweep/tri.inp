@@ -1,0 +1,47 @@
+Example 5: 500 eV Ar on Si, angles of incidence from 0 to 80 degree (steps of alpha0 = 10 degree)
+&TRI_INP
+text = "--- elements ---"
+    ncp = 2
+    symbol = "Ar", "Si"
+    !globaldensity = False, 0.0
+    inel0 = 7, 7
+
+text = "--- general ---"
+    idrel = 1
+    flc = 1.0
+    nh = 20
+    idout = 2
+    nr_pproj = 100
+    ipot = 1
+    iintegral = 2
+    isbv = 1
+
+text = "--- beam ---"
+    qubeam = 1.0, 0.0
+    case_e0 = 0
+    e0 = 500.0, 0.0
+    case_alpha = 5
+    alpha0 = 10.0, 0.0
+    number_calc = 9
+
+text = "--- target ---"
+    qu = 0.0, 1.0
+    qumax = 0.0, 1.0
+    ttarget = 1000.0
+    nqx = 100
+    iq0 = 0
+
+text = "--- crystal ---"
+    l_crystal = .false.
+
+text = "--- output options ---"
+    lparticle_p = .false.
+    lparticle_r = .false.
+    lmatrices = .false.
+    tbsp_binary = .true.
+    tbsp_ascii = .false.
+
+text = "--- extra ---"
+    tableinp = "C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTrimSP_7.07\tables"
+    
+/

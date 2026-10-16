@@ -1,0 +1,15 @@
+ Example 2: 1 keV D on W at normal incidence (dynamic, fluence 10 atoms/A^2)    
+  
+time for proj     :      33.55  s      69.9  %
+time for recoil   :      14.24  s      29.7  %
+time for gsum/hist:       0.05  s       0.1  %
+time for part/hist:       0.00  s       0.0  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.05  s       0.1  %
+time for out/hist :       0.07  s       0.1  %
+  time for history:       0.01  s       0.0  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :      48.00  s
+time for SDTrimSP :       0.80 min
+time for SDTrimSP :       0.01  h
+number of PEs:    1 NH=       500 NR= 100 NH*NR=          50000

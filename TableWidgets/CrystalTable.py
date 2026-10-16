@@ -50,6 +50,9 @@ class CrystalRow(CustomRow):
         )
     ]
 
+    # first entry of the element selection, short to keep the column narrow
+    noElementText = 'Select'
+
     def __init__(self, available_elements: Optional[List[Element]] = None):
         super().__init__()
 
@@ -58,7 +61,7 @@ class CrystalRow(CustomRow):
 
         self.available_elements = available_elements
         self.available_elements_symbols = [element.symbol for element in available_elements]
-        self.available_elements_symbols.insert(0, 'No element chosen')
+        self.available_elements_symbols.insert(0, self.noElementText)
 
         self.remove.setToolTip('Remove this element from the composition')
         self.enabled = True
@@ -155,7 +158,7 @@ class CrystalRow(CustomRow):
 
         self.available_elements = available_elements
         self.available_elements_symbols = available_elements_symbols
-        self.available_elements_symbols.insert(0, 'No element chosen')
+        self.available_elements_symbols.insert(0, self.noElementText)
 
         self.element_combobox.clear()
 

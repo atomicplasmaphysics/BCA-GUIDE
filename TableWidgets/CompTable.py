@@ -254,14 +254,15 @@ class CompTable(CustomTable):
         self.component_count = comp_count
         self.version = version
 
-        super().__init__(0, self.labels, parent)
+        # remove button, index and element stay visible when scrolling horizontally
+        super().__init__(0, self.labels, parent, frozen_columns=3)
         self.rows: List[CompRow] = []
 
         self.add_button.setToolTip('Add a new element to the composition')
 
         for i, tooltip in enumerate(self.tooltips):
             if tooltip:
-                self.horizontalHeaderItem(i + 1).setToolTip(tooltip)
+                self.setHeaderToolTip(i + 1, tooltip)
 
         self.component_count.maxReached.connect(lambda max_reached: self.maxCompReached(max_reached))
 

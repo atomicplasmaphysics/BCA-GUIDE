@@ -33,6 +33,7 @@ ICONS: Dict[str, Tuple[Optional[str], str]] = {
     'up': (None, '<path d="m18 15-6-6-6 6" />'),  # lucide: chevron-up
     'down': (None, '<path d="m6 9 6 6 6-6" />'),  # lucide: chevron-down
     'open_workdir': (None, '<path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1" /> <path d="m21 21-1.9-1.9" /> <circle cx="17" cy="17" r="3" />'),  # lucide: folder-search
+    'search': (None, '<circle cx="11" cy="11" r="8" /> <path d="m21 21-4.3-4.3" />'),  # lucide: search
     'file': (None, '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" />'),  # lucide: file-text
     'open_external': (None, '<path d="M15 3h6v6" /> <path d="M10 14 21 3" /> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />'),  # lucide: external-link
     'error_check': (None, '<path d="m6 16 6-12 6 12" /> <path d="M8 12h8" /> <path d="m16 20 2 2 4-4" />'),  # lucide: spell-check

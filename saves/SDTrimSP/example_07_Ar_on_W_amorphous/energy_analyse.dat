@@ -1,0 +1,135 @@
+ Example 7: 2 keV Ar on amorphous W at normal incidence, compare with example 6 
+ (
+# SDTrimSP: VERSION 7.07    16.10.2026
+ ------------------------------------------------------ 
+  
+ENERGY ANALYSE PROJECTLE( 1):
+  NUC.LOSS (<ED)   :            937.4863 keV                     a) all zyl.-ring 
+  NUC.LOSS (>ED)   :           6571.0771 keV              b) most first zyl.-ring 
+  NUC.L(<E_b+E_cut):            101.7158 keV              c) not create recoil    
+                        --------------------
+       transfer E  :           7406.8476 keV          a+b-c  E-transfer to recoils
+  
+      sum NUCL.LOSS:          -7508.5634 keV          a+b    all zyl.-ring        
+         ELECT.LOSS:          -1667.6273 keV                                      
+         E_BACK    :           -823.4108 keV 
+         E_TRAN    :              0.0000 keV 
+         E_STOP    :             -0.3985 keV 
+         E_SBE     :              0.0000 keV 
+                        --------------------
+        sum ENERGY :         -10000.0000 keV 
+      
+         E_TOT     :          10000.0000 keV 
+         E_INPUT   :          10000.0000 keV              from outside E0*NH (*NR)
+ -------------------------------------------------
+  
+ ENERGY ANALYSE PARTICLE( 1):  (because of E-transfere energy multiple)
+  NUC.LOSS (<ED)   :              0.0000 keV                     a) all zyl.-ring 
+  NUC.LOSS (>ED)   :              0.0000 keV              b) most first zyl.-ring 
+  NUC.L(<E_b+E_cut):              0.0000 keV              c) not create recoil    
+                        --------------------
+      transfer E:                 0.0000 keV       a+b-c E-transfer to next recoil
+  
+      sum NUCL.LOSS:              0.0000 keV                a+b sum all E-transfer
+      ELECT.LOSS   :              0.0000 keV 
+      E_BACK       :              0.0000 keV 
+      E_TRAN       :              0.0000 keV 
+      E_STOP       :              0.0000 keV 
+      E_SBE        :              0.0000 keV 
+                        --------------------
+        sum ENERGY :              0.0000 keV 
+         E_TOT     :              0.0000 keV          from projectiles and recoils
+  
+  
+      NUC.L (sum)  :              0.0000 keV          E-transfer not create recoil
+      ELECT.LOSS   :              0.0000 keV 
+      E_BACK       :              0.0000 keV 
+      E_TRAN       :              0.0000 keV 
+      E_STOP       :              0.0000 keV 
+      E_SBE        :              0.0000 keV 
+                        --------------------
+    sum ENERGY LOSS:              0.0000 keV 
+ -------------------------------------------------
+  
+ ENERGY ANALYSE PARTICLE( 2):  (because of E-transfere energy multiple)
+  NUC.LOSS (<ED)   :          18398.7461 keV                     a) all zyl.-ring 
+  NUC.LOSS (>ED)   :           7353.4484 keV              b) most first zyl.-ring 
+  NUC.L(<E_b+E_cut):           4425.5927 keV              c) not create recoil    
+                        --------------------
+      transfer E:             21326.6018 keV       a+b-c E-transfer to next recoil
+  
+      sum NUCL.LOSS:         -25752.1945 keV                a+b sum all E-transfer
+      ELECT.LOSS   :          -2260.7794 keV 
+      E_BACK       :           -254.9984 keV 
+      E_TRAN       :              0.0000 keV 
+      E_STOP       :           -381.7675 keV 
+      E_SBE        :            -57.0910 keV 
+                        --------------------
+        sum ENERGY :         -28706.8310 keV 
+         E_TOT     :          28706.8310 keV          from projectiles and recoils
+  
+  
+      NUC.L (sum)  :          -4425.5927 keV          E-transfer not create recoil
+      ELECT.LOSS   :          -2260.7794 keV 
+      E_BACK       :           -254.9984 keV 
+      E_TRAN       :              0.0000 keV 
+      E_STOP       :           -381.7675 keV 
+      E_SBE        :            -57.0910 keV 
+                        --------------------
+    sum ENERGY LOSS:          -7380.2292 keV 
+ -------------------------------------------------
+  
+ENERGY ANALYSE PARTICLE(all):
+  
+  NUC.LOSS (<ED)   :          18398.7461 keV                     a) all zyl.-ring 
+  NUC.LOSS (>ED)   :           7353.4484 keV              b) most first zyl.-ring 
+  NUC.L(<E_b+E_cut):           4425.5927 keV              c) not create recoil    
+                        --------------------
+      transfer E:             21326.6018 keV       a+b-c E-transfer to next recoil
+  
+      sum NUCL.LOSS:         -25752.1945 keV                a+b sum all E-transfer
+      ELECT.LOSS   :          -2260.7794 keV 
+      E_BACK       :           -254.9984 keV 
+      E_TRAN       :              0.0000 keV 
+      E_STOP       :           -381.7675 keV 
+      E_SBE        :            -57.0910 keV 
+                        --------------------
+        sum ENERGY :         -28706.8310 keV 
+         E_TOT     :          28706.8310 keV          from projectiles and recoils
+  
+  
+      NUC.L (sum)  :          -4425.5927 keV          E-transfer not create recoil
+      ELECT.LOSS   :          -2260.7794 keV 
+      E_BACK       :           -254.9984 keV 
+      E_TRAN       :              0.0000 keV 
+      E_STOP       :           -381.7675 keV 
+      E_SBE        :            -57.0910 keV 
+                        --------------------
+    sum ENERGY LOSS:          -7380.2292 keV 
+         E_INPUT   :           7406.8476 keV                      from projectiles
+ ==================================================================
+  
+  
+ENERGY ANALYSE PROJECTLE( 1):
+     NUC.L     transfer E to recoils   :          7.40684762 MeV      74.07 %       create recoil
+     NUC.LOSS  transfer<E_cut+E_bulk   :          0.10171575 MeV       1.02 %    create no recoil
+                             ELECT.LOSS:          1.66762734 MeV      16.68 %
+                             E_BACK    :          0.82341082 MeV       8.23 %
+                             E_TRAN    :          0.00000000 MeV       0.00 %
+                             E_STOP    :          0.00039847 MeV       0.00 %
+                             E_SBE     :          0.00000000 MeV       0.00 %
+                                          --------------------
+                            sum ENERGY :         10.00000000 MeV 
+   E_INPUT ]from outside E0*NH(*NR)]   :         10.00000000 MeV 
+  
+  
+ENERGY ANALYSE ALL PARTIC
+     NUC.LOSS  transfer<E_cut+E_bulk   :          4.42559273 MeV      59.75 %    create no recoil
+                          ELECT.LOSS   :          2.26077944 MeV      30.52 %
+                          E_BACK       :          0.25499844 MeV       3.44 %
+                          E_TRAN       :          0.00000000 MeV       0.00 %
+                          E_STOP       :          0.38176753 MeV       5.15 %
+                          E_SBE        :          0.05709105 MeV       0.77 %
+                                          --------------------
+                            sum ENERGY :          7.40684762 MeV 
+             E_TOT (from projectiles)  :          7.40684762 MeV 

@@ -12,7 +12,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
-    version = '1.5.05'
+    version = '1.5.06'
 
     # settings object
     settings = QSettings('TU Wien', title)

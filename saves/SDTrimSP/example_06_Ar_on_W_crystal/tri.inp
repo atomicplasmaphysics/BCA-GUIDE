@@ -1,0 +1,52 @@
+Example 6: 2 keV Ar on a W crystal (bcc, 100 surface) at normal incidence, compare with example 7 (amorphous)
+&TRI_INP
+text = "--- elements ---"
+    ncp = 2
+    symbol = "Ar", "W"
+    !globaldensity = False, 0.0
+    inel0 = 7, 7
+
+text = "--- general ---"
+    idrel = 1
+    flc = 1.0
+    nh = 50
+    idout = 5
+    nr_pproj = 100
+    ipot = 1
+    iintegral = 2
+    isbv = 1
+
+text = "--- beam ---"
+    qubeam = 1.0, 0.0
+    case_e0 = 0
+    e0 = 2000.0, 0.0
+    case_alpha = 0
+    alpha0 = 0.0, 0.0
+
+text = "--- target ---"
+    qu = 0.0, 1.0
+    qumax = 0.0, 1.0
+    ttarget = 1000.0
+    nqx = 100
+    iq0 = 0
+
+text = "--- crystal ---"
+    l_crystal = .true.
+    l_crystal_dyn = .false.
+    l_crystal1 = .true.
+    name_cryst1 = 'W_bcc'
+    miller_ind1 = 1, 0, 0
+    dy_crystal_beam = 3.1652
+    dz_crystal_beam = 3.1652
+
+text = "--- output options ---"
+    lparticle_p = .false.
+    lparticle_r = .false.
+    lmatrices = .false.
+    tbsp_binary = .true.
+    tbsp_ascii = .false.
+
+text = "--- extra ---"
+    tableinp = "C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTrimSP_7.07\tables"
+    
+/

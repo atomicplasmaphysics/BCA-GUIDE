@@ -1,0 +1,15 @@
+ Example 5: 500 eV Ar on Si, angles of incidence from 0 to 80 degree (steps of a
+ l
+time for proj     :       0.02  s       4.2  %
+time for recoil   :       0.38  s      93.5  %
+time for gsum/hist:       0.00  s       0.0  %
+time for part/hist:       0.00  s       0.0  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.00  s       1.0  %
+time for out/hist :       0.00  s       0.0  %
+  time for history:       0.00  s       1.2  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :       0.42  s
+time for SDTrimSP :       0.01 min
+time for SDTrimSP :       0.00  h
+number of PEs:    1 NH=        20 NR= 100 NH*NR=           2000

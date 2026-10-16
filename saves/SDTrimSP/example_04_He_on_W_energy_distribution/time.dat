@@ -1,0 +1,15 @@
+ Example 4: He on W with an energy distribution from energy.inp (edit it with th
+ e
+time for proj     :       1.46  s      65.1  %
+time for recoil   :       0.69  s      30.5  %
+time for gsum/hist:       0.00  s       0.0  %
+time for part/hist:       0.08  s       3.4  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.01  s       0.4  %
+time for out/hist :       0.00  s       0.0  %
+  time for history:       0.01  s       0.5  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :       2.30  s
+time for SDTrimSP :       0.04 min
+time for SDTrimSP :       0.00  h
+number of PEs:    1 NH=       100 NR= 100 NH*NR=          10000

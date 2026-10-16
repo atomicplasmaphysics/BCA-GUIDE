@@ -1,11 +1,12 @@
 from typing import List, Union, Tuple, Optional, Dict
 from itertools import zip_longest
 from pathlib import Path
-from re import findall, sub
+from re import findall, sub, split
 import logging
 
 import numpy as np
 from scipy.optimize import curve_fit
+from matplotlib import colormaps
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox
@@ -195,6 +196,218 @@ def distributionFileNames(arguments: SimulationArguments, version: str, group_el
     if case_e0 == ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE:
         result['energy_angle'] = [('all', 'ene_ang.inp')]
     return result
+
+
+def defaultInelasticLossModel(symbol: str, version: str, dict_lookup, default_values) -> str:
+    """
+    Returns the inelastic loss model that SDTrimSP uses if inel0 is not given in tri.inp:
+    since 6.09 model 4 for H, D, T, model 5 for He, He3 and model 7 otherwise (tableread.F90), before the default of the version
+
+    :param symbol: symbol of the element
+    :param version: version of simulation
+    :param dict_lookup: <DictLookup> of the version
+    :param default_values: <DefaultValues> of the version
+    """
+
+    inel0 = default_values.inel0
+    if Versions.atLeast(version, Versions.V_609):
+        if symbol in ('H', 'D', 'T'):
+            inel0 = 4
+        elif symbol in ('He', 'He3'):
+            inel0 = 5
+    return next(key for key, value in dict_lookup.inel0.items() if value == inel0)
+
+
+def readCrystalInp(path: Path) -> dict:
+    """
+    Reads crystal.inp (SDTrimSP 7.00 and 7.01) like SDTrimSP (init_all.F90): leading lines starting with "#" are comments,
+    every value is read list-directed, i.e. a read continues on the next line if values are missing and the rest of a
+    line is ignored ("1   lattice_id" reads 1)
+
+    :param path: path of crystal.inp
+    :return: {'name', 'lattice_id', 'species', 'basis_vectors' (3 lists of 3 floats), 'atoms' (list of (x, y, z, species index)),
+              'p_max', 'beam_dy', 'beam_dz', 'matrix_id', 'lattice_constant' (from the comment "# lattice_constant = ...", 1 otherwise)}
+    :raises OSError: if the file can not be read
+    :raises ValueError, IndexError: if the file has an incorrect format
+    """
+
+    with open(path, 'r', encoding='utf-8', errors='replace') as file:
+        lines = file.read().splitlines()
+
+    lattice_constant = 1.
+    start = 0
+    while start < len(lines) and lines[start].strip().startswith('#'):
+        if lines[start].strip().startswith('# lattice_constant'):
+            lattice_constant = float(lines[start].split('=')[-1])
+        start += 1
+    lines = lines[start:]
+    position = [0]
+
+    def read(count: int) -> List[str]:
+        """Reads count values starting at the next line"""
+        values = []
+        while len(values) < count:
+            line = lines[position[0]].split('!')[0]
+            position[0] += 1
+            values += [value.strip('"\'') for value in line.replace(',', ' ').split()]
+        return values[:count]
+
+    crystal = {'name': read(1)[0], 'lattice_id': int(float(read(1)[0]))}
+    species_count = int(float(read(1)[0]))
+    crystal['species'] = [read(1)[0] for _ in range(species_count)]
+    crystal['basis_vectors'] = [[float(value) for value in read(3)] for _ in range(3)]
+    atom_count = int(float(read(1)[0]))
+    crystal['atoms'] = []
+    for _ in range(atom_count):
+        values = read(4)
+        crystal['atoms'].append((float(values[0]), float(values[1]), float(values[2]), int(float(values[3]))))
+    crystal['p_max'] = float(read(1)[0])
+    crystal['beam_dy'], crystal['beam_dz'] = (float(value) for value in read(2))
+    crystal['matrix_id'] = int(float(read(1)[0]))
+    crystal['lattice_constant'] = lattice_constant
+    return crystal
+
+
+def layerTargetSpecies(layer_file: Path, ncp: int) -> List[float]:
+    """
+    Returns 1 for the species that occur in a layer of layer.inp (qu_1 = 1 - sum of the other species), otherwise 0
+
+    :param layer_file: path of layer.inp
+    :param ncp: number of species
+    """
+
+    maximum = [0.] * ncp
+    try:
+        with open(layer_file, 'r', encoding='utf-8', errors='replace') as file:
+            for line in file:
+                values = line.split('!')[0].split()
+                if len(values) < ncp + 1 or line.lstrip().startswith(('!', '#')):
+                    continue
+                try:
+                    count = int(values[0])
+                    fractions = [float(value.replace('D', 'E').replace('d', 'e')) for value in values[2:ncp + 1]]
+                except ValueError:
+                    continue
+                if count <= 0:
+                    break
+                for i, fraction in enumerate([1. - sum(fractions)] + fractions):
+                    maximum[i] = max(maximum[i], fraction)
+    except OSError:
+        pass
+    return [1. if fraction > 1e-9 else 0. for fraction in maximum]
+
+
+def readTrajectoryFile(path: Path) -> List[dict]:
+    """
+    Reads the trajectories of trajec_all.dat (or trajec_stop_p.dat, ...), written with ltraj_p/ltraj_r.
+    Each trajectory starts with a line of "i_traj ihist iproj parent ncoll species ibn termflag",
+    followed by the points "k x y z ptime energy".
+    Since SDTrimSP 6.09 "parent" is the generation of a recoil (0: projectile), until 6.06 it is the species of the parent.
+
+    :param path: path of the file
+
+    :return: list of trajectories {'projectile': (ihist, iproj), 'recoil': bool, 'generation': int or None if unknown,
+             'species': index of species starting at 0, 'termflag': int, 'points': array of (x, y, z, energy)}
+    """
+
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as file:
+            lines = file.read().splitlines()
+    except OSError:
+        return []
+
+    header = lines[0] if lines else ''
+    numbers = findall(r'\d+\.\d+', header)
+    generation_known = not numbers or float(numbers[0]) >= 6.09
+
+    trajectories = []
+    current = None
+    points = []
+    expect_info = False
+
+    def finish():
+        if current is not None:
+            current['points'] = np.array(points, dtype=float).reshape(-1, 4)
+            trajectories.append(current)
+
+    for line in lines[3:]:
+        text = line.strip().lstrip('#').strip()
+        if not text:
+            continue
+        if text.startswith('i_traj'):
+            finish()
+            current, points, expect_info = None, [], True
+            continue
+        if text.startswith('k ') or text.startswith('ende'):
+            if text.startswith('ende'):
+                finish()
+                current = None
+            continue
+        values = text.split()
+        if expect_info:
+            expect_info = False
+            try:
+                _, ihist, iproj, parent, _, species, _, termflag = (int(value) for value in values[:8])
+            except ValueError:
+                continue
+            # termflag 1-3: stopped, backscattered, transmitted projectile; 4-6: the same for recoils
+            recoil = termflag >= 4 if termflag > 0 else parent > 0
+            current = {
+                'projectile': (ihist, iproj),
+                'recoil': recoil,
+                'generation': (parent if recoil else 0) if generation_known else (1 if recoil else 0),
+                'generation_known': generation_known,
+                'species': species - 1,
+                'termflag': termflag
+            }
+            continue
+        if current is not None and len(values) >= 6:
+            try:
+                points.append([float(values[1]), float(values[2]), float(values[3]), float(values[5])])
+            except ValueError:
+                pass
+    finish()
+    return trajectories
+
+
+def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
+    """
+    Returns the layers of the target as (top, bottom, name) in [Å] from layer.inp or the target thickness from tri.inp
+
+    :param save_folder: folder of the simulation
+    """
+
+    layers = []
+    try:
+        with open(save_folder / 'layer.inp', 'r', encoding='utf-8', errors='replace') as file:
+            depth = 0.
+            for line in file:
+                values = line.split('!')[0].split()
+                if len(values) < 2 or line.lstrip().startswith(('!', '#')):
+                    continue
+                try:
+                    count, thickness = int(values[0]), float(values[1].replace('D', 'E').replace('d', 'e'))
+                except ValueError:
+                    continue
+                if count <= 0:
+                    break
+                name = values[-1] if not values[-1].replace('.', '').replace('E', '').replace('-', '').replace('+', '').isdigit() else f'Layer {len(layers) + 1}'
+                layers.append((depth, depth + count * thickness, name))
+                depth += count * thickness
+    except OSError:
+        pass
+    if layers:
+        return layers
+
+    try:
+        with open(save_folder / 'tri.inp', 'r', encoding='utf-8', errors='replace') as file:
+            for line in file:
+                values = line.split('!')[0].replace(' ', '').split('=')
+                if len(values) == 2 and values[0].lower() == 'ttarget':
+                    return [(0., float(values[1].replace('D', 'E').replace('d', 'e')), 'Target')]
+    except (OSError, ValueError):
+        pass
+    return []
 
 
 def usesCrystalLayerFile(arguments: SimulationArguments, version: str) -> bool:
@@ -1753,6 +1966,7 @@ class CompRowBeamSettings(CompRow):
 
     syncHint = '<br>If the element occurs in both the beam and the target, the value is defined in the target table.'
     modifyHint = '<br>A red highlight indicates a modified value. A negative number resets it back to the default one.'
+    # beam only (first 3 and last 3 fields), target and beam (fields in between), energies are next to each other
     rowFields = [
         CustomRowField(
             unique='qubeam',
@@ -1763,7 +1977,7 @@ class CompRowBeamSettings(CompRow):
         ),
         CustomRowField(
             unique='e0',
-            label='Energy [eV]',
+            label='Kin. energy [eV]',
             tooltip='<i>e0</i><br>The kinetic energy (in [eV]) of the incoming ions.',
             synced=False
         ),
@@ -1771,24 +1985,6 @@ class CompRowBeamSettings(CompRow):
             unique='alpha0',
             label='Angle [°]',
             tooltip='<i>alpha0</i><br>The angle of incidence (α) of the incoming ions, measured in degrees from the surface normal.',
-            synced=False
-        ),
-        CustomRowField(
-            unique='beta0',
-            label='Azimuth [°]',
-            tooltip='<i>beta0</i><br>The azimuthal angle (β) of incidence of the incoming ions in degrees (since SDTrimSP 7.00).',
-            synced=False
-        ),
-        CustomRowField(
-            unique='x0',
-            label='Start depth [Å]',
-            tooltip='<i>x0</i><br>Starting position of the projectiles: ≤ 0 outside the surface, > 0 inside the solid (not in SDTrimSP 6.06).',
-            synced=False
-        ),
-        CustomRowField(
-            unique='charge',
-            label='Charge',
-            tooltip='<i>charge</i><br>Charge of the projectiles, used with the sheath potential (shth) for Maxwellian distributions.',
             synced=False
         ),
         CustomRowField(
@@ -1801,6 +1997,11 @@ class CompRowBeamSettings(CompRow):
             label='Mass [amu]',
             tooltip='<i>a_mass</i><br>The atomic mass (in [amu]) of the element, fetched from table1.' + modifyHint + syncHint,
             reset_neg=True
+        ),
+        CustomRowField(
+            unique='isot',
+            label='Isotopes',
+            tooltip='<i>isot</i><br>natural: mass of the natural isotope mixture (table1)<br>isotopes: isotope masses and natural abundances (table2)' + syncHint
         ),
         CustomRowField(
             unique='dns0',
@@ -1821,6 +2022,21 @@ class CompRowBeamSettings(CompRow):
             reset_neg=True
         ),
         CustomRowField(
+            unique='e_bulkb',
+            label='Bulk bind. energy [eV]',
+            tooltip='<i>e_bulkb</i><br>Bulk binding energy (in [eV]) that is subtracted from the transferred energy.<br>-1: value from the tables.' + syncHint
+        ),
+        CustomRowField(
+            unique='e_cutoff',
+            label='Cutoff energy [eV]',
+            tooltip='<i>e_cutoff</i><br>Cutoff energy (in [eV]) below which particles are stopped.<br>-1: default of SDTrimSP (from the tables).' + syncHint
+        ),
+        CustomRowField(
+            unique='deltahf',
+            label='Heat of formation [eV]',
+            tooltip='<i>deltahf</i><br>Heat of formation (in [eV]) of a molecular target (since SDTrimSP 6.09 per element).<br>-1: value from table.compound.' + syncHint
+        ),
+        CustomRowField(
             unique='inel0',
             label='Inelastic loss model',
             tooltip='<i>inel0</i><br>The inelastic loss model used for calculations.' + syncHint
@@ -1831,24 +2047,22 @@ class CompRowBeamSettings(CompRow):
             tooltip='<i>ck_elec</i><br>Correction factor for the inelastic energy loss of this element as moving particle (default 1).' + syncHint
         ),
         CustomRowField(
-            unique='e_cutoff',
-            label='Cutoff energy [eV]',
-            tooltip='<i>e_cutoff</i><br>Cutoff energy (in [eV]) below which particles are stopped.<br>-1: default of SDTrimSP (from the tables).' + syncHint
+            unique='beta0',
+            label='Azimuth [°]',
+            tooltip='<i>beta0</i><br>The azimuthal angle (β) of incidence of the incoming ions in degrees (since SDTrimSP 7.00).',
+            synced=False
         ),
         CustomRowField(
-            unique='e_bulkb',
-            label='Bulk bind. energy [eV]',
-            tooltip='<i>e_bulkb</i><br>Bulk binding energy (in [eV]) that is subtracted from the transferred energy.<br>-1: value from the tables.' + syncHint
+            unique='x0',
+            label='Start depth [Å]',
+            tooltip='<i>x0</i><br>Starting position of the projectiles: ≤ 0 outside the surface, > 0 inside the solid (not in SDTrimSP 6.06).',
+            synced=False
         ),
         CustomRowField(
-            unique='deltahf',
-            label='Heat of formation [eV]',
-            tooltip='<i>deltahf</i><br>Heat of formation (in [eV]) of a molecular target (since SDTrimSP 6.09 per element).<br>-1: value from table.compound.' + syncHint
-        ),
-        CustomRowField(
-            unique='isot',
-            label='Isotopes',
-            tooltip='<i>isot</i><br>natural: mass of the natural isotope mixture (table1)<br>isotopes: isotope masses and natural abundances (table2)' + syncHint
+            unique='charge',
+            label='Charge',
+            tooltip='<i>charge</i><br>Charge of the projectiles, used with the sheath potential (shth) for Maxwellian distributions.',
+            synced=False
         )
     ]
 
@@ -1857,7 +2071,7 @@ class CompRowBeamSettings(CompRow):
         self.version = version
         self.default_values = DefaultValues(self.version)
         self.dict_lookup = DictLookup(self.version)
-        self.max_concentration_field = self.rowFields[6]
+        self.max_concentration_field = self.rowFields[3]
 
         # abundances
         self.abundance = DoubleSpinBox(
@@ -2013,24 +2227,25 @@ class CompRowBeamSettings(CompRow):
             widget.valueChanged.connect(self.contentChanged.emit)
         self.isotopes.currentIndexChanged.connect(self.contentChanged.emit)
 
+        # same order as rowFields
         self.row_widgets += [
             self.abundance,
             self.kinetic_energy,
             self.angle,
-            self.azimuth,
-            self.start_depth,
-            self.charge,
             self.maximum_concentration,
             self.atomic_mass,
+            self.isotopes,
             self.atomic_density,
             self.surface_binding_energy,
             self.displacement_energy,
+            self.bulk_binding_energy,
+            self.cutoff_energy,
+            self.heat_of_formation,
             self.inelastic_loss_model,
             self.inelastic_correction,
-            self.cutoff_energy,
-            self.bulk_binding_energy,
-            self.heat_of_formation,
-            self.isotopes
+            self.azimuth,
+            self.start_depth,
+            self.charge
         ]
 
         self.updateHighlightWidgetValue(self.abundance, 0)
@@ -2241,11 +2456,13 @@ class CompRowTargetSettings(CompRowBeamSettings):
     :param version: version of simulation
     """
 
-    rowFields = CompRowBeamSettings.rowFields[6:]
+    # without the fields of the beam only (first 3 and last 3)
+    rowFields = CompRowBeamSettings.rowFields[3:-3]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.row_widgets = self.row_widgets[0:3] + self.row_widgets[9:]
+        # remove button, index and element + fields of the target
+        self.row_widgets = self.row_widgets[0:3] + self.row_widgets[6:-3]
 
     def receive(self, value_dict: dict):
         """Receives other settingsChanged pyqtSignal -> dict"""
@@ -2329,7 +2546,46 @@ class HlPlot(HlGeneralPlot):
         self.addLayout(self.layout_polar_angle_delta)
         self.polar_angle_delta.valueChanged.connect(self.emit_polar_angle)
 
+        # trajectories
+        self.trajectory_number = SpinBox(default=1, input_range=(1, 1), buttons=True, scroll=True)
+        self.layout_trajectory_number = InputHBoxLayout(
+            'Projectiles',
+            self.trajectory_number,
+            tooltip='Number of projectiles whose trajectories (and the ones of their recoils) are shown.<br>'
+                    'The number of traced projectiles is set in the simulation settings (numb_hist)'
+        )
+        self.trajectory_view = ComboBox(entries=['depth x – lateral y', 'depth x – lateral z'], entries_save=['y', 'z'])
+        self.layout_trajectory_view = InputHBoxLayout('View', self.trajectory_view, tooltip='Plane in which the trajectories are shown')
+        self.trajectory_recoils = InputHBoxLayout('Recoils', None, checkbox=True, tooltip='Show the trajectories of the recoils, colored by their generation in the collision cascade')
+        self.trajectory_layers = InputHBoxLayout('Layers', None, checkbox=True, tooltip='Show the layers of the target structure below the trajectories')
+        self.trajectory_layouts = [self.layout_trajectory_number, self.layout_trajectory_view, self.trajectory_recoils, self.trajectory_layers]
+        for layout in self.trajectory_layouts:
+            layout.setHidden(True)
+            self.addLayout(layout)
+        self.trajectory_number.valueChanged.connect(self.emitTrajectories)
+        self.trajectory_view.currentIndexChanged.connect(self.emitTrajectories)
+        self.trajectory_recoils.checkbox.stateChanged.connect(self.emitTrajectories)
+        self.trajectory_layers.checkbox.stateChanged.connect(self.emitTrajectories)
+
         self.addStretch(1)
+
+    def emitTrajectories(self):
+        """Emits signal for the trajectory plot"""
+
+        self.emit({
+            'trajectories': {
+                'number': self.trajectory_number.value(),
+                'view': self.trajectory_view.getValue(save=True),
+                'recoils': self.trajectory_recoils.checkbox.isChecked(),
+                'layers': self.trajectory_layers.checkbox.isChecked()
+            }
+        })
+
+    def setTrajectoriesHidden(self, hidden: bool):
+        """Shows or hides the settings of the trajectory plot"""
+
+        for layout in self.trajectory_layouts:
+            layout.setHidden(hidden)
 
     def emit_polar_angle(self):
         """Emits signal for polar angle energy"""
@@ -2351,6 +2607,7 @@ class HlPlot(HlGeneralPlot):
             self.history_spacer.setHidden(hide)
             self.layout_polar_angle.setHidden(hide)
             self.layout_polar_angle_delta.setHidden(hide)
+            self.setTrajectoriesHidden(hide)
 
         # hide history buttons
         hide_history = value_dict.get('hide_history')
@@ -2358,6 +2615,22 @@ class HlPlot(HlGeneralPlot):
             self.layout_history_step.setHidden(hide_history)
             self.history_step_slider.setHidden(hide_history)
             self.history_spacer.setHidden(hide_history)
+            if not hide_history:
+                self.setTrajectoriesHidden(True)
+
+        # show trajectory settings (and hide the others)
+        hide_trajectories = value_dict.get('hide_trajectories')
+        if isinstance(hide_trajectories, bool):
+            self.setTrajectoriesHidden(hide_trajectories)
+            if not hide_trajectories:
+                for widget in (self.layout_history_step, self.history_step_slider, self.history_spacer, self.layout_polar_angle, self.layout_polar_angle_delta):
+                    widget.setHidden(True)
+
+        max_trajectories = value_dict.get('max_trajectories')
+        if max_trajectories is not None:
+            self.trajectory_number.blockSignals(True)
+            self.trajectory_number.setMaximum(max(1, int(max_trajectories)))
+            self.trajectory_number.blockSignals(False)
 
         # set max history
         max_hist = value_dict.get('max_history')
@@ -2376,6 +2649,8 @@ class HlPlot(HlGeneralPlot):
         if isinstance(hide_polar_angle, bool):
             self.layout_polar_angle.setHidden(hide_polar_angle)
             self.layout_polar_angle_delta.setHidden(hide_polar_angle)
+            if not hide_polar_angle:
+                self.setTrajectoriesHidden(True)
 
         # set polar angle
         polar_angle = value_dict.get('polar_angle')
@@ -2428,6 +2703,8 @@ Andreas Mutzke
     LayerFilename = 'layer.inp'
     ExampleAdditionalSetting = 'e.g. ienergy_distr = .true.'
     SkipList = [InputFilename, LayerFilename, CrystalFilename, 'ausdat.dat']
+    # e.g. a0_tdiff.inp and eact_tdiff.inp (diffusion), energy.inp, angle.inp, CH.data (chemical erosion)
+    KeepFiles = ['*.inp', '*.data']
     OutputTooltips = {
         'output.dat': 'general standard output',
         'energy_analyse.dat': 'sum of all energy',
@@ -3134,9 +3411,12 @@ Andreas Mutzke
 
         # --- target ---
 
-        iq0 = 1 - len(arguments.structure)
-        if usesCrystalLayerFile(arguments, version):
-            iq0 = -1
+        # iq0 < 0: composition from layer.inp (-2 has a special meaning for chemical erosion, so the loaded value is kept)
+        iq0 = 0
+        if len(arguments.structure) > 1 or usesCrystalLayerFile(arguments, version):
+            iq0 = arguments.target_args.get('layer_file_flag', -1)
+            if not isinstance(iq0, int) or iq0 >= 0:
+                iq0 = -1
 
         if group_elements:
             qu = [1.0 if target_row is not None else 0.0 for _, target_row in grouped_rows]
@@ -3666,6 +3946,9 @@ text = "--- extra ---"
 
             if assumed_cls is None:
                 assumed_cls = []
+            # a single value may end with a separator in Fortran namelists (e.g. "ncp = 2,")
+            if isinstance(value, str) and value_type is not str:
+                value = value.strip().rstrip(',').strip()
             try:
                 value = value_type(value)
                 return value
@@ -3714,7 +3997,12 @@ text = "--- extra ---"
                 if item is not None:
                     assumed_cls.assumed(item)
                 value = ''
-            values = value.replace('\"', '').replace('\'', '').split(split_str)
+            value = value.replace('\"', ' ').replace('\'', ' ')
+            # the values of Fortran namelists are separated by commas and/or blanks (e.g. symbol = "C_g" "W")
+            if split_str == ',':
+                values = [part for part in split(r'[\s,]+', value.strip()) if part] or ['']
+            else:
+                values = value.split(split_str)
             values_out = []
             if lookup_dict is None:
                 lookup_dict = {}
@@ -3735,7 +4023,7 @@ text = "--- extra ---"
 
         # extract variables from contents dict
         title = getValue(contents.get('title'), str, f'SDTrimSP - {dateStr()}', 'title', assumed_cls=assumed)
-        idrel = getValueDict(contents.get('idrel'), dict_lookup.idrel, default_values.idrel + 1, 'mode', assumed_cls=assumed)
+        idrel = getValueDict(contents.get('idrel'), dict_lookup.idrel, default_values.idrel, 'mode', assumed_cls=assumed)
         flc = getValue(contents.get('flc'), float, default_values.flc, 'fluence', assumed_cls=assumed)
         nh = getValue(contents.get('nh'), int, default_values.nh, 'number_of_histories', assumed_cls=assumed)
         idout = getValue(contents.get('idout'), int, default_values.idout, 'histories_between_outputs', assumed_cls=assumed)
@@ -3754,14 +4042,17 @@ text = "--- extra ---"
         globaldensity = getValueBoolInt(contents.get('!globaldensity'))
         case_e0 = getValueDict(contents.get('case_e0'), dict_lookup.case_e0, default_values.case_e0, 'kinetic_energy_mode', assumed_cls=assumed)
         case_alpha = getValueDict(contents.get('case_alpha'), dict_lookup.case_alpha, default_values.case_alpha, 'angle_mode', assumed_cls=assumed)
-        number_calc = getValue(contents.get('number_calc'), float, default_values.number_calc, 'sweeps', assumed_cls=assumed)
+        number_calc = int(getValue(contents.get('number_calc'), float, default_values.number_calc, 'sweeps', assumed_cls=assumed))
         iq0 = getValue(contents.get('iq0'), int, 0, 'composition_profile', assumed_cls=assumed)
         nqx = getValue(contents.get('nqx'), int, default_values.nqx, 'segments', assumed_cls=assumed)
         ttarget = getValue(contents.get('ttarget'), float, default_values.ttarget, 'thickness', assumed_cls=assumed)
         symbol = getValueList(contents.get('symbol'), str, 'H', 'symbol', assumed_cls=assumed)
-        inel0 = getValueList(contents.get('inel0'), getValueDict, default_values.inel0, 'inelastic_loss_model', dict_lookup.inel0, assumed_cls=assumed)
+        # without inel0 the default of SDTrimSP is used for each species (see defaultInelasticLossModel)
+        inel0_text = contents.get('inel0')
+        inel0 = getValueList(inel0_text, getValueDict, default_values.inel0, 'inelastic_loss_model', dict_lookup.inel0, assumed_cls=assumed) if isinstance(inel0_text, str) else []
         qubeam = getValueList(contents.get('qubeam'), float, default_values.qubeam, 'abundance', assumed_cls=assumed)
-        qu = getValueList(contents.get('qu'), float, default_values.qubeam, 'abundance', assumed_cls=assumed)
+        qu_text = contents.get('qu')
+        qu = getValueList(qu_text, float, default_values.qubeam, 'abundance', assumed_cls=assumed)
         qumax = getValueList(contents.get('qumax'), float, default_values.qumax, 'max_atomic_fraction', assumed_cls=assumed)
         e0 = getValueList(contents.get('e0'), float, default_values.e0, 'energy', assumed_cls=assumed)
         alpha0 = getValueList(contents.get('alpha0'), float, default_values.alpha0, 'angle', assumed_cls=assumed)
@@ -3806,7 +4097,7 @@ text = "--- extra ---"
         miller_ind = None
         l_crystal = False
 
-        if self.default_values.enable_crystal:
+        if default_values.enable_crystal:
             l_crystal = getValueBool(contents.get('l_crystal'), default_values.l_crystal)
 
         table_crystal = None
@@ -3844,14 +4135,28 @@ text = "--- extra ---"
         if tables_folder is None and tableinp and Path(tableinp).is_dir():
             tables_folder = Path(tableinp)
 
-        # get rid of 'ioutput_part(x)'
-        contents.get('ioutput_part(2)')
-        contents.get('ioutput_part(5)')
+        # the GUI writes 'ioutput_part(2)' (nh * nr_pproj) and 'ioutput_part(5)' (100 * nh * nr_pproj), other values are
+        # kept in the additional settings (they are written after the ones of the GUI and are used by SDTrimSP)
+        particle_outputs = []
+        for index, factor in ((2, 1), (5, 100)):
+            value = contents.get(f'ioutput_part({index})')
+            if value is not None and getValue(value, int, -1) != int(nh) * int(nr_pproj) * factor:
+                particle_outputs.append(f'ioutput_part({index}) = {str(value).strip()}')
 
         additional = []
 
         for add_key, add_val in contents.items():
             additional.append(f'{add_key} = {add_val}')
+        additional += particle_outputs
+
+        # with a layer file (iq0 < 0) qu is not needed, the target species are the ones that occur in the layers
+        # (also projectiles with qu = 0 that form a layer)
+        if iq0 < 0 and ncp > 0:
+            layer_species = layerTargetSpecies(layer_file, ncp)
+            if not isinstance(qu_text, str):
+                qu = layer_species
+            elif len(qu) == ncp and any(layer_species):
+                qu = [q if q else in_layer for q, in_layer in zip(qu, layer_species)]
 
         if not len(symbol) == len(qubeam) == len(qu) == ncp:
             return f'Length of lists "symbol({len(symbol)})", "qubeam({len(qubeam)})", "qu({len(qu)})" and "ncp={ncp}" are different.'
@@ -3893,7 +4198,7 @@ text = "--- extra ---"
                     qumax_i = default_values.qumax
                     assumed_row.assumed('max_atomic_fraction')
                 if inel0_i is None:
-                    inel0_i = [k for k, v in dict_lookup.inel0.items() if v == default_values.inel0][0]
+                    inel0_i = defaultInelasticLossModel(symbol_i, version, dict_lookup, default_values)
                     assumed_row.assumed('inelastic_loss_model_row')
 
                 row_parameters = {
@@ -3963,6 +4268,13 @@ text = "--- extra ---"
         # elements that are only part of crystals in the layer file have qu = 0, but are target elements
         if crystal_elements:
             qu = [q if q or s not in crystal_elements or b else 1.0 for q, s, b in zip(qu, symbol, qubeam)]
+        # elements that are only part of the crystal of crystal.inp (7.00, 7.01) have qu = 0, but are target elements
+        if l_crystal and table_crystal is None:
+            try:
+                crystal_inp_species = set(readCrystalInp(crystal_file)['species'])
+            except (OSError, ValueError, IndexError):
+                crystal_inp_species = set()
+            qu = [q if q or s not in crystal_inp_species or b else 1.0 for q, s, b in zip(qu, symbol, qubeam)]
         target_rows = rowList(qu, 'target')
 
         # beam_args data (<GeneralBeamArguments>)
@@ -4003,6 +4315,23 @@ text = "--- extra ---"
         elif case_e0 == ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE:
             error_list.append('Distribution of energies and angles "ene_ang.inp" not found or not readable')
 
+        # the order of the species in tri.inp is kept (it changes the random numbers and therefore the results):
+        # grouped are the target species first and then the projectiles that are not in the target (every species once),
+        # not grouped are all projectiles first and then all target species
+        beam_symbols = [row.symbol for row in beam_rows]
+        target_symbols = [row.symbol for row in target_rows]
+        file_symbols = [symbol_i for symbol_i, qu_i, qubeam_i in zip(symbol, qu, qubeam) if qu_i or qubeam_i]
+        shared = bool(set(beam_symbols) & set(target_symbols))
+        grouped_symbols = target_symbols + [symbol_i for symbol_i in beam_symbols if symbol_i not in target_symbols]
+        if not shared and file_symbols == beam_symbols + target_symbols:
+            group_elements = False
+        elif file_symbols == grouped_symbols:
+            group_elements = True
+        else:
+            group_elements = shared
+            error_list.append('The order of the elements is changed (beam and target elements are grouped)' if shared else
+                              'The order of the elements is changed (beam elements first)')
+
         beam_args = GeneralBeamArguments(
             kinetic_energy_mode=case_e0,
             angle_mode=case_alpha,
@@ -4016,7 +4345,8 @@ text = "--- extra ---"
             thickness=ttarget,
             segments=nqx,
             global_density=globaldensity,
-            crystal_flag=l_crystal
+            crystal_flag=l_crystal,
+            layer_file_flag=iq0 if iq0 < 0 else -1
         )
 
         # settings data (<GeneralArguments>)
@@ -4040,7 +4370,8 @@ text = "--- extra ---"
             energy_distribution=lenergy_distr,
             distribution_grid=distribution_grid,
             random_seed=int(irand),
-            inelastic_outside=bool(sfin)
+            inelastic_outside=bool(sfin),
+            group_elements=group_elements
         )
 
         layer_counter = RunningIndex()
@@ -4122,6 +4453,21 @@ text = "--- extra ---"
             except FileNotFoundError:
                 error_list.append('No known layer files in this directory, assuming no layer file.')
 
+        # SDTrimSP uses the first nqx segments of the layer file with their thicknesses (ttarget is not used then)
+        if structure and iq0 < 0 and sum(layer.segments for layer in structure) > nqx:
+            remaining = nqx
+            trimmed = []
+            for layer in structure:
+                if remaining <= 0:
+                    break
+                if layer.segments > remaining:
+                    layer.thickness = layer.thickness / layer.segments * remaining
+                    layer.segments = remaining
+                trimmed.append(layer)
+                remaining -= layer.segments
+            structure = trimmed
+            target_args.thickness = sum(layer.thickness for layer in structure)
+
         if not structure:
             abundances = [target.abundance for target in target_rows]
             if not abundances:
@@ -4174,9 +4520,6 @@ text = "--- extra ---"
             read file: matrix_id -> matrix_id
             """
 
-            file_lines = []
-            contents = DeleteDict()
-
             crystal_args = GeneralCrystalArguments(
                 name=default_values.crystal_name,
                 lattice_id=default_values.lattice_id,
@@ -4192,81 +4535,37 @@ text = "--- extra ---"
             )
 
             try:
-                with open(crystal_file, 'r', encoding='utf-8', errors='replace') as file:
-
-                    for line in file.readlines():
-                        line = line.strip()
-
-                        if not line:
-                            continue
-                        elif not line.startswith('#'):
-                            file_lines.append(line)
-                        elif line.startswith('# lattice_constant'):
-                            contents['lattice_constant'] = line.split('=')[-1]
-
-                lattice_constant = getValue(contents.get('lattice_constant'), float, default_values.lattice_constant, assumed_cls=assumed)
-
-                contents['name'] = file_lines[0].split()[0]
-                crystal_name = getValue(contents.get('name'), str, 'MyLittleCrystal', 'name', assumed_cls=assumed)
-
-                contents['lattice_id'] = file_lines[1].split()[0]
-                lattice_id = getValue(contents.get('lattice_id'), int, 1, 'lattice_id', assumed_cls=assumed)
-
-                contents['number_of_species'] = file_lines[2].split()[0]
-                number_of_species = getValue(contents.get('number_of_species'), int, 0, 'number_of_species', assumed_cls=assumed)
-
-                species = [file_lines[3 + i].split()[0].strip('"') for i in range(number_of_species)]
+                crystal = readCrystalInp(crystal_file)
+                lattice_constant = crystal['lattice_constant']
+                species = crystal['species']
                 if not species:
                     assumed.assumed('species')
-
-                basis_vec_1 = BasisVector([float(i) for i in file_lines[3 + number_of_species].split()[:3]]) / lattice_constant
-                basis_vec_2 = BasisVector([float(i) for i in file_lines[4 + number_of_species].split()[:3]]) / lattice_constant
-                basis_vec_3 = BasisVector([float(i) for i in file_lines[5 + number_of_species].split()[:3]]) / lattice_constant
-
-                contents['number_of_atoms'] = file_lines[6 + number_of_species].split()[0]
-                number_of_atoms = getValue(contents.get('number_of_atoms'), int, 0, 'number_of_atoms', assumed_cls=assumed)
-
-                crystal_rows = []
-                for i in range(number_of_atoms):
-                    numbers = file_lines[7 + number_of_species + i].split()
-                    row = CrystalRowArguments(
-                        index=i,
-                        symbol=species[int(numbers[3]) - 1],
-                        coord=Coordinate([floatSafe(numbers[i], 0) for i in range(3)])
-                    )
-                    crystal_rows.append(row)
-
-                contents['p_max'] = file_lines[7 + number_of_species + number_of_atoms].split()[0]
-                impact_parameter = getValue(contents.get('p_max'), float, default_values.p_max, 'impact_parameter', assumed_cls=assumed)
-
-                beam = file_lines[8 + number_of_species + number_of_atoms].split()[:2]
-                dy = getValue(beam[0], float, default_values.beam_dy, 'beam_dy', assumed_cls=assumed)
-                dz = getValue(beam[1], float, default_values.beam_dz, 'beam_dz', assumed_cls=assumed)
-
-                contents['matrix_id'] = file_lines[9 + number_of_species + number_of_atoms].split()[0]
-                matrix_id = getValue(contents.get('matrix_id'), int, default_values.matrix_id, 'matrix_id', assumed_cls=assumed)
+                crystal_rows = [
+                    CrystalRowArguments(index=i, symbol=species[atom[3] - 1], coord=Coordinate(list(atom[:3])))
+                    for i, atom in enumerate(crystal['atoms'])
+                ]
 
                 # crystal_args data (<GeneralTargetArguments>)
                 crystal_args = GeneralCrystalArguments(
-                    name=crystal_name,
-                    lattice_id=lattice_id,
-                    number_of_species=number_of_species,
+                    name=crystal['name'],
+                    lattice_id=crystal['lattice_id'],
+                    number_of_species=len(species),
                     species=species,
                     lattice_constant=lattice_constant,
-                    basis_vec_a1=basis_vec_1,
-                    basis_vec_a2=basis_vec_2,
-                    basis_vec_a3=basis_vec_3,
+                    basis_vec_a1=BasisVector(crystal['basis_vectors'][0]) / lattice_constant,
+                    basis_vec_a2=BasisVector(crystal['basis_vectors'][1]) / lattice_constant,
+                    basis_vec_a3=BasisVector(crystal['basis_vectors'][2]) / lattice_constant,
                     miller_ind=miller_ind,
-                    p_max=impact_parameter,
-                    beam_dy=dy,
-                    beam_dz=dz,
-                    matrix_id=matrix_id
+                    p_max=crystal['p_max'],
+                    beam_dy=crystal['beam_dy'],
+                    beam_dz=crystal['beam_dz'],
+                    matrix_id=crystal['matrix_id']
                 )
 
-            except FileNotFoundError:
-                error_list.append(f'Could not open crystal file.')
+            except OSError:
+                error_list.append('Could not open crystal file.')
 
-            except IndexError:
+            except (IndexError, ValueError):
                 error_list.append('Crystal file has incorrect format.')
 
         simulation = SimulationArguments(
@@ -4351,6 +4650,11 @@ text = "--- extra ---"
 
         if 'stop from subroutine' in log or exit_code == 66:
             return 'the simulation stopped because of an error, see the log'
+        # 7.00 and 7.01 leave the collision loop without a result if a projectile is already below the target
+        # (projectile.F90, "ix_var is not properly set"), this was fixed in 7.02
+        if 'invalid case for flag' in log and 'ix_var is not properly set' in log:
+            return ('a projectile passed through the target (transmission), which SDTrimSP 7.00 and 7.01 cannot handle. '
+                    'Use a thicker target, a lower energy or SDTrimSP 7.02 or newer')
         if 'code terminates' in log:
             return 'the simulation terminated because of an error, see the log'
         if exit_code != 0:
@@ -4496,8 +4800,16 @@ class SimulationOutput(SimulationsOutput):
         self.analysis = SimulationAnalysis(element_data)
         super().__init__(plot, element_data, title_label)
 
+        # settings of the trajectory plot, changed in HlPlot
+        self.trajectory_args = {'number': 1, 'view': 'y', 'recoils': True, 'layers': True}
+
     def receive(self, value_dict: dict):
         """Receives pyqtSignal -> dict"""
+
+        trajectories = value_dict.get('trajectories')
+        if isinstance(trajectories, dict):
+            self.trajectory_args.update(trajectories)
+            self.analyse('plotTrajectories', dict(self.trajectory_args), hide=False)
 
         histories = value_dict.get('history')
         if histories is not None:
@@ -4774,6 +5086,20 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItem(ListWidgetItem('Plot energy dependence (only for "energy sweep")', bold=True, grey=True))
         list_widget.addItemEmpty()
 
+        # trajectories
+        trajectories_file = save_folder / 'trajec_all.dat'
+        if trajectories_file.is_file() and trajectories_file.stat().st_size > 0:
+            list_widget.addItem(ListWidgetItem('Plot particle trajectories:', bold=True))
+            list_widget.addItem(ListWidgetItem('Trajectories of projectiles and recoils',
+                                               indent=1,
+                                               function=self.analyse,
+                                               function_args={'plot': 'plotTrajectories',
+                                                              'plot_args': self.trajectory_args,
+                                                              'hide': False}))
+        else:
+            list_widget.addItem(ListWidgetItem('Plot particle trajectories (only with trajectory output)', bold=True, grey=True))
+        list_widget.addItemEmpty()
+
         # reflected projectiles and sputtered recoils
         back_p_exists = (save_folder / 'partic_back_p.dat').is_file()
         back_r_exists = (save_folder / 'partic_back_r.dat').is_file()
@@ -4846,6 +5172,10 @@ class SimulationAnalysis(SimulationsAnalysis):
         # TODO: move this to general <Simulations.py>
         self.particle: Particle = Particle.Projectile
         self.particle_data = None
+
+        # trajectories (cached with the modification time of the file)
+        self.trajectories: List[dict] = []
+        self.trajectories_file: Optional[Tuple[Path, float]] = None
         
     def reset(self):
         """Reset class"""
@@ -5404,6 +5734,114 @@ class SimulationAnalysis(SimulationsAnalysis):
         except (IndexError, ValueError):
             logging.warning(f'Could not process file "{filename}"!')
             return None
+
+    def getTrajectories(self) -> List[dict]:
+        """Returns the trajectories of trajec_all.dat in the save folder (see readTrajectoryFile)"""
+
+        if self.save_folder is None:
+            return []
+        path = self.save_folder / 'trajec_all.dat'
+        try:
+            key = (path, path.stat().st_mtime)
+        except OSError:
+            return []
+        if key != self.trajectories_file:
+            self.trajectories = readTrajectoryFile(path)
+            self.trajectories_file = key
+        return self.trajectories
+
+    def plotTrajectories(self, number: int = 1, view: str = 'y', recoils: bool = True, layers: bool = True) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """
+        Plot and return the trajectories of the first projectiles and their recoils.
+        The projectiles have one color, the recoils a color depending on their generation in the collision cascade
+
+        :param number: number of projectiles
+        :param view: lateral axis, 'y' or 'z'
+        :param recoils: show the recoils
+        :param layers: show the layers of the target
+        """
+
+        mpl_settings = MplCanvasSettings()
+        trajectories = self.getTrajectories()
+        projectiles = list(dict.fromkeys(trajectory['projectile'] for trajectory in trajectories))
+        self.emit({
+            'hide_trajectories': False,
+            'max_trajectories': max(1, len(projectiles))
+        })
+        if not projectiles:
+            mpl_settings.axes.set_title('No trajectories found')
+            return None, mpl_settings
+
+        number = max(1, min(int(number), len(projectiles)))
+        selected = set(projectiles[:number])
+        shown = [trajectory for trajectory in trajectories if trajectory['projectile'] in selected and (recoils or not trajectory['recoil'])]
+        column = 2 if view == 'z' else 1
+        generation_known = all(trajectory.get('generation_known', True) for trajectory in shown)
+
+        # all trajectories of a generation in one line, separated by nan
+        generations: Dict[int, List[np.ndarray]] = {}
+        for trajectory in shown:
+            points = trajectory['points']
+            if not len(points):
+                continue
+            segment = np.vstack([points[:, [column, 0]], [np.nan, np.nan]])
+            generations.setdefault(trajectory['generation'], []).append(segment)
+
+        # depth range of the trajectories (and the surface), the layers are only drawn in this range, so that the limits
+        # follow the trajectories and not the (much thicker) target
+        points = np.vstack([np.vstack(segments) for segments in generations.values()]) if generations else np.zeros((1, 2))
+        lateral = points[:, 0][~np.isnan(points[:, 0])]
+        depth = np.append(points[:, 1][~np.isnan(points[:, 1])], 0.)
+        margin = 0.05 * max(np.ptp(lateral) if lateral.size else 0., np.ptp(depth), 1.)
+        depth_min, depth_max = depth.min() - margin, depth.max() + margin
+
+        # layers below the trajectories
+        if layers:
+            layer_colors = ['#bcbd22', '#17becf', '#9467bd', '#8c564b', '#7f7f7f']
+            names = []
+            for top, bottom, name in readLayers(self.save_folder):
+                if bottom <= depth_min or top >= depth_max:
+                    continue
+                label = name if name not in names else None
+                names.append(name)
+                color = layer_colors[names.index(name) % len(layer_colors)]
+                mpl_settings.axes.axhspan(max(top, depth_min), min(bottom, depth_max), color=color, alpha=0.2, linewidth=0, zorder=0, label=label)
+        mpl_settings.axes.axhline(0, color='#7f7f7f', linewidth=1, zorder=1)
+
+        # the legend shows the first and the last generation of the color gradient
+        recoil_colormap = colormaps['autumn']
+        max_generation = max([generation for generation in generations if generation > 0], default=1)
+        data, labels = [], []
+        for generation in sorted(generations):
+            lines = np.vstack(generations[generation])
+            if generation == 0:
+                color = 'tab:blue'
+                label = 'Projectiles' if number > 1 else 'Projectile'
+            else:
+                color = recoil_colormap(0.85 * (generation - 1) / max(1, max_generation - 1))
+                if not generation_known:
+                    label = 'Recoils'
+                elif generation == 1:
+                    label = 'Recoils, generation 1'
+                elif generation == max_generation:
+                    label = f'{"⋮ " if max_generation > 2 else ""}Recoils, generation {generation}'
+                else:
+                    label = None
+            mpl_settings.axes.plot(lines[:, 0], lines[:, 1], color=color, linewidth=1, label=label, zorder=2 + 1 / (1 + generation))
+            data += [np.full(len(lines), generation), lines[:, 0], lines[:, 1]]
+            labels += [f'Generation {generation}', f'Lateral position {view} [Å]', 'Depth x [Å]']
+
+        # equal lengths for the export, missing values are nan
+        length = max(len(column_data) for column_data in data)
+        data = [np.concatenate([column_data, np.full(length - len(column_data), np.nan)]) for column_data in data]
+
+        mpl_settings.axes.set_xlabel(f'Lateral position {view} [Å]')
+        mpl_settings.axes.set_ylabel('Depth x [Å]')
+        mpl_settings.axes.set_aspect('equal', adjustable='datalim')
+        mpl_settings.axes.invert_yaxis()
+        mpl_settings.axes.set_title(f'Trajectories of {number} of {len(projectiles)} projectile{"s" if len(projectiles) > 1 else ""}')
+        mpl_settings.axes.legend(fontsize='small')
+        return (data, labels), mpl_settings
 
     def getParticleData(self, particle: Particle) -> Optional[List[np.ndarray]]:
         """

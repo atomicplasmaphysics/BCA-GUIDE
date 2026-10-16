@@ -1,0 +1,46 @@
+Example 2: 1 keV D on W at normal incidence (dynamic, fluence 10 atoms/A^2)
+&TRI_INP
+text = "--- elements ---"
+    ncp = 2
+    symbol = "D", "W"
+    !globaldensity = False, 0.0
+    inel0 = 7, 7
+
+text = "--- general ---"
+    idrel = 0
+    flc = 10.0
+    nh = 500
+    idout = 10
+    nr_pproj = 100
+    ipot = 1
+    iintegral = 2
+    isbv = 1
+
+text = "--- beam ---"
+    qubeam = 1.0, 0.0
+    case_e0 = 0
+    e0 = 1000.0, 0.0
+    case_alpha = 0
+    alpha0 = 0.0, 0.0
+
+text = "--- target ---"
+    qu = 0.0, 1.0
+    qumax = 0.5, 1.0
+    ttarget = 500.0
+    nqx = 100
+    iq0 = 0
+
+text = "--- crystal ---"
+    l_crystal = .false.
+
+text = "--- output options ---"
+    lparticle_p = .false.
+    lparticle_r = .false.
+    lmatrices = .false.
+    tbsp_binary = .true.
+    tbsp_ascii = .false.
+
+text = "--- extra ---"
+    tableinp = "C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTrimSP_7.07\tables"
+    
+/

@@ -1,0 +1,174 @@
+ start:
+ default_init_0
+ init_parallel_environment
+ title:
+ Example 6: 2 keV Ar on a W crystal (bcc, 100 surface) at normal incidence, comp
+ a
+ ===read all table===
+  -read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table1
+    use inelastic (electronic) energy  model inel0(           1 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    use inelastic (electronic) energy  model inel0(           2 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_ck
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_a3a4a5
+  -read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table.crystal
+     base_crystals:  1 (lattice_id)
+       W_bcc                   crystal name
+                           
+                   symbol :      Ar       W     W_1
+                crystal_id:       0       0       1
+       correspond. element:       1       2       2
+                   dns0   : 0.02080 0.06306 0.06306
+                   e_bulkb: 0.00000 0.00000 0.00000
+                   nms_all:       1       1       1
+   ck_elec(i,j), ck: a2-a5
+    Ar   -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Ar   -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Ar   -> W_1       1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> W_1       1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W_1  -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W_1  -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W_1  -> W_1       1.00000     0.50000    -1.00000    -1.00000    -1.00000
+  ===end table read===
+   EsEc:---USE-----  
+   EsEc:  ncp symb   e_surfb  e_cutoff   e_bulkb
+   EsEc:  1    Ar     0.00000   0.50000   0.00000
+   EsEc:  2    W      8.79000   2.93000   0.00000
+   EsEc:  3    W_1    8.79000   2.93000   0.00000
+ ===Calculation of amplitude (Debye-Waller)
+    dx=f(T,bulk-debye-Temp(element)
+             Nr        Z     T [K] u_deb_wal [A] max(u_deb_wal)
+    u_deb_wal  1 Ar    18    300.00   0.36898
+    u_deb_wal  2 W     74    300.00   0.04449
+    u_deb_wal  3 W_1   74    300.00   0.04449
+ ---
+    start-seed:
+     pid          seed
+      0                        1                        1
+ --energy_init-------------------------
+ --target_init-------------------------
+ --crystal_init------------------------
+   Lattice-id is           1
+   name of crystal:W_bcc     
+   lat%base_vectors0(1:3)%p
+    a1 :          3.1654         0.0000         0.0000
+    a2 :          0.0000         3.1654         0.0000
+    a3 :          0.0000         0.0000         3.1654
+   surface of crystal: dy=         3.1654 dz=         3.1654
+   depth   of crystal: dx=         3.1654
+   points of crystal           2
+     1         0.0000         0.0000         0.0000 W_1   ( 3)
+     2         1.5827         1.5827         1.5827 W_1   ( 3)
+   dens_crystal:    0.0631 lm(amorphous)    2.5124
+   pmax_crystal:    3.1000 pm(amorphous)    2.4551
+   beam_crystal:    3.1652    3.1652
+   matrix_id   :  3 3x3x3
+   i_lm_crystal:  1 lm_max=f(p_min)
+   
+   weighting and partner of atoms:
+    ip symbol lattice_i weighting   partner     ip   
+     3 W_1            1    1.0000         0
+   ---lattice-structure was successful---
+ ---start get_lattice_parameters
+   -------------crystal:           1
+    n_neighbouring_atoms          54
+    miller_ind   1.00000   0.00000   0.00000
+    Rotation matrix :
+       1.0000        0.0000        0.0000    
+       0.0000        1.0000        0.0000    
+       0.0000        0.0000        1.0000    
+    phi (rotation about Z-axis) & theta (rotation about Y-axis) program-intern:
+     phi:  0.000000000000000E+000  theta:  0.000000000000000E+000  deg
+    phi (polar) & theta (azimuthal) definition by Miller:
+     alpha:  0.000000000000000E+000   beta:  0.000000000000000E+000  deg
+    dy_beam calculate:   3.16538 dy_beam/dy:   1.00000
+    dy_beam input    :   3.16520 dy_beam/dy:   0.99994
+    dy_beam used     :   3.16520 dy_beam/dy:   0.99994
+    dz_beam calculate:   3.16538 dz_beam/dz:   1.00000
+    dz_beam input    :   3.16520 dz_beam/dz:   0.99994
+    dz_beam used     :   3.16520 dz_beam/dz:   0.99994
+  -------------layerthick if use crystal:
+  layer should be multiples of:   3.16538 =dx_crystal
+  layer thick used            :  10.00000
+ INFO:  allocate(task_queue) memory:  160.22 MByt
+ start history ihist=           0
+ history: start time:11:32:46
+INFO: Fluence step:   0.0200000 [ions/A**2]  
+INFO: time    step:   0.0200000 [s]          
+           1 ihist:           2 %, time:11:32:46         100
+           2 ihist:           4 %, time:11:32:47         100
+           3 ihist:           6 %, time:11:32:49         100
+           4 ihist:           8 %, time:11:32:50         100
+           5 ihist:          10 %, time:11:32:52         100
+           6 ihist:          12 %, time:11:32:53         100
+           7 ihist:          14 %, time:11:32:55         100
+           8 ihist:          16 %, time:11:32:56         100
+           9 ihist:          18 %, time:11:32:58         100
+          10 ihist:          20 %, time:11:33:00         100
+          11 ihist:          22 %, time:11:33:02         100
+          12 ihist:          24 %, time:11:33:03         100
+          13 ihist:          26 %, time:11:33:04         100
+          14 ihist:          28 %, time:11:33:06         100
+          15 ihist:          30 %, time:11:33:07         100
+          16 ihist:          32 %, time:11:33:08         100
+          17 ihist:          34 %, time:11:33:09         100
+          18 ihist:          36 %, time:11:33:10         100
+          19 ihist:          38 %, time:11:33:12         100
+          20 ihist:          40 %, time:11:33:13         100
+          21 ihist:          42 %, time:11:33:15         100
+          22 ihist:          44 %, time:11:33:16         100
+          23 ihist:          46 %, time:11:33:17         100
+          24 ihist:          48 %, time:11:33:18         100
+          25 ihist:          50 %, time:11:33:20         100
+          26 ihist:          52 %, time:11:33:21         100
+          27 ihist:          54 %, time:11:33:22         100
+          28 ihist:          56 %, time:11:33:23         100
+          29 ihist:          58 %, time:11:33:24         100
+          30 ihist:          60 %, time:11:33:26         100
+          31 ihist:          62 %, time:11:33:27         100
+          32 ihist:          64 %, time:11:33:29         100
+          33 ihist:          66 %, time:11:33:31         100
+          34 ihist:          68 %, time:11:33:32         100
+          35 ihist:          70 %, time:11:33:34         100
+          36 ihist:          72 %, time:11:33:35         100
+          37 ihist:          74 %, time:11:33:37         100
+          38 ihist:          76 %, time:11:33:38         100
+          39 ihist:          78 %, time:11:33:39         100
+          40 ihist:          80 %, time:11:33:41         100
+          41 ihist:          82 %, time:11:33:42         100
+          42 ihist:          84 %, time:11:33:44         100
+          43 ihist:          86 %, time:11:33:45         100
+          44 ihist:          88 %, time:11:33:46         100
+          45 ihist:          90 %, time:11:33:47         100
+          46 ihist:          92 %, time:11:33:48         100
+          47 ihist:          94 %, time:11:33:50         100
+          48 ihist:          96 %, time:11:33:51         100
+          49 ihist:          98 %, time:11:33:52         100
+          50 ihist:         100 %, time:11:33:53         100
+ ihist: end history of projectile_loop
+ end history
+ start gsum_stat
+ end gsum_stat
+ end gsum_fluence
+ end outp

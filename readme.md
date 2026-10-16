@@ -22,6 +22,17 @@ Basic examples are provided in the `saves` folder:
 - Argon beam on Tungsten target (`Ar_on_W`)
 - Hydrogen and Argon beam on layered Iron and Tungsten target under 60deg (`H_Ar_on_Fe_W_60deg`)
 
+Further examples for SDTrimSP (created with SDTrimSP 7.07, they can be opened with every version) are in `saves/SDTrimSP`:
+
+- `example_01_Ar_on_Au`: 2 keV Ar on Au at 60deg, sputter yields and distributions of reflected and sputtered particles
+- `example_02_D_on_W_dynamic`: 1 keV D on W, dynamic simulation (concentrations and surface level over the fluence)
+- `example_03_Ar_on_SiO2_Si_trajectories`: 1 keV Ar on a SiO2 layer on Si, trajectories of projectiles and recoils
+- `example_04_He_on_W_energy_distribution`: He on W with an energy distribution from `energy.inp`
+- `example_05_Ar_on_Si_angle_sweep`: 500 eV Ar on Si, angles of incidence from 0deg to 80deg
+- `example_06_Ar_on_W_crystal` and `example_07_Ar_on_W_amorphous`: 2 keV Ar on crystalline (bcc, 100) and amorphous W
+
+Open them with the *Open* button of a simulation tab and select the `input.json` of the example.
+
 ## Installation
 
 The GUI needs [Python 3](https://www.python.org/downloads/) with following packages installed:
@@ -70,6 +81,10 @@ Quick instructions and a detailed manual can be found inside the GUI in the *Hel
 
 Upon opening the GUI, the *Configurations* tab needs to be configured for the desired simulation.
 
+All installed simulations can be added at once with the *Search* button of the *Configurations* tab: select a folder
+(e.g. `Simulation Programs`), all simulations in it and its subfolders are added with their binary and version.
+Single simulations are configured manually as described below.
+
 #### Example: configure TRIDYN 2022
 
 1) Provide a title in the *Configuration title* field, e.g. **"TRIDYN 22"**.
@@ -101,7 +116,16 @@ python -m pytest                                    # all tests except the simul
 python -m pytest --simulations -n 20                # also runs simulations with every program found in "Simulation Programs"
 python -m pytest --simulations -n 20 --simulation-data tests/simulation_data   # keeps the simulation outputs
 python -m pytest tests/test_simulation_data.py --simulation-data tests/simulation_data   # checks kept outputs in the GUI
+python -m pytest --simulations -n 20 --test-dir=D:/BCA-GUIDE/tests   # all files of the tests in another folder or drive
 ```
+
+With `--test-dir=DIR` (with `=`, otherwise pytest treats DIR as test folder; or the environment variable `BCA_TEST_DIR`) the temporary files of the tests are created in
+`DIR/tmp` and the simulation runs are kept in `DIR/simulation_data` (instead of the temporary folder of the system drive).
+
+`tests/test_case_comparison.py` runs the test cases that come with SDTrimSP (folder `case`) directly with their version
+and through the GUI (the GUI loads the input files of the case, writes its own input files and runs them) and checks
+that both runs give identical results. Cases with more than `BCA_TEST_CASE_PROJECTILES` projectiles (default 20000)
+are skipped.
 
 The simulation runs vary the input (energies from 10 eV to 1 GeV, angles, sweeps, angle and energy distributions,
 distributions from files (energy.inp, angle.inp, ene_ang.inp), Maxwellian distributions, dynamic mode, potentials,

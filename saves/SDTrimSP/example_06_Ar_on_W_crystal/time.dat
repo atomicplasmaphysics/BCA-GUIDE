@@ -1,0 +1,15 @@
+ Example 6: 2 keV Ar on a W crystal (bcc, 100 surface) at normal incidence, comp
+ a
+time for proj     :      10.24  s      14.9  %
+time for recoil   :      58.65  s      85.1  %
+time for gsum/hist:       0.00  s       0.0  %
+time for part/hist:       0.00  s       0.0  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.01  s       0.0  %
+time for out/hist :       0.00  s       0.0  %
+  time for history:       0.01  s       0.0  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :      68.95  s
+time for SDTrimSP :       1.15 min
+time for SDTrimSP :       0.02  h
+number of PEs:    1 NH=        50 NR= 100 NH*NR=           5000

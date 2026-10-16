@@ -1,0 +1,5 @@
+! number of    thick-    target composition 2...ncp    name of layer
+! layers       ness      qu_2           qu_3
+    10  2.00000E+00    3.33330E-01    6.66670E-01    SiO2
+    90  2.00000E+00    1.00000E+00    0.00000E+00    Si
+     0            0              0              0    end

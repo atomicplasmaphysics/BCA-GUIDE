@@ -1,0 +1,221 @@
+ start:
+ default_init_0
+ init_parallel_environment
+ title:
+ Example 2: 1 keV D on W at normal incidence (dynamic, fluence 10 atoms/A^2)    
+  
+ ===read all table===
+  -read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table1
+    use inelastic (electronic) energy  model inel0(           1 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    use inelastic (electronic) energy  model inel0(           2 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_ck
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_a3a4a5
+   ck_elec(i,j), ck: a2-a5
+    D    -> D         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    D    -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> D         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+  ===end table read===
+   EsEc:---USE-----  
+   EsEc:  ncp symb   e_surfb  e_cutoff   e_bulkb
+   EsEc:  1    D      1.10000   0.75300   0.00000
+   EsEc:  2    W      8.79000   2.93000   0.00000
+ ===Calculation of amplitude (Debye-Waller)
+    dx=f(T,bulk-debye-Temp(element)
+             Nr        Z     T [K] u_deb_wal [A] max(u_deb_wal)
+    u_deb_wal  1 D      1    300.00   1.46223
+    u_deb_wal  2 W     74    300.00   0.04449
+    max u_deb(   all target atoms):   0.04449
+ ---
+    start-seed:
+     pid          seed
+      0                        1                        1
+ --energy_init-------------------------
+ --target_init-------------------------
+ INFO:  allocate(task_queue) memory:  160.22 MByt
+ start history ihist=           0
+ history: start time:11:30:52
+INFO: Fluence step:   0.0200000 [ions/A**2]  
+INFO: time    step:   0.0200000 [s]          
+           1 ihist:           0 %, time:11:30:52         100
+INFO   :  chamax:   0.19029 %   
+           2 ihist:           0 %, time:11:30:52         100
+           3 ihist:           0 %, time:11:30:52         100
+           4 ihist:           0 %, time:11:30:52         100
+           5 ihist:           1 %, time:11:30:53         100
+           6 ihist:           1 %, time:11:30:53         100
+           7 ihist:           1 %, time:11:30:53         100
+           8 ihist:           1 %, time:11:30:53         100
+           9 ihist:           1 %, time:11:30:53         100
+          10 ihist:           2 %, time:11:30:53         100
+  1 flc:     0.2 E:  1000. a:  0.0 dz:     -2.15 dz/dt  -0.99702 Ysum:  0.54100  0.00600 qumax  0.00943  1.00000
+          15 ihist:           3 %, time:11:30:53         100
+          20 ihist:           4 %, time:11:30:53         100
+  2 flc:     0.4 E:  1000. a:  0.0 dz:     -4.41 dz/dt  -0.97151 Ysum:  0.51900  0.00600 qumax  0.01745  1.00000
+          25 ihist:           5 %, time:11:30:53         100
+          30 ihist:           6 %, time:11:30:54         100
+  3 flc:     0.6 E:  1000. a:  0.0 dz:     -6.65 dz/dt  -1.00849 Ysum:  0.52100  0.00500 qumax  0.02715  1.00000
+          35 ihist:           7 %, time:11:30:54         100
+          40 ihist:           8 %, time:11:30:54         100
+  4 flc:     0.8 E:  1000. a:  0.0 dz:     -8.98 dz/dt  -1.05545 Ysum:  0.50400  0.00600 qumax  0.03548  1.00000
+          45 ihist:           9 %, time:11:30:54         100
+          50 ihist:          10 %, time:11:30:55         100
+  5 flc:     1.0 E:  1000. a:  0.0 dz:    -11.21 dz/dt  -1.00503 Ysum:  0.52300  0.00800 qumax  0.04193  1.00000
+          55 ihist:          11 %, time:11:30:55         100
+          60 ihist:          12 %, time:11:30:55         100
+  6 flc:     1.2 E:  1000. a:  0.0 dz:    -13.49 dz/dt  -1.06132 Ysum:  0.51000  0.01000 qumax  0.05116  1.00000
+          65 ihist:          13 %, time:11:30:55         100
+          70 ihist:          14 %, time:11:30:56         100
+  7 flc:     1.4 E:  1000. a:  0.0 dz:    -15.77 dz/dt  -0.93878 Ysum:  0.51100  0.01100 qumax  0.06077  1.00000
+          75 ihist:          15 %, time:11:30:57         100
+          80 ihist:          16 %, time:11:30:57         100
+  8 flc:     1.6 E:  1000. a:  0.0 dz:    -18.08 dz/dt  -1.01173 Ysum:  0.50600  0.00600 qumax  0.06633  1.00000
+          85 ihist:          17 %, time:11:30:58         100
+          90 ihist:          18 %, time:11:30:58         100
+  9 flc:     1.8 E:  1000. a:  0.0 dz:    -20.38 dz/dt  -1.05027 Ysum:  0.50600  0.01100 qumax  0.07510  1.00000
+          95 ihist:          19 %, time:11:30:59         100
+         100 ihist:          20 %, time:11:30:59         100
+ 10 flc:     2.0 E:  1000. a:  0.0 dz:    -22.61 dz/dt  -1.03454 Ysum:  0.52300  0.00800 qumax  0.08370  1.00000
+         105 ihist:          21 %, time:11:31:00         100
+         110 ihist:          22 %, time:11:31:00         100
+ 11 flc:     2.2 E:  1000. a:  0.0 dz:    -24.90 dz/dt  -1.08159 Ysum:  0.51000  0.00700 qumax  0.09162  1.00000
+         115 ihist:          23 %, time:11:31:01         100
+         120 ihist:          24 %, time:11:31:01         100
+ 12 flc:     2.4 E:  1000. a:  0.0 dz:    -27.29 dz/dt  -1.11679 Ysum:  0.49200  0.00500 qumax  0.09682  1.00000
+         125 ihist:          25 %, time:11:31:01         100
+         130 ihist:          26 %, time:11:31:02         100
+ 13 flc:     2.6 E:  1000. a:  0.0 dz:    -29.46 dz/dt  -1.00038 Ysum:  0.53700  0.00300 qumax  0.10094  1.00000
+         135 ihist:          27 %, time:11:31:02         100
+         140 ihist:          28 %, time:11:31:02         100
+ 14 flc:     2.8 E:  1000. a:  0.0 dz:    -31.77 dz/dt  -1.03529 Ysum:  0.50900  0.00500 qumax  0.10553  1.00000
+         145 ihist:          29 %, time:11:31:03         100
+         150 ihist:          30 %, time:11:31:03         100
+ 15 flc:     3.0 E:  1000. a:  0.0 dz:    -34.16 dz/dt  -1.12039 Ysum:  0.49100  0.00600 qumax  0.11903  1.00000
+         155 ihist:          31 %, time:11:31:04         100
+         160 ihist:          32 %, time:11:31:04         100
+ 16 flc:     3.2 E:  1000. a:  0.0 dz:    -36.66 dz/dt  -1.12680 Ysum:  0.46800  0.00400 qumax  0.12732  1.00000
+         165 ihist:          33 %, time:11:31:04         100
+         170 ihist:          34 %, time:11:31:05         100
+ 17 flc:     3.4 E:  1000. a:  0.0 dz:    -39.02 dz/dt  -1.04627 Ysum:  0.49600  0.00600 qumax  0.13403  1.00000
+         175 ihist:          35 %, time:11:31:05         100
+         180 ihist:          36 %, time:11:31:06         100
+ 18 flc:     3.6 E:  1000. a:  0.0 dz:    -41.46 dz/dt  -1.08853 Ysum:  0.48100  0.00600 qumax  0.14668  1.00000
+         185 ihist:          37 %, time:11:31:06         100
+         190 ihist:          38 %, time:11:31:06         100
+ 19 flc:     3.8 E:  1000. a:  0.0 dz:    -43.76 dz/dt  -1.01985 Ysum:  0.51100  0.00300 qumax  0.14945  1.00000
+         195 ihist:          39 %, time:11:31:07         100
+         200 ihist:          40 %, time:11:31:07         100
+ 20 flc:     4.0 E:  1000. a:  0.0 dz:    -46.02 dz/dt  -1.02057 Ysum:  0.51600  0.00800 qumax  0.15128  1.00000
+         205 ihist:          41 %, time:11:31:08         100
+         210 ihist:          42 %, time:11:31:08         100
+ 21 flc:     4.2 E:  1000. a:  0.0 dz:    -48.37 dz/dt  -1.07295 Ysum:  0.50100  0.00400 qumax  0.15673  1.00000
+         215 ihist:          43 %, time:11:31:09         100
+         220 ihist:          44 %, time:11:31:09         100
+ 22 flc:     4.4 E:  1000. a:  0.0 dz:    -50.68 dz/dt  -0.98791 Ysum:  0.50600  0.00600 qumax  0.16210  1.00000
+         225 ihist:          45 %, time:11:31:09         100
+         230 ihist:          46 %, time:11:31:10         100
+ 23 flc:     4.6 E:  1000. a:  0.0 dz:    -52.96 dz/dt  -1.01660 Ysum:  0.51400  0.00700 qumax  0.16697  1.00000
+         235 ihist:          47 %, time:11:31:10         100
+         240 ihist:          48 %, time:11:31:11         100
+ 24 flc:     4.8 E:  1000. a:  0.0 dz:    -55.44 dz/dt  -1.13304 Ysum:  0.46900  0.00800 qumax  0.17826  1.00000
+         245 ihist:          49 %, time:11:31:11         100
+         250 ihist:          50 %, time:11:31:11         100
+ 25 flc:     5.0 E:  1000. a:  0.0 dz:    -57.82 dz/dt  -1.11634 Ysum:  0.48700  0.01600 qumax  0.19299  1.00000
+         255 ihist:          51 %, time:11:31:12         100
+         260 ihist:          52 %, time:11:31:12         100
+ 26 flc:     5.2 E:  1000. a:  0.0 dz:    -60.24 dz/dt  -1.15660 Ysum:  0.48400  0.00500 qumax  0.19914  1.00000
+         265 ihist:          53 %, time:11:31:13         100
+         270 ihist:          54 %, time:11:31:13         100
+ 27 flc:     5.4 E:  1000. a:  0.0 dz:    -62.68 dz/dt  -1.05644 Ysum:  0.48100  0.00300 qumax  0.20439  1.00000
+         275 ihist:          55 %, time:11:31:14         100
+         280 ihist:          56 %, time:11:31:14         100
+ 28 flc:     5.6 E:  1000. a:  0.0 dz:    -64.90 dz/dt  -1.04114 Ysum:  0.52800  0.00600 qumax  0.20599  1.00000
+         285 ihist:          57 %, time:11:31:14         100
+         290 ihist:          58 %, time:11:31:15         100
+ 29 flc:     5.8 E:  1000. a:  0.0 dz:    -67.33 dz/dt  -1.07574 Ysum:  0.48400  0.00100 qumax  0.20958  1.00000
+         295 ihist:          59 %, time:11:31:15         100
+         300 ihist:          60 %, time:11:31:16         100
+ 30 flc:     6.0 E:  1000. a:  0.0 dz:    -69.62 dz/dt  -1.03761 Ysum:  0.51100  0.00900 qumax  0.21469  1.00000
+         305 ihist:          61 %, time:11:31:16         100
+         310 ihist:          62 %, time:11:31:16         100
+ 31 flc:     6.2 E:  1000. a:  0.0 dz:    -71.97 dz/dt  -1.02281 Ysum:  0.49800  0.00600 qumax  0.22129  1.00000
+         315 ihist:          63 %, time:11:31:17         100
+         320 ihist:          64 %, time:11:31:17         100
+ 32 flc:     6.4 E:  1000. a:  0.0 dz:    -74.37 dz/dt  -1.05396 Ysum:  0.49000  0.00300 qumax  0.22321  1.00000
+         325 ihist:          65 %, time:11:31:18         100
+         330 ihist:          66 %, time:11:31:18         100
+ 33 flc:     6.6 E:  1000. a:  0.0 dz:    -76.71 dz/dt  -1.00667 Ysum:  0.50200  0.00600 qumax  0.23191  1.00000
+         335 ihist:          67 %, time:11:31:19         100
+         340 ihist:          68 %, time:11:31:19         100
+ 34 flc:     6.8 E:  1000. a:  0.0 dz:    -79.08 dz/dt  -0.99972 Ysum:  0.49300  0.00600 qumax  0.23896  1.00000
+         345 ihist:          69 %, time:11:31:20         100
+         350 ihist:          70 %, time:11:31:20         100
+ 35 flc:     7.0 E:  1000. a:  0.0 dz:    -81.40 dz/dt  -1.06495 Ysum:  0.50700  0.00400 qumax  0.24407  1.00000
+         355 ihist:          71 %, time:11:31:21         100
+         360 ihist:          72 %, time:11:31:21         100
+ 36 flc:     7.2 E:  1000. a:  0.0 dz:    -83.89 dz/dt  -1.11098 Ysum:  0.47300  0.00200 qumax  0.24911  1.00000
+         365 ihist:          73 %, time:11:31:21         100
+         370 ihist:          74 %, time:11:31:22         100
+ 37 flc:     7.4 E:  1000. a:  0.0 dz:    -86.16 dz/dt  -1.04713 Ysum:  0.51500  0.00600 qumax  0.25899  1.00000
+         375 ihist:          75 %, time:11:31:22         100
+         380 ihist:          76 %, time:11:31:23         100
+ 38 flc:     7.6 E:  1000. a:  0.0 dz:    -88.58 dz/dt  -1.11863 Ysum:  0.48400  0.00600 qumax  0.26297  1.00000
+         385 ihist:          77 %, time:11:31:23         100
+         390 ihist:          78 %, time:11:31:24         100
+ 39 flc:     7.8 E:  1000. a:  0.0 dz:    -90.99 dz/dt  -1.08023 Ysum:  0.48200  0.01100 qumax  0.28243  1.00000
+         395 ihist:          79 %, time:11:31:25         100
+         400 ihist:          80 %, time:11:31:25         100
+ 40 flc:     8.0 E:  1000. a:  0.0 dz:    -93.42 dz/dt  -1.17469 Ysum:  0.48400  0.00500 qumax  0.28568  1.00000
+         405 ihist:          81 %, time:11:31:26         100
+         410 ihist:          82 %, time:11:31:26         100
+ 41 flc:     8.2 E:  1000. a:  0.0 dz:    -96.01 dz/dt  -1.22439 Ysum:  0.44900  0.00500 qumax  0.29337  1.00000
+         415 ihist:          83 %, time:11:31:27         100
+         420 ihist:          84 %, time:11:31:28         100
+ 42 flc:     8.4 E:  1000. a:  0.0 dz:    -98.24 dz/dt  -0.94047 Ysum:  0.52300  0.00500 qumax  0.29902  1.00000
+         425 ihist:          85 %, time:11:31:28         100
+         430 ihist:          86 %, time:11:31:29         100
+ 43 flc:     8.6 E:  1000. a:  0.0 dz:   -100.70 dz/dt  -1.05975 Ysum:  0.47800  0.00400 qumax  0.30027  1.00000
+         435 ihist:          87 %, time:11:31:30         100
+         440 ihist:          88 %, time:11:31:30         100
+ 44 flc:     8.8 E:  1000. a:  0.0 dz:   -103.02 dz/dt  -1.01181 Ysum:  0.50300  0.00900 qumax  0.30397  1.00000
+         445 ihist:          89 %, time:11:31:31         100
+         450 ihist:          90 %, time:11:31:31         100
+ 45 flc:     9.0 E:  1000. a:  0.0 dz:   -105.42 dz/dt  -1.10100 Ysum:  0.48900  0.00600 qumax  0.31187  1.00000
+         455 ihist:          91 %, time:11:31:32         100
+         460 ihist:          92 %, time:11:31:32         100
+ 46 flc:     9.2 E:  1000. a:  0.0 dz:   -107.70 dz/dt  -0.98372 Ysum:  0.51300  0.00600 qumax  0.31605  1.00000
+         465 ihist:          93 %, time:11:31:33         100
+         470 ihist:          94 %, time:11:31:34         100
+ 47 flc:     9.4 E:  1000. a:  0.0 dz:   -110.07 dz/dt  -1.07180 Ysum:  0.49600  0.00400 qumax  0.31724  1.00000
+         475 ihist:          95 %, time:11:31:35         100
+         480 ihist:          96 %, time:11:31:36         100
+ 48 flc:     9.6 E:  1000. a:  0.0 dz:   -112.41 dz/dt  -1.07416 Ysum:  0.50000  0.00600 qumax  0.32498  1.00000
+         485 ihist:          97 %, time:11:31:37         100
+         490 ihist:          98 %, time:11:31:38         100
+ 49 flc:     9.8 E:  1000. a:  0.0 dz:   -114.78 dz/dt  -1.08214 Ysum:  0.49600  0.00500 qumax  0.33015  1.00000
+         495 ihist:          99 %, time:11:31:39         100
+         500 ihist:         100 %, time:11:31:40         100
+ 50 flc:    10.0 E:  1000. a:  0.0 dz:   -117.25 dz/dt  -1.15597 Ysum:  0.47200  0.00900 qumax  0.32901  1.00000
+ ihist: end history of projectile_loop
+ end history
+ start gsum_stat
+ end gsum_stat
+ end outp

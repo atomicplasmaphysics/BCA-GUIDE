@@ -1,0 +1,14 @@
+# SDTrimSP: VERSION 7.07    16.10.2026
+Example 4: He on W with an energy distribution from energy.inp (edit it with the
+#flu.-step     atoms  each-out  n-projec stat./dyn
+#       nh        nr       ncp     idout  ncp_proj     idrel  debugmom
+       100       100         2        10         1         1         0
+He        W         
+#e0(1:ncp)
+  0.00000000E+00  0.00000000E+00
+          #1 nproj(1:ncp_proj)    lin_moment_energy_inp.  :  e_beam_p(1:ncp_proj,1:6)  min(e),max(e)
+          #1 nproj(1:ncp_proj)    lin_moment_alpha_inp.   :  alpha   (1:ncp_proj,1:6)  min(a),max(a)
+# (1/2) i_p( 1)      E/a_p 1)**1     E/a_p 1)**2     E/a_p 1)**3     E/a_p 1)**4     E/a_p 1)**5     E/a_p 1)**6     E/a_p 1)MIN     E/a_p 1)MAX
+  0.10000000E+01 !fluence-step 
+  0.10000000E+05  0.34263131E+07  0.16254794E+10  0.96803154E+12  0.67817322E+15  0.52810409E+18  0.43878083E+21  0.30528755E-01  0.99987610E+03
+  0.10000000E+05  0.00000000E+00  0.00000000E+00  0.00000000E+00  0.00000000E+00  0.00000000E+00  0.00000000E+00  0.00000000E+00  0.00000000E+00

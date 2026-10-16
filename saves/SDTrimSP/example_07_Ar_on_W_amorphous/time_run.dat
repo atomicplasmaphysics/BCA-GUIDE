@@ -1,0 +1,113 @@
+ start:
+ default_init_0
+ init_parallel_environment
+ title:
+ Example 7: 2 keV Ar on amorphous W at normal incidence, compare with example 6 
+ (
+ ===read all table===
+  -read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table1
+    use inelastic (electronic) energy  model inel0(           1 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    use inelastic (electronic) energy  model inel0(           2 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_ck
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_a3a4a5
+   ck_elec(i,j), ck: a2-a5
+    Ar   -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Ar   -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    W    -> W         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+  ===end table read===
+   EsEc:---USE-----  
+   EsEc:  ncp symb   e_surfb  e_cutoff   e_bulkb
+   EsEc:  1    Ar     0.00000   0.50000   0.00000
+   EsEc:  2    W      8.79000   2.93000   0.00000
+ ===Calculation of amplitude (Debye-Waller)
+    dx=f(T,bulk-debye-Temp(element)
+             Nr        Z     T [K] u_deb_wal [A] max(u_deb_wal)
+    u_deb_wal  1 Ar    18    300.00   0.36898
+    u_deb_wal  2 W     74    300.00   0.04449
+    max u_deb(   all target atoms):   0.04449
+ ---
+    start-seed:
+     pid          seed
+      0                        1                        1
+ --energy_init-------------------------
+ --target_init-------------------------
+ INFO:  allocate(task_queue) memory:  160.22 MByt
+ start history ihist=           0
+ history: start time:11:33:57
+INFO: Fluence step:   0.0200000 [ions/A**2]  
+INFO: time    step:   0.0200000 [s]          
+           1 ihist:           2 %, time:11:33:57         100
+           2 ihist:           4 %, time:11:33:57         100
+           3 ihist:           6 %, time:11:33:57         100
+           4 ihist:           8 %, time:11:33:57         100
+           5 ihist:          10 %, time:11:33:58         100
+           6 ihist:          12 %, time:11:33:58         100
+           7 ihist:          14 %, time:11:33:58         100
+           8 ihist:          16 %, time:11:33:58         100
+           9 ihist:          18 %, time:11:33:58         100
+          10 ihist:          20 %, time:11:33:58         100
+          11 ihist:          22 %, time:11:33:58         100
+          12 ihist:          24 %, time:11:33:58         100
+          13 ihist:          26 %, time:11:33:59         100
+          14 ihist:          28 %, time:11:33:59         100
+          15 ihist:          30 %, time:11:33:59         100
+          16 ihist:          32 %, time:11:33:59         100
+          17 ihist:          34 %, time:11:33:59         100
+          18 ihist:          36 %, time:11:33:59         100
+          19 ihist:          38 %, time:11:33:59         100
+          20 ihist:          40 %, time:11:33:59         100
+          21 ihist:          42 %, time:11:34:00         100
+          22 ihist:          44 %, time:11:34:00         100
+          23 ihist:          46 %, time:11:34:00         100
+          24 ihist:          48 %, time:11:34:00         100
+          25 ihist:          50 %, time:11:34:00         100
+          26 ihist:          52 %, time:11:34:00         100
+          27 ihist:          54 %, time:11:34:00         100
+          28 ihist:          56 %, time:11:34:00         100
+          29 ihist:          58 %, time:11:34:01         100
+          30 ihist:          60 %, time:11:34:01         100
+          31 ihist:          62 %, time:11:34:01         100
+          32 ihist:          64 %, time:11:34:01         100
+          33 ihist:          66 %, time:11:34:01         100
+          34 ihist:          68 %, time:11:34:01         100
+          35 ihist:          70 %, time:11:34:01         100
+          36 ihist:          72 %, time:11:34:02         100
+          37 ihist:          74 %, time:11:34:02         100
+          38 ihist:          76 %, time:11:34:02         100
+          39 ihist:          78 %, time:11:34:02         100
+          40 ihist:          80 %, time:11:34:02         100
+          41 ihist:          82 %, time:11:34:02         100
+          42 ihist:          84 %, time:11:34:02         100
+          43 ihist:          86 %, time:11:34:02         100
+          44 ihist:          88 %, time:11:34:03         100
+          45 ihist:          90 %, time:11:34:03         100
+          46 ihist:          92 %, time:11:34:03         100
+          47 ihist:          94 %, time:11:34:03         100
+          48 ihist:          96 %, time:11:34:03         100
+          49 ihist:          98 %, time:11:34:03         100
+          50 ihist:         100 %, time:11:34:03         100
+ ihist: end history of projectile_loop
+ end history
+ start gsum_stat
+ end gsum_stat
+ end gsum_fluence
+ end outp

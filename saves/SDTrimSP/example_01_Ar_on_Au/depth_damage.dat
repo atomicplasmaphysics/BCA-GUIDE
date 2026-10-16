@@ -1,0 +1,95 @@
+# SDTrimSP: VERSION 7.07    16.10.2026
+Example 1: 2 keV Ar on Au at 60 degree (static)                                 
+   2          4000.     8.0000       number of species, NH*NR, e_tot_p[MeV]
+# DEPTH DISTRIBUTIONS, COMPONENT( 1): Ar   
+          10 number of depth
+#         [A]     [number]     [number]     [number]     [number]     [number]     [number]     [number]     [number]
+#       DEPTH        STOPS     STOPS<ED        DISPL     DISPL<ED       REPL.        SUBS.      d_ATOMS    VACANCIES 
+#                                                                    Ar-> Ar      Au-> Ar       Ar           Ar      
+  5.00000E+00  3.18000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  1.50000E+01  5.93000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  2.50000E+01  4.21000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  3.50000E+01  2.25000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  4.50000E+01  1.33000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  5.50000E+01  5.50000E+01  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  6.50000E+01  1.50000E+01  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  7.50000E+01  8.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  8.50000E+01  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  9.50000E+01  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+          sum  1.76800E+03  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  sum(STOPS)             1768.0 Ar   
+  sum(STOPS<ED)             0.0 Ar   
+  sum(DISP)                 0.0 Ar   
+  sum(DISP<ED)              0.0 Ar   
+#
+# DEPTH DISTRIBUTIONS, COMPONENT( 2): Au   
+          13 number of depth
+#         [A]     [number]     [number]     [number]     [number]     [number]     [number]     [number]     [number]
+#       DEPTH        STOPS     STOPS<ED        DISPL     DISPL<ED       SUBS.        REPL.      d_ATOMS    VACANCIES 
+#                                                                    Ar-> Au      Au-> Au       Au           Au      
+  5.00000E+00  1.32709E+06  1.29856E+06  1.35571E+06  1.31477E+06  0.00000E+00  1.23490E+04  0.00000E+00  4.48080E+04
+  1.50000E+01  1.37714E+06  1.34831E+06  1.37604E+06  1.34831E+06  0.00000E+00  1.14310E+04  0.00000E+00  1.62960E+04
+  2.50000E+01  8.45555E+05  8.30870E+05  8.43945E+05  8.30870E+05  0.00000E+00  5.48300E+03  0.00000E+00  7.59200E+03
+  3.50000E+01  4.04102E+05  3.97398E+05  4.03205E+05  3.97398E+05  0.00000E+00  2.53600E+03  0.00000E+00  3.27100E+03
+  4.50000E+01  1.69190E+05  1.66654E+05  1.68777E+05  1.66654E+05  0.00000E+00  8.96000E+02  0.00000E+00  1.22700E+03
+  5.50000E+01  6.27830E+04  6.18960E+04  6.26060E+04  6.18960E+04  0.00000E+00  3.03000E+02  0.00000E+00  4.07000E+02
+  6.50000E+01  2.17190E+04  2.14070E+04  2.16730E+04  2.14070E+04  0.00000E+00  1.12000E+02  0.00000E+00  1.54000E+02
+  7.50000E+01  7.64500E+03  7.52600E+03  7.63400E+03  7.52600E+03  0.00000E+00  4.90000E+01  0.00000E+00  5.90000E+01
+  8.50000E+01  2.35200E+03  2.31700E+03  2.33200E+03  2.31700E+03  0.00000E+00  1.20000E+01  0.00000E+00  3.00000E+00
+  9.50000E+01  4.27000E+02  4.26000E+02  4.26000E+02  4.26000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  1.05000E+02  2.20000E+01  2.20000E+01  2.20000E+01  2.20000E+01  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  1.15000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  1.25000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+          sum  4.21803E+06  4.13538E+06  4.24237E+06  4.15159E+06  0.00000E+00  3.31710E+04  0.00000E+00  7.38170E+04
+  sum(STOPS)          4218032.0 Au   
+  sum(STOPS<ED)       4135379.0 Au   
+  sum(DISP)           4242367.0 Au   
+  sum(DISP<ED)        4151594.0 Au   
+#
+# DEPTH DISTRIBUTIONS ALL
+          13 number of depth
+#         [A]     [number]     [number]     [number]     [number]     [number]     [number]
+#       DEPTH     sumSTOPS  sumSTOPS<ED     sumDISPL  sumDISPL<ED   d_sumATOMS    VACANCIES
+  5.00000E+00  1.32741E+06  1.29856E+06  1.35571E+06  1.31477E+06  0.00000E+00  4.48080E+04
+  1.50000E+01  1.37774E+06  1.34831E+06  1.37604E+06  1.34831E+06  0.00000E+00  1.62960E+04
+  2.50000E+01  8.45976E+05  8.30870E+05  8.43945E+05  8.30870E+05  0.00000E+00  7.59200E+03
+  3.50000E+01  4.04327E+05  3.97398E+05  4.03205E+05  3.97398E+05  0.00000E+00  3.27100E+03
+  4.50000E+01  1.69323E+05  1.66654E+05  1.68777E+05  1.66654E+05  0.00000E+00  1.22700E+03
+  5.50000E+01  6.28380E+04  6.18960E+04  6.26060E+04  6.18960E+04  0.00000E+00  4.07000E+02
+  6.50000E+01  2.17340E+04  2.14070E+04  2.16730E+04  2.14070E+04  0.00000E+00  1.54000E+02
+  7.50000E+01  7.65300E+03  7.52600E+03  7.63400E+03  7.52600E+03  0.00000E+00  5.90000E+01
+  8.50000E+01  2.35200E+03  2.31700E+03  2.33200E+03  2.31700E+03  0.00000E+00  3.00000E+00
+  9.50000E+01  4.27000E+02  4.26000E+02  4.26000E+02  4.26000E+02  0.00000E+00  0.00000E+00
+  1.05000E+02  2.20000E+01  2.20000E+01  2.20000E+01  2.20000E+01  0.00000E+00  0.00000E+00
+  1.15000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+  1.25000E+02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+#
+#sum(STOPS)    ..stops of generated not sputtered recoils + stops of incident projectiles
+#sum(STOPS)=sum(DISPL) - BACKW.SPUTTER.RECOILS(output.dat) + IMPLANTED_PROJ
+#sum(STOPS<ED) ..stops of generated not sputtered recoils with E<=Ed       
+#sum(DISPL)    ..damages of generated recoils (start point of recoil)      
+#sum(DISPL<ED) ..damages of generated recoils with E<=Ed                   
+#repl..replacement generated recoils E(Z1)<Ed(Z1) & E(Z2)>Ed(Z2)  & Z1 =Z2 
+#subs..subtitution generated recoils E(Z1)<Ed(Z1) & E(Z2)>Ed(Z2)  & Z1/=Z2 
+ 
+ 
+#Calculated Values:                      
+#  STOPS>Ed      =STOPS-STOPS<ED         
+#  DISPL_fictive=STOPS<ED                
+#  DISPL_real   =DISPL - STOPS           
+#  DISPL>Ed     =DISPL - DISPL<ED        
+#  VACANCIES    =DISPL - STOPS(depth_recoil.dat) + STOPS>Ed(depth_recoil.dat) - REPL - SUBS
+#  VACANCIES    =DISPL - STOPS<Ed(depth_recoil.dat)                           - REPL - SUBS
+#  d_ATOMS     = STOPS - DISPL           
+#  sum(STOPS)  = sum(DISPL) - BACKW.SPUTTER.REC.(output.dat) + IMPLANTED_PROJ.(output.dat) 
+#
+ Ar        
+#  BACKW._SPUTTER.REC      =DISPL    - STOPS    (see output.dat)                  0
+#  BACKW._SPUTTER.REC.(<ED)=DISPL<Ed - STOPS<Ed (see output.dat)                  0
+#  BACKW._SPUTTER.REC.(>ED)=DISPL>Ed - STOPS>Ed (see output.dat)                  0
+ 
+ Au        
+#  BACKW._SPUTTER.REC      =DISPL    - STOPS    (see output.dat)              24335
+#  BACKW._SPUTTER.REC.(<ED)=DISPL<Ed - STOPS<Ed (see output.dat)              16215
+#  BACKW._SPUTTER.REC.(>ED)=DISPL>Ed - STOPS>Ed (see output.dat)               8120
+ 

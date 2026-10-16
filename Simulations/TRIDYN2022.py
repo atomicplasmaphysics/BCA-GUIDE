@@ -1186,7 +1186,7 @@ class CompRowBeamSettings(CompRow):
         ),
         CustomRowField(
             unique='e0',
-            label='Energy [eV]',
+            label='Kin. energy [eV]',
             tooltip='<i>irra e0</i><br>The kinetic energy (in [eV]) of the incoming ions.',
             synced=False
         ),

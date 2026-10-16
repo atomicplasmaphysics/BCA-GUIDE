@@ -4,6 +4,9 @@ Shared fixtures for the BCA-GUIDE tests.
 The GUI is created with the offscreen platform (no windows are shown), set BCA_TEST_SHOW=1 to use the normal platform.
 The settings are redirected to a temporary ini file and the default save folder to a temporary folder,
 so the tests never change the settings or saves of the user.
+
+With --test-dir=DIR (or the environment variable BCA_TEST_DIR) all temporary files of the tests are created in DIR/tmp
+(instead of the temporary folder of the system drive) and the simulation runs are kept in DIR/simulation_data.
 """
 
 import os
@@ -35,10 +38,25 @@ def pytest_addoption(parser):
         '--simulation-data', action='store', default='',
         help='folder where the simulation runs are kept (with --simulations) and that is checked by test_simulation_data.py'
     )
+    parser.addoption(
+        '--test-dir', action='store', default=os.environ.get('BCA_TEST_DIR', ''),
+        help='folder for all files of the tests: DIR/tmp for temporary files, DIR/simulation_data for the simulation runs '
+             '(default: environment variable BCA_TEST_DIR)'
+    )
 
 
 def pytest_configure(config):
     config.addinivalue_line('markers', 'simulation: runs the simulation programs, only executed with --simulations')
+
+    test_dir = config.getoption('--test-dir')
+    if test_dir:
+        test_dir = Path(test_dir).resolve()
+        # the workers of pytest-xdist get their temporary folder from the main process
+        if not config.option.basetemp and not hasattr(config, 'workerinput'):
+            (test_dir / 'tmp').parent.mkdir(parents=True, exist_ok=True)
+            config.option.basetemp = str(test_dir / 'tmp')
+        if not config.getoption('--simulation-data'):
+            config.option.simulation_data = str(test_dir / 'simulation_data')
 
 
 def pytest_collection_modifyitems(config, items):

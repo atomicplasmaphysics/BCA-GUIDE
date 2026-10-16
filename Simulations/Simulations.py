@@ -1817,6 +1817,8 @@ class SimulationsInput:
     ExampleAdditionalSetting = ''
     # list of skipped files for preview
     SkipList = [InputFilename, LayerFilename]
+    # further input files (written by the user) that are not deleted before a run, wildcards (*) are supported
+    KeepFiles: List[str] = []
     # dictionary of tooltips for output files
     OutputTooltips = {'output': 'Output of simulation'}
     # possible input parameters

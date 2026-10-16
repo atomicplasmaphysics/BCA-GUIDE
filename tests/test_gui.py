@@ -12,6 +12,7 @@ from conftest import SAVES, SIMULATION_PROGRAMS, DATA, addSimulationPage, copySa
 from GlobalConf import GlobalConf
 from Containers.SimulationConfiguration import SimulationConfiguration
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions
+from Simulations.SimulationsList import SimulationsList
 
 
 TRIDYN = SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022'
@@ -196,7 +197,7 @@ def test_crystal_editor_table_mode(main_window, qapp, tmp_path, errors):
     shutil.copytree(SDTRIMSP / 'SDTrimSP_7.05' / 'tables', folder / 'tables')
     binary = SDTrimSPInput.findBinary(SDTRIMSP / 'SDTrimSP_7.05') or folder / 'SDTrimSP.exe'
 
-    sc, page = addSimulationPage(main_window, 'cryst', 0, folder, binary, Versions.V_702, copySave(SAVES / 'SDTrimSP' / 'Ar_on_Au_7.05', tmp_path / 'save'))
+    sc, page = addSimulationPage(main_window, 'cryst', 0, folder, binary, Versions.V_702, copySave(SAVES / 'SDTrimSP' / 'example_01_Ar_on_Au', tmp_path / 'save'))
     pump(qapp)
     page.general_target_settings.layout_crystal_file.checkbox.setChecked(True)
     dialog = page.crystal_editor_dialog
@@ -327,12 +328,19 @@ def test_distribution_files(main_window, qapp, tmp_path, monkeypatch, errors):
     beam.editDistributions()
     assert beam.distributions['energy']['He'] == [[100., 1.], [300., 2.]]
 
-    # saving writes the files with the number of the species in tri.inp (grouped elements: Si, He, Ar)
+    # saving keeps the order of the species of the loaded tri.inp (He, Ar, Si) and writes the files with their number
+    files = page.saveSettings()
+    assert '"He", "Ar", "Si"' in (save / 'tri.inp').read_text()
+    assert files and {'energy.inp', 'energy02.inp', 'angle.inp', 'angle02.inp'} <= set(files)
+    assert DistributionEditor.readDistributionFile(save / 'energy.inp') == [[100., 1.], [300., 2.]]
+    assert (save / 'energy.inp').read_text().startswith('!')
+
+    # with grouped elements the target species are first (Si, He, Ar)
+    page.settings_group_layout_settings.layout_group_elements.checkbox.setChecked(True)
     files = page.saveSettings()
     assert '"Si", "He", "Ar"' in (save / 'tri.inp').read_text()
     assert files and {'energy02.inp', 'energy03.inp', 'angle02.inp', 'angle03.inp'} <= set(files)
     assert DistributionEditor.readDistributionFile(save / 'energy02.inp') == [[100., 1.], [300., 2.]]
-    assert (save / 'energy02.inp').read_text().startswith('!')
 
     # Maxwellian distributions show the sheath potential, constant energies hide the button
     beam.kinetic_energy.setValue(ArgumentValues.KineticEnergy.MAXWELLIAN_ENERGY_DISTRIBUTION, from_entries_save=True)
@@ -343,3 +351,87 @@ def test_distribution_files(main_window, qapp, tmp_path, monkeypatch, errors):
     pump(qapp)
     assert beam.distribution_button.isHidden()
     assert not errors, '\n'.join(errors)
+
+
+def test_search_simulations(main_window, qapp, tmp_path, dialogs, errors):
+    """The search adds all installations below the selected folder once, with versions and binaries"""
+
+    if not any(SDTRIMSP.glob('SDTrimSP_*')):
+        pytest.skip('no SDTrimSP installation available')
+    page = main_window.simulation_configuration_page
+
+    dialogs['dir'] = ''
+    assert page.searchSimulations() == 0
+
+    dialogs['dir'] = str(SIMULATION_PROGRAMS)
+    added = page.searchSimulations()
+    assert added == len(main_window.simulation_configs) > 0
+    for sc in main_window.simulation_configs:
+        assert sc.binary.is_file() and sc.binary.is_relative_to(sc.folder)
+        assert sc.version in SimulationsList().simulation_program_versions[sc.program_name]
+    titles = [sc.title for sc in main_window.simulation_configs]
+    if (SDTRIMSP / 'SDTrimSP_7.07').is_dir():
+        sc = main_window.simulation_configs[titles.index('SDTrimSP 7.07')]
+        assert sc.version == Versions.V_707
+    if (SDTRIMSP / 'SDTrimSP_7.05').is_dir():
+        assert main_window.simulation_configs[titles.index('SDTrimSP 7.05')].version == Versions.V_702
+    # installations without a binary for this operating system are not added
+    assert 'SDTrimSP 6.09' not in titles
+
+    # a second search does not add the same installations again
+    assert page.searchSimulations() == 0
+    assert len(main_window.simulation_configs) == added
+    assert not errors, '\n'.join(errors)
+
+
+@pytest.mark.skipif(not (SDTRIMSP / 'SDTrimSP_7.07').is_dir(), reason='SDTrimSP 7.07 not available')
+def test_composition_table_columns(main_window, qapp, errors):
+    """Delete button, index and element stay visible when the composition tables are scrolled horizontally"""
+
+    folder = SDTRIMSP / 'SDTrimSP_7.07'
+    sc, page = addSimulationPage(main_window, 'cols', 0, folder, SDTrimSPInput.findBinary(folder), Versions.V_707)
+    main_window.resize(900, 800)
+    main_window.show()
+    main_window.tab_simulations.setCurrentWidget(page)
+    page.tab_widget.setCurrentIndex(0)
+    pump(qapp)
+    for table in (page.table_beam, page.table_target):
+        table.addRow()
+        pump(qapp)
+        labels = [table.horizontalHeaderItem(column).text() for column in range(table.columnCount())]
+        assert labels[1:3] == ['#', 'Element']
+        # the energies of the elements are next to each other
+        energies = [i for i, label in enumerate(labels) if 'energy' in label.lower() and not label.startswith('Kin.')]
+        assert energies == list(range(energies[0], energies[0] + len(energies)))
+
+        row = table.rows[-1]
+        assert table.frozen.cellWidget(table.rowCount() - 2, 2) is row.selected_element
+        assert table.cellWidget(table.rowCount() - 2, 2) is row.selected_element
+        bar = table.horizontalScrollBar()
+        bar.setValue(bar.maximum())
+        pump(qapp)
+        assert table.frozen.isVisible() and bar.value() > 0
+        assert table.frozen.geometry().width() == sum(table.columnWidth(column) for column in range(3))
+        assert row.selected_element.isVisible()
+
+    labels = [page.table_beam.horizontalHeaderItem(column).text() for column in range(page.table_beam.columnCount())]
+    assert labels[3:6] == ['Abundance', 'Kin. energy [eV]', 'Angle [°]']
+    assert labels[-3:] == ['Azimuth [°]', 'Start depth [Å]', 'Charge']
+
+    # removing a row removes it in both tables
+    rows = page.table_beam.rowCount()
+    page.table_beam.rows[-1].remove.click()
+    pump(qapp)
+    assert page.table_beam.rowCount() == page.table_beam.frozen.rowCount() == rows - 1
+    assert not errors, '\n'.join(errors)
+
+
+def test_crystal_preview_not_clipped(qapp):
+    """Lines and atoms of the crystal preview are not clipped to the square 3D axes (only the texts were visible outside)"""
+
+    from Utility.Layouts import CrystalPreview
+    preview = CrystalPreview(None, show_beam=True, show_basis_vecs=True, show_surface=True, disable_interaction=False)
+    assert preview.axes.get_children()
+    assert all(not artist.get_clip_on() for artist in preview.axes.get_children())
+    preview.updateParams(show_coordinate_system=True)
+    assert all(not artist.get_clip_on() for artist in preview.axes.get_children())

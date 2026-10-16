@@ -1,0 +1,157 @@
+ start:
+ default_init_0
+ init_parallel_environment
+ title:
+ Example 3: 1 keV Ar on 20 A SiO2 on Si, trajectories of 10 projectiles and thei
+ r
+ ===read all table===
+  -read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table1
+    use inelastic (electronic) energy  model inel0(           1 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    use inelastic (electronic) energy  model inel0(           2 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    use inelastic (electronic) energy  model inel0(           3 )=           7
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6a
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table6b
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_ck
+    read:
+ C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTri
+ mSP_7.07\tables/table7_a3a4a5
+   ck_elec(i,j), ck: a2-a5
+    Ar   -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Ar   -> Si        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Ar   -> O         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Si   -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    Si   -> Si        0.50000     0.55000    -1.00000    -1.00000    -1.00000
+    Si   -> O         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    O    -> Ar        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    O    -> Si        1.00000     0.50000    -1.00000    -1.00000    -1.00000
+    O    -> O         1.00000     0.50000    -1.00000    -1.00000    -1.00000
+  ===end table read===
+   EsEc:---USE-----  
+   EsEc:  ncp symb   e_surfb  e_cutoff   e_bulkb
+   EsEc:  1    Ar     0.00000   0.50000   0.00000
+   EsEc:  2    Si     4.72000   1.57333   0.00000
+   EsEc:  3    O      2.58000   0.86000   0.00000
+ ===Calculation of amplitude (Debye-Waller)
+    dx=f(T,bulk-debye-Temp(element)
+             Nr        Z     T [K] u_deb_wal [A] max(u_deb_wal)
+    u_deb_wal  1 Ar    18    300.00   0.36898
+    u_deb_wal  2 Si    14    300.00   0.07036
+    u_deb_wal  3 O      8    300.00   0.59540
+    max u_deb(   all target atoms):   0.59540
+ ---
+    start-seed:
+     pid          seed
+      0                        1                        1
+ --energy_init-------------------------
+ --target_init-------------------------
+ --- read layer.inp ---
+    j            xxx        Si        O         
+   10        2.00000  qu=   0.33333   0.66667   layer:     1
+   90        2.00000  qu=   1.00000   0.00000   layer:    11
+    0        0.00000  qu=   0.00000   0.00000      end
+ INFO:  allocate(task_queue) memory:  160.22 MByt
+ INFO:      allocate(trajek) memory:   61.05 MByt
+ start history ihist=           0
+ history: start time:11:34:46
+INFO: Fluence step:   0.0200000 [ions/A**2]  
+INFO: time    step:   0.0200000 [s]          
+           1 ihist:           2 %, time:11:34:46         100
+ INFO: PID=           0  recoil: try new maxt =        1000
+        new allocate(trajek) memory:  122.10 MByt
+ INFO: PID=           0  recoil: try new maxt =        1500
+        new allocate(trajek) memory:  183.15 MByt
+ INFO: PID=           0  recoil: try new maxt =        2000
+        new allocate(trajek) memory:  244.20 MByt
+ INFO: PID=           0  recoil: try new maxt =        2500
+        new allocate(trajek) memory:  305.25 MByt
+ INFO: PID=           0  recoil: try new maxt =        3000
+        new allocate(trajek) memory:  366.30 MByt
+ INFO: PID=           0  recoil: try new maxt =        3500
+        new allocate(trajek) memory:  427.35 MByt
+ INFO: PID=           0  recoil: try new maxt =        4000
+        new allocate(trajek) memory:  488.40 MByt
+ INFO: PID=           0  recoil: try new maxt =        4500
+        new allocate(trajek) memory:  549.45 MByt
+ INFO: PID=           0  recoil: try new maxt =        5000
+        new allocate(trajek) memory:  610.50 MByt
+ INFO: PID=           0  recoil: try new maxt =        5500
+        new allocate(trajek) memory:  671.55 MByt
+ INFO: PID=           0  recoil: try new maxt =        6000
+        new allocate(trajek) memory:  732.60 MByt
+ INFO: PID=           0  recoil: try new maxt =        6500
+        new allocate(trajek) memory:  793.66 MByt
+           2 ihist:           4 %, time:11:34:50         100
+           3 ihist:           6 %, time:11:34:50         100
+           4 ihist:           8 %, time:11:34:50         100
+           5 ihist:          10 %, time:11:34:50         100
+           6 ihist:          12 %, time:11:34:51         100
+           7 ihist:          14 %, time:11:34:51         100
+           8 ihist:          16 %, time:11:34:51         100
+           9 ihist:          18 %, time:11:34:51         100
+          10 ihist:          20 %, time:11:34:51         100
+          11 ihist:          22 %, time:11:34:52         100
+          12 ihist:          24 %, time:11:34:52         100
+          13 ihist:          26 %, time:11:34:52         100
+          14 ihist:          28 %, time:11:34:52         100
+          15 ihist:          30 %, time:11:34:53         100
+          16 ihist:          32 %, time:11:34:53         100
+          17 ihist:          34 %, time:11:34:53         100
+          18 ihist:          36 %, time:11:34:53         100
+          19 ihist:          38 %, time:11:34:53         100
+          20 ihist:          40 %, time:11:34:54         100
+          21 ihist:          42 %, time:11:34:54         100
+          22 ihist:          44 %, time:11:34:54         100
+          23 ihist:          46 %, time:11:34:54         100
+          24 ihist:          48 %, time:11:34:54         100
+          25 ihist:          50 %, time:11:34:55         100
+          26 ihist:          52 %, time:11:34:55         100
+          27 ihist:          54 %, time:11:34:55         100
+          28 ihist:          56 %, time:11:34:55         100
+          29 ihist:          58 %, time:11:34:55         100
+          30 ihist:          60 %, time:11:34:56         100
+          31 ihist:          62 %, time:11:34:56         100
+          32 ihist:          64 %, time:11:34:56         100
+          33 ihist:          66 %, time:11:34:56         100
+          34 ihist:          68 %, time:11:34:56         100
+          35 ihist:          70 %, time:11:34:57         100
+          36 ihist:          72 %, time:11:34:57         100
+          37 ihist:          74 %, time:11:34:57         100
+          38 ihist:          76 %, time:11:34:57         100
+          39 ihist:          78 %, time:11:34:58         100
+          40 ihist:          80 %, time:11:34:58         100
+          41 ihist:          82 %, time:11:34:58         100
+          42 ihist:          84 %, time:11:34:58         100
+          43 ihist:          86 %, time:11:34:58         100
+          44 ihist:          88 %, time:11:34:59         100
+          45 ihist:          90 %, time:11:34:59         100
+          46 ihist:          92 %, time:11:34:59         100
+          47 ihist:          94 %, time:11:34:59         100
+          48 ihist:          96 %, time:11:35:00         100
+          49 ihist:          98 %, time:11:35:00         100
+          50 ihist:         100 %, time:11:35:00         100
+ ihist: end history of projectile_loop
+ end history
+ start gsum_stat
+ end gsum_stat
+ end gsum_fluence
+ end outp

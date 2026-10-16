@@ -1,0 +1,48 @@
+Example 4: He on W with an energy distribution from energy.inp (edit it with the "Distributions..." button)
+&TRI_INP
+text = "--- elements ---"
+    ncp = 2
+    symbol = "He", "W"
+    !globaldensity = False, 0.0
+    inel0 = 7, 7
+
+text = "--- general ---"
+    idrel = 1
+    flc = 1.0
+    nh = 100
+    idout = 10
+    nr_pproj = 100
+    ipot = 1
+    iintegral = 2
+    isbv = 1
+
+text = "--- beam ---"
+    qubeam = 1.0, 0.0
+    case_e0 = 1
+    e0 = 0.0, 0.0
+    case_alpha = 0
+    alpha0 = 0.0, 0.0
+
+text = "--- target ---"
+    qu = 0.0, 1.0
+    qumax = 0.0, 1.0
+    ttarget = 2000.0
+    nqx = 100
+    iq0 = 0
+
+text = "--- crystal ---"
+    l_crystal = .false.
+
+text = "--- output options ---"
+    lparticle_p = .true.
+    ioutput_part(2) = 10000
+    lparticle_r = .true.
+    ioutput_part(5) = 1000000
+    lmatrices = .false.
+    tbsp_binary = .true.
+    tbsp_ascii = .false.
+
+text = "--- extra ---"
+    tableinp = "C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTrimSP_7.07\tables"
+    
+/

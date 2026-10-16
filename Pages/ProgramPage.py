@@ -935,10 +935,10 @@ class SimulationPage(TabWithToolbar):
             return
         input_file = input_files[1]
 
-        # delete all files except input files
+        # delete all files except input files (also the ones that are not written by the GUI, e.g. a0_tdiff.inp)
         files = [
             file for file in self.simulation_configuration.save_folder.iterdir()
-            if file.is_file() and file.name not in input_files
+            if file.is_file() and file.name not in input_files and not inFileList(file.name, self.simulation_class.KeepFiles)
         ]
 
         if files and not GlobalConf.skip_delete_info:

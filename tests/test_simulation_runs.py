@@ -47,7 +47,7 @@ AU_LATTICE_CONSTANT = 4.078
 
 # example inputs (input.json) that are varied
 BASES = {
-    'Ar_Au': SAVES / 'SDTrimSP' / 'Ar_on_Au_7.00',  # Ar on Au, 2 keV, 60 degree
+    'Ar_Au': SAVES / 'SDTrimSP' / 'example_01_Ar_on_Au',  # Ar on Au, 2 keV, 60 degree
     'Ar_W': SAVES / 'SDTrimSP' / 'Ar_on_W',  # Ar on W
     'H_Ar_FeW': SAVES / 'SDTrimSP' / 'H_Ar_on_Fe_W_60deg',  # two projectiles, two layers
 }

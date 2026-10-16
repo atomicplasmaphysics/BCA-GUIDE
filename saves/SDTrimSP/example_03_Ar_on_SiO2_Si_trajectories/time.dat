@@ -1,0 +1,15 @@
+ Example 3: 1 keV Ar on 20 A SiO2 on Si, trajectories of 10 projectiles and thei
+ r
+time for proj     :       0.22  s       1.5  %
+time for recoil   :      14.49  s      97.6  %
+time for gsum/hist:       0.00  s       0.0  %
+time for part/hist:       0.12  s       0.8  %
+time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.02  s       0.1  %
+time for out/hist :       0.00  s       0.0  %
+  time for history:       0.00  s       0.0  %
+time for gsum/SDTr:       0.00  s
+time for SDTrimSP :      14.93  s
+time for SDTrimSP :       0.25 min
+time for SDTrimSP :       0.00  h
+number of PEs:    1 NH=        50 NR= 100 NH*NR=           5000

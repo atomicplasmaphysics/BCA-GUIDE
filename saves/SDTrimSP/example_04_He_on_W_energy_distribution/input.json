@@ -1,0 +1,328 @@
+{
+    "general": {
+        "title": "Example 4: He on W with an energy distribution from energy.inp (edit it with the \"Distributions...\" button)",
+        "simulation": "SDTrimSP"
+    },
+    "beam_arguments": {
+        "optional": {
+            "sweep": 18,
+            "sheath_potential": 0.0,
+            "distributions": {
+                "energy": {
+                    "He": [
+                        [
+                            50.0,
+                            5.0
+                        ],
+                        [
+                            200.0,
+                            10.0
+                        ],
+                        [
+                            300.0,
+                            15.0
+                        ],
+                        [
+                            400.0,
+                            17.5
+                        ],
+                        [
+                            500.0,
+                            10.0
+                        ],
+                        [
+                            1000.0,
+                            2.0
+                        ]
+                    ]
+                }
+            }
+        },
+        "kinetic_energy_mode": "FILE",
+        "angle_mode": "FIXED"
+    },
+    "beam_rows": [
+        {
+            "optional": {
+                "inelastic_loss_model": "LINDHARD_SCHARFF_AND_ZIEGLER",
+                "azimuth": 0.0,
+                "start_depth": 0.0,
+                "charge": 0.0,
+                "inelastic_correction": 1.0,
+                "cutoff_energy": -1.0,
+                "bulk_binding_energy": -1.0,
+                "heat_of_formation": -1.0,
+                "isotopes": 0
+            },
+            "index": 1,
+            "symbol": "He",
+            "element": {
+                "symbol": "He",
+                "name": {
+                    "en": "helium",
+                    "de": "Helium"
+                },
+                "atomic_nr": 2,
+                "period": 1,
+                "group": 18,
+                "atomic_mass": 4.002603,
+                "atomic_density": 0.01878,
+                "periodic_table_symbol": "He",
+                "mass_density": null,
+                "surface_binding_energy": 0.0,
+                "displacement_energy": 0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "He",
+                    "name": {
+                        "en": "helium",
+                        "de": "Helium"
+                    },
+                    "atomic_nr": 2,
+                    "period": 1,
+                    "group": 18,
+                    "atomic_mass": 4.002603,
+                    "atomic_density": 0.01878,
+                    "periodic_table_symbol": "He",
+                    "mass_density": null,
+                    "surface_binding_energy": 0.0,
+                    "displacement_energy": 0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 0.0,
+            "energy": 0.0,
+            "angle": 0.0
+        }
+    ],
+    "target_arguments": {
+        "optional": {
+            "global_density": false,
+            "crystal_flag": false,
+            "miller_ind": {
+                "vec": [
+                    0,
+                    0,
+                    0
+                ]
+            }
+        },
+        "thickness": 2000.0,
+        "segments": 100
+    },
+    "target_rows": [
+        {
+            "optional": {
+                "inelastic_loss_model": "LINDHARD_SCHARFF_AND_ZIEGLER",
+                "azimuth": 0.0,
+                "start_depth": 0.0,
+                "charge": 0.0,
+                "inelastic_correction": 1.0,
+                "cutoff_energy": -1.0,
+                "bulk_binding_energy": -1.0,
+                "heat_of_formation": -1.0,
+                "isotopes": 0
+            },
+            "index": 2,
+            "symbol": "W",
+            "element": {
+                "symbol": "W",
+                "name": {
+                    "en": "tungsten",
+                    "de": "Wolfram"
+                },
+                "atomic_nr": 74,
+                "period": 6,
+                "group": 6,
+                "atomic_mass": 183.84,
+                "atomic_density": 0.06306,
+                "periodic_table_symbol": "W",
+                "mass_density": null,
+                "surface_binding_energy": 8.79,
+                "displacement_energy": 0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "W",
+                    "name": {
+                        "en": "tungsten",
+                        "de": "Wolfram"
+                    },
+                    "atomic_nr": 74,
+                    "period": 6,
+                    "group": 6,
+                    "atomic_mass": 183.84,
+                    "atomic_density": 0.06306,
+                    "periodic_table_symbol": "W",
+                    "mass_density": null,
+                    "surface_binding_energy": 8.79,
+                    "displacement_energy": 0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 1.0,
+            "energy": 0.0,
+            "angle": 0.0
+        }
+    ],
+    "structure": [
+        {
+            "name": "Layer",
+            "segments": 100,
+            "thickness": 2000.0,
+            "abundances": [
+                1.0
+            ]
+        }
+    ],
+    "settings": {
+        "optional": {
+            "histories": 100,
+            "histories_between_out": 10,
+            "projectiles": 100,
+            "interaction_potential": "KRC",
+            "integration_method": "GAUSS_LEGENDRE",
+            "surface_binding_model": "ELEMENT_SPECIFIC",
+            "group_elements": false,
+            "log_reflected": true,
+            "log_sputtered": true,
+            "log_matrix": false,
+            "tbsp_format": "binary",
+            "trajectories_projectiles": false,
+            "trajectories_recoils": false,
+            "trajectories_number": 20,
+            "energy_distribution": false,
+            "distribution_grid": [
+                60,
+                60,
+                60,
+                2.0
+            ],
+            "random_seed": 1,
+            "inelastic_outside": false
+        },
+        "title": "Example 4: He on W with an energy distribution from energy.inp (edit it with the \"Distributions...\" button)",
+        "comment": "",
+        "mode": "STATIC",
+        "fluence": 1.0,
+        "threads": 0,
+        "compounds": []
+    },
+    "crystal_args": {
+        "optional": {
+            "beam_dy": 0.0,
+            "beam_dz": 0.0,
+            "crystal_dyn": false,
+            "crystals": [
+                {
+                    "name": "Al_fcc",
+                    "miller": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            ],
+            "table_crystal": true
+        },
+        "name": "Al_fcc",
+        "lattice_id": 1,
+        "lattice_constant": 4.049857,
+        "basis_vec_a1": {
+            "vec": [
+                1,
+                0,
+                0
+            ]
+        },
+        "basis_vec_a2": {
+            "vec": [
+                0,
+                1,
+                0
+            ]
+        },
+        "basis_vec_a3": {
+            "vec": [
+                0,
+                0,
+                1.0
+            ]
+        },
+        "miller_ind": {
+            "vec": [
+                0,
+                0,
+                0
+            ]
+        }
+    },
+    "crystal_rows": [
+        {
+            "symbol": "Al",
+            "coord": {
+                "vec": [
+                    0.0,
+                    0.0,
+                    0.0
+                ]
+            }
+        },
+        {
+            "symbol": "Al",
+            "coord": {
+                "vec": [
+                    0.0,
+                    0.5,
+                    0.5
+                ]
+            }
+        },
+        {
+            "symbol": "Al",
+            "coord": {
+                "vec": [
+                    0.5,
+                    0.0,
+                    0.5
+                ]
+            }
+        },
+        {
+            "symbol": "Al",
+            "coord": {
+                "vec": [
+                    0.5,
+                    0.5,
+                    0.0
+                ]
+            }
+        }
+    ],
+    "additional": [
+        ""
+    ]
+}

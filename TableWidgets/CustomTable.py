@@ -1,7 +1,7 @@
-from typing import List, Union
+from typing import List, Union, Optional
 
-from PyQt6.QtCore import pyqtSignal, QObject
-from PyQt6.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox
+from PyQt6.QtCore import pyqtSignal, QObject, Qt
+from PyQt6.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox, QFrame
 
 from Utility.Icons import getIcon
 
@@ -101,12 +101,13 @@ class CustomTable(QTableWidget):
     :param row_count: number of rows
     :param header_labels: list of header labels
     :param parent: parent widget
+    :param frozen_columns: (optional) number of first columns that stay visible when scrolling horizontally
     """
 
     settingsChanged = pyqtSignal(dict)
     contentChanged = pyqtSignal()
 
-    def __init__(self, row_count: int, header_labels, parent):
+    def __init__(self, row_count: int, header_labels, parent, frozen_columns: int = 0):
         self.header_labels = [''] + header_labels
         super().__init__(row_count, len(self.header_labels), parent)
         self.rows: List[CustomRow] = []
@@ -121,11 +122,115 @@ class CustomTable(QTableWidget):
         self.horizontal_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.horizontal_header.setMinimumSectionSize(40)
 
+        # the first columns are shown in a second table on top of this one, which does not scroll horizontally
+        self.frozen_columns = frozen_columns
+        self.frozen: Optional[QTableWidget] = None
+        if frozen_columns > 0:
+            self.createFrozenTable()
+
         self.add_button = QPushButton(getIcon('add'), '')
         self.add_button.setFixedSize(30, 30)
         self.add_button.setAutoDefault(False)
         self.add_button.clicked.connect(lambda: self.addRow())
         self.createAddButton()
+
+    def createFrozenTable(self):
+        """Creates the table for the frozen first columns"""
+
+        self.frozen = QTableWidget(self.rowCount(), self.frozen_columns, self)
+        self.frozen.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.frozen.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.frozen.verticalHeader().setVisible(False)
+        self.frozen.setHorizontalHeaderLabels(self.header_labels[:self.frozen_columns])
+        self.frozen.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        self.frozen.horizontalHeader().setMinimumSectionSize(self.horizontal_header.minimumSectionSize())
+        self.frozen.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.frozen.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.frozen.setFrameShape(QFrame.Shape.NoFrame)
+        self.frozen.setVerticalScrollMode(self.verticalScrollMode())
+        # opaque, otherwise the scrolled columns are visible below the frozen ones
+        for widget in (self.frozen, self.frozen.viewport(), self.frozen.horizontalHeader(), self.frozen.horizontalHeader().viewport()):
+            widget.setAutoFillBackground(True)
+
+        for column in range(self.frozen_columns):
+            self.horizontal_header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+        self.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+
+        self.frozen.verticalScrollBar().valueChanged.connect(self.verticalScrollBar().setValue)
+        self.verticalScrollBar().valueChanged.connect(self.frozen.verticalScrollBar().setValue)
+        self.horizontal_header.sectionResized.connect(self.frozenSectionResized)
+        self.horizontal_header.geometriesChanged.connect(self.updateFrozenGeometry)
+
+        self.viewport().stackUnder(self.frozen)
+        self.updateFrozenGeometry()
+        self.frozen.show()
+
+    def frozenSectionResized(self, column: int, _old_size: int, new_size: int):
+        """Keeps the widths of the frozen columns equal to the ones of this table"""
+
+        if self.frozen is None or column >= self.frozen_columns:
+            return
+        self.frozen.setColumnWidth(column, new_size)
+        self.updateFrozenGeometry()
+
+    def updateFrozenGeometry(self):
+        """Places the table of the frozen columns on top of the first columns"""
+
+        if self.frozen is None:
+            return
+        width = sum(self.columnWidth(column) for column in range(self.frozen_columns))
+        header_height = self.horizontal_header.height()
+        self.frozen.horizontalHeader().setFixedHeight(header_height)
+        self.frozen.setGeometry(
+            self.frameWidth(),
+            self.frameWidth(),
+            width,
+            self.viewport().height() + header_height
+        )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.updateFrozenGeometry()
+
+    def insertRow(self, row: int):
+        super().insertRow(row)
+        if self.frozen is not None:
+            self.frozen.insertRow(row)
+
+    def removeRow(self, row: int):
+        super().removeRow(row)
+        if self.frozen is not None:
+            self.frozen.removeRow(row)
+
+    def setCellWidget(self, row: int, column: int, widget: QWidget):
+        if self.frozen is not None and column < self.frozen_columns:
+            self.frozen.setCellWidget(row, column, widget)
+        else:
+            super().setCellWidget(row, column, widget)
+
+    def cellWidget(self, row: int, column: int) -> Optional[QWidget]:
+        if self.frozen is not None and column < self.frozen_columns:
+            return self.frozen.cellWidget(row, column)
+        return super().cellWidget(row, column)
+
+    def setSpan(self, row: int, column: int, row_span: int, column_span: int):
+        super().setSpan(row, column, row_span, column_span)
+        if self.frozen is not None and column < self.frozen_columns:
+            span = min(column_span, self.frozen_columns - column)
+            if row_span > 1 or span > 1:
+                self.frozen.setSpan(row, column, row_span, span)
+
+    def setHeaderToolTip(self, column: int, tooltip: str):
+        """
+        Sets the tooltip of the header of a column
+
+        :param column: index of column
+        :param tooltip: tooltip
+        """
+
+        self.horizontalHeaderItem(column).setToolTip(tooltip)
+        if self.frozen is not None and column < self.frozen_columns:
+            self.frozen.horizontalHeaderItem(column).setToolTip(tooltip)
 
     def createAddButton(self):
         """Creates add button"""
@@ -180,10 +285,24 @@ class CustomTable(QTableWidget):
         self.resizeColumnsToContents()
         self.resizeRowsToContents()
 
+        if self.frozen is not None:
+            # the frozen columns get the size of their content in the frozen table, rows the larger height of both
+            self.frozen.resizeColumnsToContents()
+            self.frozen.resizeRowsToContents()
+            header = self.horizontal_header
+            for column in range(1, self.frozen_columns):
+                width = max(self.frozen.columnWidth(column), header.sectionSizeHint(column))
+                self.setColumnWidth(column, width)
+            for row in range(self.rowCount()):
+                height = max(self.rowHeight(row), self.frozen.rowHeight(row))
+                self.setRowHeight(row, height)
+                self.frozen.setRowHeight(row, height)
+
         # first column needs to be resized as well
         if self.rowCount() > 1:
             first_width = self.cellWidget(0, 0).sizeHint().width()
             self.setColumnWidth(0, first_width)
+        self.updateFrozenGeometry()
 
     def removeCustomRow(self, row_idx: int, update: bool = True):
         """

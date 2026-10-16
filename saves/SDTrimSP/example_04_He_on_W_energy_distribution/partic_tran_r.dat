@@ -1,0 +1,6 @@
+# SDTrimSP: VERSION 7.07    16.10.2026
+Example 4: He on W with an energy distribution from energy.inp (edit it with the
+           0   number particle
+         100         100   NH NR
+#ende
+           0   number particle from SDTrimSP

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple, List, TYPE_CHECKING
 from platform import system
 from pathlib import Path
 from re import findall
@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QTimer, QDir
 from PyQt6.QtGui import QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
     QSplitter, QWidget, QPushButton, QListWidget, QLabel, QListWidgetItem,
-    QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy, QAbstractItemView
+    QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy, QAbstractItemView, QApplication
 )
 
 from GlobalConf import GlobalConf
@@ -32,6 +32,112 @@ from Simulations.SimulationsList import SimulationsList
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
     from MainWindow import MainWindow
+
+
+# folders that are not searched for installed simulations
+SEARCH_SKIP_FOLDERS = {'__pycache__', 'node_modules', 'site-packages', '$recycle.bin', 'system volume information', 'windows', 'appdata'}
+
+
+def bestVersion(versions: List[str], version_name: str) -> Tuple[int, bool]:
+    """
+    Returns the index of the selectable version that suits the detected version best and if it matches exactly.
+    If the detected version is not listed, the highest listed version below it is used (or the lowest listed version)
+
+    :param versions: selectable versions, e.g. ['6.01, 6.06', '7.07']
+    :param version_name: detected version name, e.g. 'SDTrimSP v7.05'
+
+    :return: (index or -1 if no version number is found, exact match)
+    """
+
+    version_numbers = findall(r'\d+(?:\.\d+)?', version_name)
+    if not version_numbers:
+        return -1, False
+    detected = version_numbers[0]
+
+    candidates = []
+    for i, entry in enumerate(versions):
+        for version in entry.split(','):
+            version = version.strip()
+            if version == detected:
+                return i, True
+            try:
+                candidates.append((float(version), i))
+            except ValueError:
+                pass
+
+    if not candidates:
+        return -1, False
+
+    detected_value = float(detected)
+    lower = [candidate for candidate in candidates if candidate[0] <= detected_value]
+    if lower:
+        return max(lower)[1], False
+    return min(candidates)[1], False
+
+
+def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dict], List[str]]:
+    """
+    Searches base_folder and its subfolders for installed simulation programs.
+    A folder is an installation if a simulation program detects its version there and finds a binary for this
+    operating system. Subfolders of an installation are not searched.
+
+    :param base_folder: folder to search in
+    :param max_depth: (optional) maximum depth of subfolders
+
+    :return: (list of {'program': index, 'name': program name, 'version': selectable version, 'version_name': detected version,
+              'folder': folder, 'binary': binary}, list of skipped installations with reasons)
+    """
+
+    simulation_list = SimulationsList()
+    found = []
+    skipped = []
+
+    def detect(folder: Path) -> bool:
+        """Returns True if folder is (a not usable) installation"""
+
+        for index, program in enumerate(simulation_list.simulation_program_list):
+            version_name = program.getVersionName(folder, None)
+            if not version_name:
+                continue
+            versions = simulation_list.simulation_program_versions.get(program.Name) or []
+            version_index, exact = bestVersion(versions, version_name)
+            numbers = findall(r'\d+(?:\.\d+)?', version_name)
+            supported = version_index >= 0 and (exact or not numbers or float(numbers[0]) >= min(
+                float(version.strip()) for entry in versions for version in entry.split(',')
+            ))
+            if not supported:
+                skipped.append(f'{version_name} in "{pathToStr(folder)}": version is not supported')
+                return True
+            binary = program.findBinary(folder)
+            if binary is None:
+                skipped.append(f'{version_name} in "{pathToStr(folder)}": no binary for this operating system found')
+                return True
+            found.append({
+                'program': index,
+                'name': program.Name,
+                'version': versions[version_index] if versions else 'All',
+                'version_name': version_name,
+                'folder': folder,
+                'binary': binary
+            })
+            return True
+        return False
+
+    def search(folder: Path, depth: int):
+        if detect(folder) or depth >= max_depth:
+            return
+        try:
+            subfolders = sorted(entry for entry in folder.iterdir() if entry.is_dir())
+        except OSError:
+            return
+        for subfolder in subfolders:
+            if subfolder.name.startswith('.') or subfolder.name.lower() in SEARCH_SKIP_FOLDERS:
+                continue
+            search(subfolder, depth + 1)
+
+    if base_folder.is_dir():
+        search(base_folder, 0)
+    return found, skipped
 
 
 class ConfigurationPage(TabWithToolbar):
@@ -78,6 +184,11 @@ class ConfigurationPage(TabWithToolbar):
         self.action_save.setShortcut(QKeySequence.StandardKey.Save)
         self.action_save.triggered.connect(lambda: self.save())
 
+        # Search
+        self.action_search = self.toolbar.addAction(getIcon('search'), 'Search')
+        self.action_search.setToolTip('Search a folder and all its subfolders for installed simulations\nand add them as configurations')
+        self.action_search.triggered.connect(lambda: self.searchSimulations())
+
         # Add empty space
         self.empty_space = QWidget()
         self.empty_space.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -107,7 +218,7 @@ class ConfigurationPage(TabWithToolbar):
         # SIMULATION CONFIGURATION
         #
 
-        self.simulation_configuration_vbox = VBoxTitleLayout(self, 'Simulation Configuration', add_stretch=False)
+        self.simulation_configuration_vbox = VBoxTitleLayout(self, 'Manual Simulation Configuration', add_stretch=False)
         self.simulation_configuration_group = QVBoxLayout()
         self.simulation_configuration_group.setSpacing(5)
 
@@ -454,6 +565,70 @@ class ConfigurationPage(TabWithToolbar):
         self.clearConfigView()
         self.listConfigView()
         self.main_window.writeStatusBar('Loading configuration file successful')
+
+    def searchSimulations(self, base_folder: Optional[Path] = None) -> int:
+        """
+        Searches a folder (selected in a dialog) and its subfolders for installed simulations and adds them as configurations.
+        Installations that are already configured are skipped.
+
+        :param base_folder: (optional) folder to search in, otherwise a dialog is opened
+
+        :return: number of added configurations
+        """
+
+        if base_folder is None:
+            folder = QFileDialog.getExistingDirectory(self, 'Select the folder which contains the simulation programs', pathToStr(Path(QDir.currentPath())))
+            if not folder:
+                self.main_window.writeStatusBar('Search for simulations aborted')
+                return 0
+            base_folder = Path(folder)
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            found, skipped = searchInstallations(base_folder)
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        configured = {sc.folder.resolve() for sc in self.main_window.simulation_configs if sc.folder is not None}
+        titles = {sc.title for sc in self.main_window.simulation_configs}
+        added = []
+        for installation in found:
+            folder = installation['folder']
+            if folder.resolve() in configured:
+                skipped.append(f'{installation["version_name"]} in "{pathToStr(folder)}": already configured')
+                continue
+            numbers = findall(r'\d+(?:\.\d+)?', installation['version_name'])
+            title = f'{installation["name"]} {numbers[0]}' if numbers else installation['name']
+            unique_title, i = title, 2
+            while unique_title in titles:
+                unique_title = f'{title} ({i})'
+                i += 1
+            titles.add(unique_title)
+            self.main_window.simulation_configs.append(SimulationConfiguration(
+                unique_title, installation['program'], folder, installation['binary'], installation['version']
+            ))
+            added.append(f'{unique_title}: "{pathToStr(installation["binary"])}" (version {installation["version"]})')
+
+        if added:
+            self.save(autosave=True, no_config=not GlobalConf.keep_configurations_info)
+            self.clearConfigView()
+            self.listConfigView()
+
+        details = []
+        if added:
+            details += ['Added:'] + added
+        if skipped:
+            details += ([''] if added else []) + ['Not added:'] + skipped
+        showMessageBox(
+            self,
+            QMessageBox.Icon.Information if added else QMessageBox.Icon.Warning,
+            'Search for simulations',
+            f'{len(added)} simulation{"" if len(added) == 1 else "s"} added from "{pathToStr(base_folder)}"',
+            detailed_message='\n'.join(details) if details else '',
+            expand_details=True
+        )
+        self.main_window.writeStatusBar(f'{len(added)} simulation configuration{"" if len(added) == 1 else "s"} added')
+        return len(added)
 
     def save(self, autosave: bool = False, no_config: bool = False):
         """
@@ -978,30 +1153,7 @@ class ConfigurationPage(TabWithToolbar):
         if not self.detected_version_name or self.detected_program != self.program.currentIndex():
             return -1, False
 
-        version_numbers = findall(r'\d+(?:\.\d+)?', self.detected_version_name)
-        if not version_numbers:
-            return -1, False
-        detected = version_numbers[0]
-
-        candidates = []
-        for i in range(self.versions.count()):
-            for version in self.versions.itemText(i).split(','):
-                version = version.strip()
-                if version == detected:
-                    return i, True
-                try:
-                    candidates.append((float(version), i))
-                except ValueError:
-                    pass
-
-        if not candidates:
-            return -1, False
-
-        detected_value = float(detected)
-        lower = [candidate for candidate in candidates if candidate[0] <= detected_value]
-        if lower:
-            return max(lower)[1], False
-        return min(candidates)[1], False
+        return bestVersion([self.versions.itemText(i) for i in range(self.versions.count())], self.detected_version_name)
 
     def selectDetectedVersion(self):
         """Selects the version that suits the detected version best, if there is one"""
