@@ -84,7 +84,12 @@ def test_binary_detection_and_version_highlight(main_window, qapp, dialogs, erro
     dialogs['dir'] = str(SDTRIMSP / 'SDTrimSP_7.07')
     page.simulation_folder.select_path_loc()
     assert page.simulation_binary.path == SDTrimSPInput.findBinary(SDTRIMSP / 'SDTrimSP_7.07')
-    # 7.07 is not listed explicitly, the best suited version is selected without highlighting
+    assert page.versions.currentText() == Versions.V_707
+    assert not highlighted(page.versions)
+
+    # 7.06 is not listed explicitly, the best suited version (7.02, 7.05) is selected without highlighting
+    page.detected_version_name = 'SDTrimSP v7.06'
+    page.selectDetectedVersion()
     assert page.versions.currentText() == Versions.V_702
     assert not highlighted(page.versions)
 
@@ -222,4 +227,119 @@ def test_crystal_editor_table_mode(main_window, qapp, tmp_path, errors):
     assert dialog.table_crystal_selected.name == 'Au_fcc'
     assert page.loadSettings(sc.save_folder, from_json=True, unsaved_warning=False)
     assert dialog.table_crystal_selected.name == 'Au_fcc'
+    assert not errors, '\n'.join(errors)
+
+
+LAYERED_EXAMPLE = SDTRIMSP / 'SDTrimSP_7.05' / 'case' / 'Ar_2_Cu_W_layer_crystal'
+
+
+def loadLayeredCrystalExample(main_window, qapp, tmp_path):
+    """Loads the example with two crystals in layers (Cu_fcc and W_bcc) from tri.inp and layer.inp"""
+
+    folder = SDTRIMSP / 'SDTrimSP_7.05'
+    binary = SDTrimSPInput.findBinary(folder) or folder / 'SDTrimSP.exe'
+    save = tmp_path / 'layered'
+    save.mkdir()
+    for file in ('tri.inp', 'layer.inp'):
+        shutil.copy(LAYERED_EXAMPLE / file, save / file)
+
+    sc, page = addSimulationPage(main_window, 'layered', 0, folder, binary, Versions.V_702)
+    pump(qapp)
+    assert page.loadSettings(save, from_json=False, unsaved_warning=False)
+    pump(qapp)
+    return sc, page
+
+
+@pytest.mark.skipif(not LAYERED_EXAMPLE.is_dir(), reason='layered crystal example not available')
+def test_layered_crystals(main_window, qapp, tmp_path, errors):
+    sc, page = loadLayeredCrystalExample(main_window, qapp, tmp_path)
+    dialog = page.crystal_editor_dialog
+    layers = page.target_layers
+
+    assert [crystal['name'] for crystal in dialog.tableCrystalsList()] == ['Cu_fcc', 'W_bcc']
+    assert layers.crystal_names == ['Cu_fcc', 'W_bcc']
+    assert len(layers.rows) == 8
+    assert [cell.value() for cell in layers.rows[0].crystal_cells] == pytest.approx([1, 0])
+    assert [cell.value() for cell in layers.rows[1].crystal_cells] == pytest.approx([0, 1])
+    assert [cell.value() for cell in layers.rows[0].miller_cells] == pytest.approx([1, 0, 0.1])
+    assert not dialog.undefined_state, dialog.table_crystal_validation.text()
+
+    # mixture of both crystals and amorphous material in the first layer
+    layers.rows[0].crystal_cells[0].setValue(0.5)
+    layers.rows[0].crystal_cells[1].setValue(0.25)
+
+    arguments, input_text, layer_text, crystal_text = page.makePreview()
+    assert 'l_crystal2 = .true.' in input_text
+    assert "name_cryst2 = 'W_bcc'" in input_text
+    assert 'iq0 = -1' in input_text
+    assert layer_text is not None and 'Cu_1' in layer_text and 'W_2' in layer_text
+    assert all(line.startswith('!') for line in layer_text.splitlines()[:2])
+
+    # saved files can be loaded again
+    files = page.saveSettings()
+    assert files is not None and 'layer.inp' in files
+    for from_json in (False, True):
+        assert page.loadSettings(sc.save_folder, from_json=from_json, unsaved_warning=False)
+        pump(qapp)
+        assert [cell.value() for cell in page.target_layers.rows[0].crystal_cells] == pytest.approx([0.5, 0.25])
+
+    # fractions larger than 1 are not accepted
+    page.target_layers.rows[0].crystal_cells[1].setValue(0.75)
+    assert page.simulation_class.checkArguments(page.makeArguments(), sc.version)
+
+    # without crystal the columns are removed
+    page.general_target_settings.layout_crystal_file.checkbox.setChecked(False)
+    pump(qapp)
+    assert page.target_layers.crystal_names == []
+    assert not errors, '\n'.join(errors)
+
+
+DISTRIBUTION_EXAMPLE = SDTRIMSP / 'SDTrimSP_7.07' / 'case' / 'He_Ar_Si_distribution'
+
+
+@pytest.mark.skipif(not DISTRIBUTION_EXAMPLE.is_dir(), reason='distribution example of SDTrimSP 7.07 not available')
+def test_distribution_files(main_window, qapp, tmp_path, monkeypatch, errors):
+    """The distributions of the example are loaded, edited in the dialog and written again when saving"""
+
+    from Containers.Arguments import ArgumentValues
+    import TableWidgets.DistributionEditor as DistributionEditor
+
+    folder = SDTRIMSP / 'SDTrimSP_7.07'
+    binary = SDTrimSPInput.findBinary(folder)
+    save = tmp_path / 'save'
+    shutil.copytree(DISTRIBUTION_EXAMPLE, save)
+    sc, page = addSimulationPage(main_window, 'distr', 0, folder, binary, Versions.V_707)
+    assert page.loadSettings(save, from_json=False, unsaved_warning=False)
+    pump(qapp)
+
+    beam = page.general_beam_settings
+    assert not beam.distribution_button.isHidden()
+    assert beam.sheath_potential.isHidden()
+    assert set(beam.distributions['energy']) == {'He', 'Ar'}
+    assert set(beam.distributions['angle']) == {'He', 'Ar'}
+
+    # the dialog changes the distribution of He
+    def accept(dialog):
+        dialog.energy_tables['He'].setRows([[100., 1.], [300., 2.]])
+        dialog.accept()
+        return 1
+    monkeypatch.setattr(DistributionEditor.DistributionDialog, 'exec', lambda dialog: accept(dialog))
+    beam.editDistributions()
+    assert beam.distributions['energy']['He'] == [[100., 1.], [300., 2.]]
+
+    # saving writes the files with the number of the species in tri.inp (grouped elements: Si, He, Ar)
+    files = page.saveSettings()
+    assert '"Si", "He", "Ar"' in (save / 'tri.inp').read_text()
+    assert files and {'energy02.inp', 'energy03.inp', 'angle02.inp', 'angle03.inp'} <= set(files)
+    assert DistributionEditor.readDistributionFile(save / 'energy02.inp') == [[100., 1.], [300., 2.]]
+    assert (save / 'energy02.inp').read_text().startswith('!')
+
+    # Maxwellian distributions show the sheath potential, constant energies hide the button
+    beam.kinetic_energy.setValue(ArgumentValues.KineticEnergy.MAXWELLIAN_ENERGY_DISTRIBUTION, from_entries_save=True)
+    pump(qapp)
+    assert not beam.sheath_potential.isHidden()
+    beam.kinetic_energy.setValue(ArgumentValues.KineticEnergy.FIXED, from_entries_save=True)
+    beam.angle.setValue(ArgumentValues.Angle.FIXED, from_entries_save=True)
+    pump(qapp)
+    assert beam.distribution_button.isHidden()
     assert not errors, '\n'.join(errors)

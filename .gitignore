@@ -6,3 +6,4 @@
 /save/
 __pycache__/
 .pytest_cache/
+/tests/simulation_data/

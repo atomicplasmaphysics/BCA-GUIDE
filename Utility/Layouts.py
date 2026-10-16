@@ -1419,7 +1419,30 @@ class MplCanvas(FigureCanvasQTAgg):
             super().keyPressEvent(e)
 
 
-class NoMessageToolbar(NavigationToolbar2QT):
+class PlotToolbar(NavigationToolbar2QT):
+    """
+    NavigationToolbar2QT that updates the colors of its icons if the theme changes
+    (matplotlib colors the icons only once when the toolbar is created)
+    """
+
+    def event(self, event):
+        """Updates the icons after the palette changed"""
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+            QTimer.singleShot(0, self.updateIcons)
+        return super().event(event)
+
+    def updateIcons(self):
+        """Creates the icons again in the colors of the current palette"""
+        try:
+            for text, _, image_file, callback in self.toolitems:
+                if text is not None and callback in self._actions:
+                    self._actions[callback].setIcon(self._icon(image_file + '.png'))
+        except RuntimeError:
+            # toolbar was already deleted
+            pass
+
+
+class NoMessageToolbar(PlotToolbar):
     """
     Custum NavigationToolbar2QT that does not show messages
     """

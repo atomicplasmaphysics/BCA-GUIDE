@@ -1,4 +1,4 @@
-from typing import Union, Tuple, Optional, List, Callable
+from typing import Union, Tuple, Optional, List, Callable, Dict
 from pathlib import Path
 from re import findall, sub
 import logging
@@ -2003,6 +2003,16 @@ class SimulationsInput:
 
         return ''
 
+    def makeDistributionFiles(self, arguments: SimulationArguments, version: str) -> Dict[str, str]:
+        """
+        Returns further input files (e.g. distributions of energies and angles) as {file name: content}
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+        """
+
+        return {}
+
     def nameCrystalFile(self, arguments: SimulationArguments, version: str) -> str:
         """
         Returns file-name of crystal file
@@ -2054,6 +2064,32 @@ class SimulationsInput:
         """
 
         return []
+
+    def checkArguments(self, arguments: SimulationArguments, version: str) -> List[str]:
+        """
+        Checks combinations of parameters that the simulation does not accept and returns list of errors
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+
+        :return: list of errors
+        """
+
+        return []
+
+    def runFailed(self, save_folder: Optional[Path], log: str, exit_code: int, version: str) -> Optional[str]:
+        """
+        Returns a description of the problem if the finished simulation failed, otherwise None
+
+        :param save_folder: folder of the simulation
+        :param log: output of the simulation process
+        :param exit_code: exit code of the simulation process
+        :param version: version of simulation
+        """
+
+        if exit_code != 0:
+            return f'exit code {exit_code}'
+        return None
 
     def cmd(self, binary: Path, save_folder: Path, input_file: str, version: str) -> Tuple[str, bool, str]:
         """

@@ -12,7 +12,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
-    version = '1.5.04'
+    version = '1.5.05'
 
     # settings object
     settings = QSettings('TU Wien', title)
@@ -27,7 +27,7 @@ class GlobalConf:
         'system': 'System (default)',
         'light': 'Light',
         'dark': 'Dark',
-        'srim': 'SRIM (easter egg)',
+        'srim': 'SRIM',
     }
     theme_name = 'theme'
     theme = settings.value(theme_name, defaultValue='system', type=str)

@@ -94,14 +94,25 @@ Upon opening the GUI, the *Configurations* tab needs to be configured for the de
 
 The tests are found in the folder `tests` and need the packages in `requirements-dev.txt` (`pip install -r requirements-dev.txt`).
 The GUI is tested without showing windows; the settings and saves of the user are not changed.
+The tests run in parallel processes (pytest-xdist), add `-n 0` to run them in one process.
 
 ```
-python -m pytest                 # all tests except the simulation runs
-python -m pytest --simulations   # also runs a short simulation with every program found in "Simulation Programs"
+python -m pytest                                    # all tests except the simulation runs
+python -m pytest --simulations -n 20                # also runs simulations with every program found in "Simulation Programs"
+python -m pytest --simulations -n 20 --simulation-data tests/simulation_data   # keeps the simulation outputs
+python -m pytest tests/test_simulation_data.py --simulation-data tests/simulation_data   # checks kept outputs in the GUI
 ```
 
-The simulation runs (Ar, 2 keV, 60° on Au with 1000 histories, with and without crystal) check that all outputs of each
-simulation version can be shown and plotted in the GUI.
+The simulation runs vary the input (energies from 10 eV to 1 GeV, angles, sweeps, angle and energy distributions,
+distributions from files (energy.inp, angle.inp, ene_ang.inp), Maxwellian distributions, dynamic mode, potentials,
+integration methods, surface binding models, further element parameters, output options including trajectories and
+energy distributions, crystals and layered crystals) and check that all outputs of each simulation version can be shown
+and plotted in the GUI. Known problems of the simulation programs are marked as expected failures.
+
+Longer runs can be configured with environment variables:
+`BCA_TEST_PROJECTILES` (number of projectiles, default 1000), `BCA_TEST_SEED` (random seed),
+`BCA_TEST_TIMEOUT` (seconds per simulation, default 900) and `BCA_TEST_ALL_VARIANTS=1` (all variants for every version,
+otherwise only for the newest one).
 
 ## Third-party resources
 

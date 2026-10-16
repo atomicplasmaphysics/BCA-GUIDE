@@ -8,13 +8,13 @@ import logging
 import numpy as np
 
 
-# limits of SDTrimSP (tableread.F90: max_struc, work.F90: max_atoms, length of character variables)
-MAX_STRUCTURES = 10
-MAX_ATOMS = 8
-MAX_NAME_LENGTH = 10
+class CrystalTableLimitsType:
+    """Interface of the limits of the crystal table, see <Simulations.SDTrimSP.CrystalTableLimits>"""
 
-# tolerance for comparing relative coordinates
-COORD_TOLERANCE = 1e-4
+    max_structures: int
+    max_atoms: int
+    max_name_length: int
+    coord_tolerance: float
 
 
 @dataclass
@@ -31,12 +31,13 @@ class CrystalStructure:
     name: str
     positions: List[Tuple[float, float, float]] = field(default_factory=list)
 
-    def matchOrder(self, positions: List[Tuple[float, float, float]]) -> Optional[List[int]]:
+    def matchOrder(self, positions: List[Tuple[float, float, float]], tolerance: float = 1e-4) -> Optional[List[int]]:
         """
         Returns the order in which the given positions correspond to the positions of this structure, or None if they do not match.
         Positions are compared modulo 1 (periodic unit cell)
 
         :param positions: relative coordinates
+        :param tolerance: (optional) tolerance for comparing relative coordinates
         """
 
         if len(positions) != len(self.positions):
@@ -49,7 +50,7 @@ class CrystalStructure:
         for position in own:
             difference = np.abs(other - position)
             difference = np.minimum(difference, 1 - difference)
-            matches = [i for i in np.where(np.all(difference < COORD_TOLERANCE, axis=1))[0] if i not in used]
+            matches = [i for i in np.where(np.all(difference < tolerance, axis=1))[0] if i not in used]
             if not matches:
                 return None
             order.append(int(matches[0]))
@@ -133,10 +134,12 @@ class CrystalTableFile:
     New structures and crystals are inserted without changing the other lines of the file.
 
     :param path: path to table.crystal
+    :param limits: limits of the crystal table of the simulation version, e.g. <Simulations.SDTrimSP.CrystalTableLimits>
     """
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, limits: CrystalTableLimitsType):
         self.path = path
+        self.limits = limits
         self.lines: List[str] = []
         self.structures: List[CrystalStructure] = []
         self.crystals: List[TableCrystal] = []
@@ -239,7 +242,7 @@ class CrystalTableFile:
         """
 
         for structure in self.structures:
-            order = structure.matchOrder(positions)
+            order = structure.matchOrder(positions, self.limits.coord_tolerance)
             if order is not None:
                 return structure, order
         return None, None
@@ -253,8 +256,8 @@ class CrystalTableFile:
         """
 
         errors = []
-        if not crystal.name or len(crystal.name) > MAX_NAME_LENGTH or any(char.isspace() for char in crystal.name) or '!' in crystal.name:
-            errors.append(f'The name must have 1 to {MAX_NAME_LENGTH} characters without spaces and "!"')
+        if not crystal.name or len(crystal.name) > self.limits.max_name_length or any(char.isspace() for char in crystal.name) or '!' in crystal.name:
+            errors.append(f'The name must have 1 to {self.limits.max_name_length} characters without spaces and "!"')
         if self.crystal(crystal.name) is not None:
             errors.append(f'A crystal with name "{crystal.name}" already exists')
         if min(crystal.dx, crystal.dy, crystal.dz) <= 0:
@@ -263,14 +266,14 @@ class CrystalTableFile:
             errors.append('SDTrimSP scales the x- and y-coordinates with dx, so dy must be equal to dx')
         if not crystal.elements:
             errors.append('The crystal has no atoms')
-        if len(crystal.elements) > MAX_ATOMS:
-            errors.append(f'SDTrimSP supports at most {MAX_ATOMS} atoms in the unit cell')
+        if len(crystal.elements) > self.limits.max_atoms:
+            errors.append(f'SDTrimSP supports at most {self.limits.max_atoms} atoms in the unit cell')
         if crystal.matrix_id not in (3, 5):
             errors.append('The matrix id must be 3 or 5')
         if positions is not None:
             structure, _ = self.findStructure(positions)
-            if structure is None and len(self.structures) >= MAX_STRUCTURES:
-                errors.append(f'SDTrimSP supports at most {MAX_STRUCTURES} crystal structures in table.crystal')
+            if structure is None and len(self.structures) >= self.limits.max_structures:
+                errors.append(f'SDTrimSP supports at most {self.limits.max_structures} crystal structures in table.crystal')
         elif self.structure(crystal.structure) is None:
             errors.append(f'Structure {crystal.structure} does not exist')
         return errors

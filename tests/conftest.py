@@ -31,6 +31,10 @@ DATA = Path(__file__).resolve().parent / 'data'
 
 def pytest_addoption(parser):
     parser.addoption('--simulations', action='store_true', default=False, help='also run the simulation programs (slow)')
+    parser.addoption(
+        '--simulation-data', action='store', default='',
+        help='folder where the simulation runs are kept (with --simulations) and that is checked by test_simulation_data.py'
+    )
 
 
 def pytest_configure(config):
@@ -108,7 +112,11 @@ def pump(app: QApplication, seconds: float = 0.2, until: Optional[Callable[[], b
         app.processEvents()
         if until is not None and until():
             return True
-        time.sleep(0.005)
+        try:
+            time.sleep(0.005)
+        except OSError:
+            # WinError 1450 (not enough system resources) can occur when many simulations run in parallel
+            pass
     return until() if until is not None else True
 
 

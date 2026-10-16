@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 
 from Styles import Styles
 
-from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError, MAX_ATOMS, MAX_NAME_LENGTH
+from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError
 
 from Utility.CrystalImport import importCrystal, CrystalImportError, ImportedCrystal
 from Utility.Icons import getIcon
@@ -57,9 +57,9 @@ class NewCrystalDialog(QDialog):
         layout.addLayout(grid)
 
         self.name = QLineEdit()
-        self.name.setMaxLength(MAX_NAME_LENGTH)
+        self.name.setMaxLength(self.table_file.limits.max_name_length)
         self.name.setPlaceholderText('e.g. Au_fcc')
-        self.name.setToolTip(f'Name of the crystal in table.crystal (max. {MAX_NAME_LENGTH} characters, no spaces)')
+        self.name.setToolTip(f'Name of the crystal in table.crystal (max. {self.table_file.limits.max_name_length} characters, no spaces)')
         grid.addWidget(QLabel('Name:'), 0, 0)
         grid.addWidget(self.name, 0, 1, 1, 3)
 
@@ -111,7 +111,7 @@ class NewCrystalDialog(QDialog):
 
         # atoms
         atoms_header = QHBoxLayout()
-        atoms_header.addWidget(QLabel('<b>Atoms in the unit cell</b> (relative coordinates)'), stretch=1)
+        atoms_header.addWidget(QLabel('<b>Atoms in the unit cell</b> (relative coordinates along the basis vectors a₁, a₂, a₃)'), stretch=1)
         self.add_atom = QPushButton(getIcon('add'), '')
         self.add_atom.setToolTip('Add atom')
         self.add_atom.setAutoDefault(False)
@@ -125,7 +125,7 @@ class NewCrystalDialog(QDialog):
         layout.addLayout(atoms_header)
 
         self.atoms = QTableWidget(0, 4)
-        self.atoms.setHorizontalHeaderLabels(['Element', 'x', 'y', 'z'])
+        self.atoms.setHorizontalHeaderLabels(['Element', 'a₁', 'a₂', 'a₃'])
         self.atoms.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.atoms.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.atoms.setMinimumHeight(220)
@@ -254,8 +254,8 @@ class NewCrystalDialog(QDialog):
         self.density.setText(f'{crystal.density:.5f}')
 
         errors = self.table_file.validateCrystal(crystal, positions)
-        if len(positions) > MAX_ATOMS:
-            errors.append(f'At most {MAX_ATOMS} atoms are possible')
+        if len(positions) > self.table_file.limits.max_atoms:
+            errors.append(f'At most {self.table_file.limits.max_atoms} atoms are possible')
         seen = []
         for position in positions:
             if any(all(abs(a - b) < 1e-4 for a, b in zip(position, other)) for other in seen):
@@ -305,7 +305,7 @@ class NewCrystalDialog(QDialog):
         if unknown:
             messages.append(f'Unknown elements for this simulation: {", ".join(unknown)}')
 
-        self.name.setText(imported.name.replace(' ', '_')[:MAX_NAME_LENGTH])
+        self.name.setText(imported.name.replace(' ', '_')[:self.table_file.limits.max_name_length])
         self.dx.setValue(a)
         self.dz.setValue(c)
 

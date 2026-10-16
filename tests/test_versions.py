@@ -27,6 +27,7 @@ def test_version_order():
     (Versions.V_609, {1, 2, 3, 4, 6, 8}),  # 5 and 7 do not work since 6.09
     (Versions.V_700, {1, 2, 3, 4, 6, 8}),
     (Versions.V_702, {1, 2, 3, 4, 6, 8}),
+    (Versions.V_707, {1, 2, 3, 4, 6, 8}),
 ])
 def test_surface_binding_models(version, isbv):
     assert set(DictLookup(version).isbv.values()) == isbv
@@ -37,6 +38,7 @@ def test_surface_binding_models(version, isbv):
     (Versions.V_609, {1, 2, 3, 4, 5, 6, 7}),
     (Versions.V_700, {1, 2, 3, 4, 5, 6, 7, 8}),  # tabulated stopping power since 7.00
     (Versions.V_702, {1, 2, 3, 4, 5, 6, 7, 8}),
+    (Versions.V_707, {1, 2, 3, 4, 5, 6, 7, 8}),
 ])
 def test_inelastic_loss_models(version, inel0):
     assert set(DictLookup(version).inel0.values()) == inel0
@@ -65,6 +67,7 @@ def test_gui_entries_match_lookup(qapp, version):
     (Versions.V_609, False, False),
     (Versions.V_700, True, False),
     (Versions.V_702, True, True),
+    (Versions.V_707, True, True),
 ])
 def test_crystal_support(version, crystal, table):
     defaults = DefaultValues(version)
@@ -74,3 +77,50 @@ def test_crystal_support(version, crystal, table):
 
 def test_tabulated_model_exists():
     assert ArgumentValues.InelasticLossModel.TABULATED in DictLookup(Versions.V_700).inel0
+
+
+@pytest.mark.parametrize('version, selection', [(Versions.V_702, False), (Versions.V_707, True)])
+def test_tbsp_file_selection(qapp, version, selection):
+    """Since 7.07 the file of the tabulated stopping power is selected (tbsp_binary, tbsp_ascii)"""
+
+    settings = VlSimulationSettings(version)
+    assert (settings.tbsp_format is not None) == selection
+    assert DefaultValues(version).tbsp_file_selection == selection
+
+
+def test_run_failed(tmp_path):
+    """SDTrimSP sometimes terminates with exit code 0 after an error"""
+
+    from Simulations.SDTrimSP import SimulationInput
+    simulation = SimulationInput()
+    assert simulation.runFailed(tmp_path, 'ERROR: invalid case for flag...code terminates now...', 0, Versions.V_700)
+    assert simulation.runFailed(tmp_path, 'stop from subroutine energy_init', 0, Versions.V_707)
+    assert simulation.runFailed(tmp_path, '', 170, Versions.V_601)
+    assert simulation.runFailed(tmp_path, '', 0, Versions.V_707)  # no output.dat
+    (tmp_path / 'output.001.dat').write_text('')
+    assert simulation.runFailed(tmp_path, 'end', 0, Versions.V_707) is None
+
+
+def test_check_arguments():
+    """inel0 = 2 or 3 is only allowed for the KrC potential"""
+
+    from Containers.Arguments import ArgumentValues, GeneralArguments, RowArguments, GeneralTargetArguments, GeneralBeamArguments
+    from Simulations.SDTrimSP import SimulationInput
+
+    class Arguments:
+        def __init__(self, ipot, inel0):
+            self.settings = GeneralArguments(title='', mode=None, fluence=1, interaction_potential=ipot)
+            row = RowArguments(index=1, symbol='Ar', element=None, abundance=1, max_atomic_fraction=1, energy=1, angle=0, inelastic_loss_model=inel0)
+            self.beam_rows = [row]
+            self.target_rows = []
+            self.target_args = GeneralTargetArguments(thickness=100, segments=10)
+            self.crystal_args = None
+            self.structure = []
+            self.beam_args = GeneralBeamArguments()
+
+    simulation = SimulationInput()
+    model = ArgumentValues.InelasticLossModel
+    potential = ArgumentValues.InteractionPotential
+    assert not simulation.checkArguments(Arguments(potential.KRC, model.LINDHARD_SCHARFF_AND_OEN_ROBINSON), Versions.V_707)
+    assert simulation.checkArguments(Arguments(potential.ZBL, model.LINDHARD_SCHARFF_AND_OEN_ROBINSON), Versions.V_707)
+    assert not simulation.checkArguments(Arguments(potential.ZBL, model.LINDHARD_SCHARFF), Versions.V_707)

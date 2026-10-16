@@ -1,7 +1,7 @@
 from typing import List
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint
+from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint, QTimer
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
@@ -43,7 +43,6 @@ class MainWindow(QMainWindow):
         QCoreApplication.setApplicationName(GlobalConf.title)
 
         self.window_title = GlobalConf.title
-        self.theme_before_srim = 'system'
 
         #
         # MENU BAR
@@ -140,11 +139,6 @@ class MainWindow(QMainWindow):
         self.action_manual = self.menu_help.addAction(getIcon('help'), 'Quick Manual')
         self.action_manual.triggered.connect(lambda: ManualDialog(self).show())
 
-        self.menu_help.addSeparator()
-
-        # SRIM Mode (easter egg, also selectable as theme in the preferences)
-        self.action_srim = self.menu_help.addAction('Enable SRIM Mode')
-        self.action_srim.triggered.connect(lambda: self.toggleSrimMode())
 
         self.menu_help.addSeparator()
 
@@ -169,10 +163,9 @@ class MainWindow(QMainWindow):
         self.addSimulationTab(self.simulation_configuration_page, 'Configurations')
         self.simulation_configuration_page.open(default=True)
 
-        # apply the theme from the preferences
-        if GlobalConf.theme == 'srim':
-            self.theme_before_srim = 'system'
+        # apply the theme from the preferences, also react to theme changes of the operating system
         self.applyTheme()
+        self.app.styleHints().colorSchemeChanged.connect(lambda _: QTimer.singleShot(0, self.refreshStyleSheets))
 
         #
         # STATUS BAR
@@ -489,17 +482,6 @@ class MainWindow(QMainWindow):
             )
             dialog.open()
 
-    def toggleSrimMode(self):
-        """Toggles SRIM Mode"""
-
-        if GlobalConf.theme == 'srim':
-            GlobalConf.theme = self.theme_before_srim
-        else:
-            self.theme_before_srim = GlobalConf.theme
-            GlobalConf.theme = 'srim'
-        GlobalConf.setValue(GlobalConf.theme_name, GlobalConf.theme)
-        self.applyTheme()
-
     def applyTheme(self):
         """Applies the theme selected in GlobalConf.theme (system, light, dark or srim)"""
 
@@ -515,14 +497,24 @@ class MainWindow(QMainWindow):
             self.app.setWindowIcon(QIcon(':/icons/tu_logo_loco.png'))
             self.setStyleSheet('background: url(:/icons/clouds.png) repeat center center fixed; background-color: #2db9ff;')
             self.window_title = 'BCA-SRIM'
-            self.action_srim.setText('Disable SRIM Mode')
         else:
             self.app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
             self.setStyleSheet('')
             self.window_title = GlobalConf.title
-            self.action_srim.setText('Enable SRIM Mode')
 
         self.writeWindowTitleTab(self.tab_simulations.currentIndex())
+        QTimer.singleShot(0, self.refreshStyleSheets)
+
+    def refreshStyleSheets(self):
+        """
+        Widgets with a style sheet (and their children) keep the palette of the time the style sheet was set.
+        Setting the style sheets again updates them to the current palette after a theme change.
+        """
+
+        for widget in self.app.allWidgets():
+            style_sheet = widget.styleSheet()
+            if style_sheet:
+                widget.setStyleSheet(style_sheet)
 
     def closeEvent(self, event: QCloseEvent):
         """

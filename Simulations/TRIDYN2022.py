@@ -6295,7 +6295,7 @@ class SimulationAnalysis(SimulationsAnalysis):
              start_cosines,
              start_coordinates) = plot_data
 
-            hist, bin_edges = np.histogram(energy, bins=int(np.max(energy) / 0.2))
+            hist, bin_edges = np.histogram(energy, bins=max(1, int(np.max(energy) / 0.2)))
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
             mpl_settings.axes.plot(bin_edges_new,

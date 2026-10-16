@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Optional
+from typing import List, Union, Tuple, Optional, Dict
 from itertools import zip_longest
 from pathlib import Path
 from re import findall, sub
@@ -8,10 +8,10 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QLabel, QSlider
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox
 
 from Utility.Layouts import (
-    MplCanvas, InputHBoxLayout, VBoxTitleLayout,
+    MplCanvas, InputHBoxLayout, InputHBoxLayouts, VBoxTitleLayout,
     setWidgetBackground, ListWidget, ListWidgetItem,
     SpinBox, DoubleSpinBox, SpinBoxRange, ComboBox, LineEdit
 )
@@ -21,6 +21,10 @@ from Utility.Dialogs import DownloadDialog
 
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
+from Utility.Icons import getIcon
+from TableWidgets.DistributionEditor import (
+    DistributionDialog, readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile
+)
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Arguments import (
@@ -30,6 +34,7 @@ from Containers.Arguments import (
 from Containers.Element import Element, Elements
 from Containers.Compound import Compound
 from Containers.Crystal import MillerIndex, BasisVector, Coordinate
+from Containers.CrystalTableFile import CrystalTableFile, CrystalTableError
 from Containers.Particle import Particle
 
 from Simulations.Simulations import (
@@ -43,9 +48,10 @@ class Versions:
     V_609 = '6.09'
     V_700 = '7.00, 7.01'  # introduction of crystal input files
     V_702 = '7.02, 7.05'  # introduction of global crystal files
+    V_707 = '7.07'  # file of tabulated stopping power must be selected (tbsp_binary, tbsp_ascii)
 
     # versions in chronological order
-    ORDER = [V_601, V_609, V_700, V_702]
+    ORDER = [V_601, V_609, V_700, V_702, V_707]
 
     @staticmethod
     def atLeast(version: str, minimum: str) -> bool:
@@ -59,6 +65,157 @@ class Versions:
         if version not in Versions.ORDER or minimum not in Versions.ORDER:
             return False
         return Versions.ORDER.index(version) >= Versions.ORDER.index(minimum)
+
+
+class CrystalTableLimits:
+    """
+    Limits of the crystal table "tables/table.crystal" of SDTrimSP (since version 7.02)
+
+    :param version: version of simulation
+    """
+
+    # maximum number of crystal structures (tableread.F90: max_struc)
+    max_structures = 10
+    # maximum number of atoms in the unit cell (work.F90: max_atoms)
+    max_atoms = 8
+    # maximum length of the name of a crystal (tableread.F90: character(len=10) name_cryst)
+    max_name_length = 10
+    # tolerance for comparing relative coordinates of atoms
+    coord_tolerance = 1e-4
+
+    def __init__(self, version: str = ''):
+        self.version = version
+
+    # maximum number of crystals in the target (l_crystal1, l_crystal2, l_crystal3)
+    max_crystals = 3
+
+
+def tableCrystals(crystal_args: Optional[GeneralCrystalArguments]) -> List[dict]:
+    """
+    Returns the crystals from table.crystal that are used in the target (since 7.02) as list of {'name': str, 'miller': list}
+
+    :param crystal_args: <GeneralCrystalArguments> container
+    """
+
+    if crystal_args is None:
+        return []
+    crystals = crystal_args.get('crystals')
+    if isinstance(crystals, list) and crystals:
+        return [
+            {'name': str(crystal.get('name', '')), 'miller': list(crystal.get('miller', [0, 0, 0]))}
+            for crystal in crystals[:CrystalTableLimits.max_crystals] if isinstance(crystal, dict)
+        ]
+    return [{'name': crystal_args.name, 'miller': list(crystal_args.miller_ind)}]
+
+
+def crystalLayers(arguments: SimulationArguments) -> List[dict]:
+    """
+    Returns for each layer of the target structure the fractions of the crystals and the miller index as list of
+    {'fractions': list, 'miller': list}. Layers without information consist completely of the first crystal
+
+    :param arguments: <SimulationArguments> container
+    """
+
+    crystals = tableCrystals(arguments.crystal_args)
+    result = []
+    for structure in arguments.structure:
+        fractions = structure.get('crystal_fractions')
+        fractions = [float(f) for f in fractions][:len(crystals)] if isinstance(fractions, list) else [1.0]
+        fractions += [0.0] * (len(crystals) - len(fractions))
+        miller = structure.get('miller')
+        if not isinstance(miller, list) or len(miller) != 3:
+            miller = crystals[0]['miller'] if crystals else [0, 0, 0]
+        result.append({'fractions': fractions, 'miller': list(miller)})
+    return result
+
+
+def speciesList(arguments: SimulationArguments, group_elements: bool) -> List[Tuple[str, bool]]:
+    """
+    Returns the species in the order of the input file as list of (symbol, is projectile)
+
+    :param arguments: <SimulationArguments> container
+    :param group_elements: elements of beam and target are grouped
+    """
+
+    if group_elements:
+        beam_rows = sorted([row for row in arguments.beam_rows if row.symbol])
+        target_rows = sorted([row for row in arguments.target_rows if row.symbol])
+        species = []
+        used = []
+        for target_row in target_rows:
+            beam_row = next((row for row in beam_rows if row.symbol == target_row.symbol), None)
+            if beam_row is not None:
+                used.append(beam_row)
+            species.append((target_row.symbol, beam_row is not None and beam_row.abundance > 0))
+        for beam_row in beam_rows:
+            if beam_row not in used:
+                species.append((beam_row.symbol, beam_row.abundance > 0))
+        return species
+
+    rows = sorted([row for row in arguments.beam_rows + arguments.target_rows if row.symbol])
+    return [(row.symbol, row in arguments.beam_rows and row.abundance > 0) for row in rows]
+
+
+def distributionFileNames(arguments: SimulationArguments, version: str, group_elements: bool) -> Dict[str, List[Tuple[str, str]]]:
+    """
+    Returns the names of the files of the energy and angle distributions as
+    {'energy': [(symbol, file name)], 'angle': [(symbol or 'all', file name)], 'energy_angle': [('all', 'ene_ang.inp')]}.
+    The files depend on the selected modes (case_e0 = 1 or 6, case_alpha = 4) and the version:
+    since 7.00 energy.inp, energy02.inp, ... for each species of the beam (number of the species),
+    before energy.inp and energy2.inp for the first and second projectile;
+    since 7.05 angle.inp, angle02.inp, ... for each species of the beam, before one angle.inp for all projectiles
+    (7.02 and 7.05 share the settings, therefore angle.inp is additionally written with the first projectile for 7.02)
+
+    :param arguments: <SimulationArguments> container
+    :param version: version of simulation
+    :param group_elements: elements of beam and target are grouped
+    """
+
+    case_e0 = arguments.beam_args.kinetic_energy_mode
+    case_alpha = arguments.beam_args.angle_mode
+    species = speciesList(arguments, group_elements)
+    projectiles = [(index, symbol) for index, (symbol, beam) in enumerate(species, start=1) if beam]
+
+    def numbered(name: str, index: int) -> str:
+        return f'{name}.inp' if index == 1 else f'{name}{index:02d}.inp'
+
+    result = {'energy': [], 'angle': [], 'energy_angle': []}
+    if case_e0 == ArgumentValues.KineticEnergy.FILE:
+        if Versions.atLeast(version, Versions.V_700):
+            result['energy'] = [(symbol, numbered('energy', index)) for index, symbol in projectiles]
+        else:
+            result['energy'] = [(symbol, name) for (_, symbol), name in zip(projectiles, ['energy.inp', 'energy2.inp'])]
+    if case_alpha == ArgumentValues.Angle.FILE:
+        if Versions.atLeast(version, Versions.V_702):
+            result['angle'] = [(symbol, numbered('angle', index)) for index, symbol in projectiles]
+            if version == Versions.V_702 and projectiles and all(name != 'angle.inp' for _, name in result['angle']):
+                result['angle'].append((projectiles[0][1], 'angle.inp'))
+        else:
+            result['angle'] = [('all', 'angle.inp')]
+    if case_e0 == ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE:
+        result['energy_angle'] = [('all', 'ene_ang.inp')]
+    return result
+
+
+def usesCrystalLayerFile(arguments: SimulationArguments, version: str) -> bool:
+    """
+    Returns True if crystals from table.crystal (since 7.02) are used in a way that needs the layer file layer.inp:
+    more than one crystal, more than one layer or a layer that is not completely crystalline
+
+    :param arguments: <SimulationArguments> container
+    :param version: version of simulation
+    """
+
+    if not DefaultValues(version).crystal_table or not arguments.target_args.get('crystal_flag', False):
+        return False
+    crystal_args = arguments.crystal_args
+    if crystal_args is None:
+        return False
+    crystals = tableCrystals(crystal_args)
+    layers = crystalLayers(arguments)
+    if len(crystals) > 1 or len(layers) > 1:
+        return True
+    return any(abs(fraction - 1) > 1e-9 for layer in layers for fraction in layer['fractions'])
 
 
 class DefaultValues(GeneralDefaultValues):
@@ -111,6 +268,32 @@ class DefaultValues(GeneralDefaultValues):
     l_two_comp2 = False
     l_two_comp3 = False
 
+    # tabulated stopping power file (since 7.07): 'binary' (tbsp.db) or 'ascii' (tbsp.ascii)
+    tbsp_format = 'binary'
+
+    # further parameters of beam and elements (-1: value from the tables or default of SDTrimSP)
+    shth = 0.
+    beta0 = 0.
+    x0 = 0.
+    charge = 0.
+    e_cutoff = -1.
+    e_bulkb = -1.
+    deltahf = -1.
+    isot = 0
+    ck_elec = 1.
+
+    # further settings
+    irand = 1
+    sfin = 0
+    ltraj_p = False
+    ltraj_r = False
+    numb_hist = 20
+    lenergy_distr = False
+    dist_nx = 60
+    dist_ny = 60
+    dist_nz = 60
+    dist_delta = 2.0
+
     # general crystal settings
     crystal_name = 'MyLittleCrystal'
     lattice_id = 1
@@ -145,6 +328,18 @@ class DefaultValues(GeneralDefaultValues):
 
         # since 7.02 crystals are selected from tables/table.crystal and crystal.inp is not used anymore
         self.crystal_table = Versions.atLeast(version, Versions.V_702)
+
+        # since 7.07 the file of the tabulated stopping power (inel0=8) must be selected
+        self.tbsp_file_selection = Versions.atLeast(version, Versions.V_707)
+
+        # parameters that are not available in all versions
+        self.supports_beta0 = Versions.atLeast(version, Versions.V_700)  # azimuthal angle
+        self.supports_x0 = Versions.atLeast(version, Versions.V_609)  # starting depth (not in 6.06)
+        self.supports_deltahf = Versions.atLeast(version, Versions.V_609)  # heat of formation per element (scalar before)
+        # case_e0 = 6 (ene_ang.inp) is not implemented in 7.00 - 7.02 (7.02 shares the settings with 7.05, see SimulationInput.supportsEnergyAngleFile)
+        self.supports_energy_angle_file = not Versions.atLeast(version, Versions.V_700) or Versions.atLeast(version, Versions.V_702)
+        # sfin = 1 crashes the Windows binaries of 7.00 - 7.07 with an access violation (also without other changes)
+        self.supports_sfin = not Versions.atLeast(version, Versions.V_700)
 
 
 class DictLookup:
@@ -275,7 +470,7 @@ class HlBeamSettings(HlGeneralBeamSettings):
                 ArgumentValues.KineticEnergy.SWEEP,
                 ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE
             ],
-            disabled_list=[4]
+            disabled_list=[4] if self.default_values.supports_energy_angle_file else [4, 6]
         )
         self.layout_kinetic_energy = InputHBoxLayout(
             'Kinetic energy [eV]:',
@@ -345,10 +540,73 @@ class HlBeamSettings(HlGeneralBeamSettings):
         )
         self.sweep.valueChanged.connect(lambda _: self.edited())
         self.addLayout(self.layout_sweep)
+
+        # distributions of energies and angles from files
+        self.distributions = {}
+        self.projectiles = lambda: []  # set by the page: symbols of the projectiles
+        self.distribution_button = QPushButton(getIcon('file'), ' Distributions...')
+        self.distribution_button.setAutoDefault(False)
+        self.distribution_button.setToolTip(
+            'Define the distributions of energies and/or angles of the projectiles.<br>'
+            'They are written to <i>energy.inp</i>, <i>angle.inp</i> or <i>ene_ang.inp</i> when the settings are saved'
+        )
+        self.distribution_button.clicked.connect(self.editDistributions)
+        self.distribution_button.setHidden(True)
+        self.addWidget(self.distribution_button)
+
+        # sheath potential (Maxwellian distributions)
+        self.sheath_potential = DoubleSpinBox(default=self.default_values.shth, input_range=(0, 1e6), step_size=0.1)
+        self.layout_sheath_potential = InputHBoxLayout(
+            'Sheath potential [eV]:',
+            self.sheath_potential,
+            tooltip='<i>shth</i><br>Sheath potential (in [eV]) for Maxwellian distributions (plasma), usually 3·|e0|. '
+                    'Must be larger than 0. The charge of the projectiles is set in the beam composition',
+            hidden=True
+        )
+        self.sheath_potential.valueChanged.connect(lambda _: self.edited())
+        self.addLayout(self.layout_sheath_potential)
         self.addStretch(1)
 
         self.changedEnergy()
         self.changedAngle()
+
+    def usedDistributions(self) -> Tuple[bool, bool, bool]:
+        """Returns if distributions of energies, angles and of energies and angles are read from files"""
+
+        case_e0 = self.kinetic_energy.getValue(save=True)
+        case_alpha = self.angle.getValue(save=True)
+        return (
+            case_e0 == ArgumentValues.KineticEnergy.FILE,
+            case_alpha == ArgumentValues.Angle.FILE,
+            case_e0 == ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE
+        )
+
+    def updateDistributionButton(self):
+        """Shows the button for the distributions if a file mode is selected"""
+
+        self.distribution_button.setHidden(not any(self.usedDistributions()))
+
+    def editDistributions(self):
+        """Opens the dialog to edit the distributions of energies and angles"""
+
+        energy, angle, energy_angle = self.usedDistributions()
+        projectiles = [symbol for symbol in self.projectiles() if symbol]
+        if (energy or angle) and not projectiles:
+            QMessageBox.warning(self.distribution_button, 'Warning!', 'Define the elements of the beam first')
+            return
+        dialog = DistributionDialog(
+            self.distribution_button,
+            projectiles,
+            self.distributions,
+            energy,
+            angle,
+            energy_angle,
+            angle_per_projectile=Versions.atLeast(self.version, Versions.V_702),
+            legacy_energy_angle=not Versions.atLeast(self.version, Versions.V_707)
+        )
+        if dialog.exec():
+            self.distributions = dialog.result()
+            self.edited()
 
     def changedEnergy(self):
         """
@@ -360,6 +618,14 @@ class HlBeamSettings(HlGeneralBeamSettings):
         case_e0 = self.kinetic_energy.getValue(save=True)
         case_alpha = self.angle.getValue(save=True)
         self.layout_angle.setEnabled(True)
+
+        self.updateDistributionButton()
+
+        # the sheath potential is needed for Maxwellian distributions
+        self.layout_sheath_potential.setHidden(case_e0 not in [
+            ArgumentValues.KineticEnergy.MAXWELLIAN_VELOCITY_DISTRIBUTION,
+            ArgumentValues.KineticEnergy.MAXWELLIAN_ENERGY_DISTRIBUTION
+        ])
 
         changes = case_e0 != self.energy_previous
         if changes:
@@ -410,6 +676,8 @@ class HlBeamSettings(HlGeneralBeamSettings):
         Synchronises and enables/disables energy mode if needed
         Popup for angle sweep
         """
+
+        self.updateDistributionButton()
 
         case_e0 = self.kinetic_energy.getValue(save=True)
         case_alpha = self.angle.getValue(save=True)
@@ -467,6 +735,8 @@ class HlBeamSettings(HlGeneralBeamSettings):
         self.layout_kinetic_energy.reset()
         self.layout_angle.reset()
         self.layout_sweep.reset()
+        self.layout_sheath_potential.reset()
+        self.distributions = {}
 
         self.changedEnergy()
         self.changedAngle()
@@ -477,7 +747,9 @@ class HlBeamSettings(HlGeneralBeamSettings):
         return GeneralBeamArguments(
             kinetic_energy_mode=self.kinetic_energy.getValue(save=True),  # case_e0
             angle_mode=self.angle.getValue(save=True),  # case_alpha
-            sweep=self.sweep.value()  # number_calc
+            sweep=self.sweep.value(),  # number_calc
+            sheath_potential=self.sheath_potential.value(),  # shth
+            distributions=self.distributions  # energy.inp, angle.inp, ene_ang.inp
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
@@ -530,6 +802,14 @@ class HlBeamSettings(HlGeneralBeamSettings):
             self.layout_sweep.mark()
             not_loadable.append('Number of sweeps')
         self.sweep.setValue(number_calc)
+
+        # distributions of energies and angles
+        distributions = beam_args.get('distributions')
+        self.distributions = distributions if isinstance(distributions, dict) else {}
+
+        # sheath potential
+        shth = beam_args.get('sheath_potential')
+        self.sheath_potential.setValue(float(shth) if isinstance(shth, (int, float)) else self.default_values.shth)
 
         self.changedEnergy()
         self.changedAngle()
@@ -1061,6 +1341,101 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         self.layout_matrix_files.checkbox.clicked.connect(lambda _: self.edited())
         self.addLayout(self.layout_matrix_files)
 
+        # trajectories
+        self.layout_trajectories_p = InputHBoxLayout(
+            'Projectile trajectories',
+            None,
+            checkbox=self.default_values.ltraj_p,
+            tooltip='<i>ltraj_p</i><br>Write the trajectories of projectiles to output files'
+        )
+        self.layout_trajectories_r = InputHBoxLayout(
+            'Recoil trajectories',
+            None,
+            checkbox=self.default_values.ltraj_r,
+            tooltip='<i>ltraj_r</i><br>Write the trajectories of recoils to output files'
+        )
+        self.trajectories_number = SpinBox(default=self.default_values.numb_hist, input_range=(1, 1e6))
+        self.layout_trajectories_number = InputHBoxLayout(
+            'Traced trajectories:',
+            self.trajectories_number,
+            tooltip='<i>numb_hist</i><br>Number of traced trajectories of projectiles and recoils'
+        )
+        for layout in (self.layout_trajectories_p, self.layout_trajectories_r):
+            layout.checkbox.clicked.connect(lambda _: self.changedOutputs())
+            self.addLayout(layout)
+        self.trajectories_number.valueChanged.connect(lambda _: self.edited())
+        self.addLayout(self.layout_trajectories_number)
+
+        # energy distribution in the target
+        self.layout_energy_distribution = InputHBoxLayout(
+            'Energy distribution in the target',
+            None,
+            checkbox=self.default_values.lenergy_distr,
+            tooltip='<i>lenergy_distr</i><br>Write the distribution of stopped energy, electronic and nuclear losses in the target (E_distr_*.dat)'
+        )
+        self.layout_energy_distribution.checkbox.clicked.connect(lambda _: self.changedOutputs())
+        self.addLayout(self.layout_energy_distribution)
+
+        self.distribution_grid = [
+            SpinBox(default=self.default_values.dist_nx, input_range=(1, 1e4)),
+            SpinBox(default=self.default_values.dist_ny, input_range=(1, 1e4)),
+            SpinBox(default=self.default_values.dist_nz, input_range=(1, 1e4)),
+            DoubleSpinBox(default=self.default_values.dist_delta, input_range=(1e-3, 1e4), step_size=0.1)
+        ]
+        self.layout_distribution_grid = InputHBoxLayouts(
+            'Grid:',
+            self.distribution_grid,
+            split=0,
+            tooltip='<i>dist_nx, dist_ny, dist_nz, dist_delta</i><br>Size of the matrix of the energy distribution and distance (in [Å]) of its points',
+            widgets_labels=['nx', 'ny', 'nz', 'Δ [Å]']
+        )
+        for widget in self.distribution_grid:
+            widget.valueChanged.connect(lambda _: self.edited())
+        self.addLayout(self.layout_distribution_grid)
+
+        # other settings
+        self.random_seed = SpinBox(default=self.default_values.irand, input_range=(1, 2147483647))
+        self.layout_random_seed = InputHBoxLayout(
+            'Random seed:',
+            self.random_seed,
+            tooltip='<i>irand</i><br>Random seed of the simulation'
+        )
+        self.random_seed.valueChanged.connect(lambda _: self.edited())
+        self.addLayout(self.layout_random_seed)
+
+        self.layout_inelastic_outside = InputHBoxLayout(
+            'Inelastic energy loss outside the surface',
+            None,
+            checkbox=bool(self.default_values.sfin),
+            tooltip='<i>sfin</i><br>Inelastic energy loss also outside the target surface (between surface potential and surface)'
+        )
+        self.layout_inelastic_outside.checkbox.clicked.connect(lambda _: self.edited())
+        if not self.default_values.supports_sfin:
+            self.layout_inelastic_outside.checkbox.setEnabled(False)
+            self.layout_inelastic_outside.checkbox.setToolTip(
+                '<i>sfin</i><br>Inelastic energy loss also outside the target surface.<br>'
+                '<b>Disabled for SDTrimSP 7.00 and newer: sfin = 1 lets the simulation crash (access violation)</b>'
+            )
+        self.addLayout(self.layout_inelastic_outside)
+
+        # file of tabulated stopping power (since 7.07)
+        self.tbsp_format = None
+        self.layout_tbsp_format = None
+        if self.default_values.tbsp_file_selection:
+            self.tbsp_format = ComboBox(
+                default=0,
+                entries=['tbsp.db (binary)', 'tbsp.ascii (text)'],
+                entries_save=['binary', 'ascii'],
+                label_default=True
+            )
+            self.layout_tbsp_format = InputHBoxLayout(
+                'Tabulated stopping power file:',
+                self.tbsp_format,
+                tooltip='<i>tbsp_binary, tbsp_ascii</i><br>File in the tables-directory that is used for the tabulated stopping power (inelastic loss model 8)'
+            )
+            self.tbsp_format.currentIndexChanged.connect(lambda _: self.edited())
+            self.addLayout(self.layout_tbsp_format)
+
         self.changedPotential()
         self.changedMode()
         self.changedGroupElements()
@@ -1137,9 +1512,24 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         self.layout_reflected.reset()
         self.layout_sputtered.reset()
         self.layout_matrix_files.reset()
+        if self.layout_tbsp_format is not None:
+            self.layout_tbsp_format.reset()
+        for layout in (self.layout_trajectories_p, self.layout_trajectories_r, self.layout_trajectories_number,
+                       self.layout_energy_distribution, self.layout_distribution_grid, self.layout_random_seed, self.layout_inelastic_outside):
+            layout.reset()
+        self.changedOutputs()
 
         self.changedPotential()
         self.changedMode()
+
+    def changedOutputs(self):
+        """Enables the number of trajectories and the grid of the energy distribution if they are used"""
+
+        self.layout_trajectories_number.setEnabled(
+            self.layout_trajectories_p.checkbox.isChecked() or self.layout_trajectories_r.checkbox.isChecked()
+        )
+        self.layout_distribution_grid.setEnabled(self.layout_energy_distribution.checkbox.isChecked())
+        self.edited()
 
     def getArguments(self) -> GeneralArguments:
         """Returns <GeneralArguments> container of parameters for general simulation settings"""
@@ -1157,7 +1547,15 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             group_elements=self.layout_group_elements.checkbox.isChecked(),
             log_reflected=self.layout_reflected.checkbox.isChecked(),  # lparticle_p
             log_sputtered=self.layout_sputtered.checkbox.isChecked(),  # lparticle_r
-            log_matrix=self.layout_matrix_files.checkbox.isChecked()  # lmatrices
+            log_matrix=self.layout_matrix_files.checkbox.isChecked(),  # lmatrices
+            tbsp_format=self.tbsp_format.getValue(save=True) if self.tbsp_format is not None else None,  # tbsp_binary, tbsp_ascii
+            trajectories_projectiles=self.layout_trajectories_p.checkbox.isChecked(),  # ltraj_p
+            trajectories_recoils=self.layout_trajectories_r.checkbox.isChecked(),  # ltraj_r
+            trajectories_number=self.trajectories_number.value(),  # numb_hist
+            energy_distribution=self.layout_energy_distribution.checkbox.isChecked(),  # lenergy_distr
+            distribution_grid=[widget.value() for widget in self.distribution_grid],  # dist_nx, dist_ny, dist_nz, dist_delta
+            random_seed=self.random_seed.value(),  # irand
+            inelastic_outside=self.layout_inelastic_outside.checkbox.isChecked()  # sfin
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
@@ -1276,6 +1674,33 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             lmatrices = self.default_values.lparticle_p
         self.layout_matrix_files.checkbox.setChecked(lmatrices)
 
+        # trajectories, energy distribution, random seed and inelastic loss outside the surface
+        for key, layout, default in [
+            ('trajectories_projectiles', self.layout_trajectories_p, self.default_values.ltraj_p),
+            ('trajectories_recoils', self.layout_trajectories_r, self.default_values.ltraj_r),
+            ('energy_distribution', self.layout_energy_distribution, self.default_values.lenergy_distr),
+            ('inelastic_outside', self.layout_inelastic_outside, bool(self.default_values.sfin))
+        ]:
+            value = settings.get(key)
+            layout.checkbox.setChecked(value if isinstance(value, bool) else default)
+        numb_hist = settings.get('trajectories_number')
+        self.trajectories_number.setValue(numb_hist if isinstance(numb_hist, int) else self.default_values.numb_hist)
+        grid = settings.get('distribution_grid')
+        defaults = [self.default_values.dist_nx, self.default_values.dist_ny, self.default_values.dist_nz, self.default_values.dist_delta]
+        if not isinstance(grid, list) or len(grid) != 4:
+            grid = defaults
+        for widget, value in zip(self.distribution_grid, grid):
+            widget.setValue(value)
+        irand = settings.get('random_seed')
+        self.random_seed.setValue(irand if isinstance(irand, int) else self.default_values.irand)
+        self.changedOutputs()
+
+        if self.tbsp_format is not None:
+            tbsp_format = settings.get('tbsp_format')
+            if tbsp_format not in ('binary', 'ascii'):
+                tbsp_format = self.default_values.tbsp_format
+            self.tbsp_format.setValue(tbsp_format, from_entries_save=True)
+
         self.changedPotential()
         self.changedMode()
 
@@ -1349,6 +1774,24 @@ class CompRowBeamSettings(CompRow):
             synced=False
         ),
         CustomRowField(
+            unique='beta0',
+            label='Azimuth [°]',
+            tooltip='<i>beta0</i><br>The azimuthal angle (β) of incidence of the incoming ions in degrees (since SDTrimSP 7.00).',
+            synced=False
+        ),
+        CustomRowField(
+            unique='x0',
+            label='Start depth [Å]',
+            tooltip='<i>x0</i><br>Starting position of the projectiles: ≤ 0 outside the surface, > 0 inside the solid (not in SDTrimSP 6.06).',
+            synced=False
+        ),
+        CustomRowField(
+            unique='charge',
+            label='Charge',
+            tooltip='<i>charge</i><br>Charge of the projectiles, used with the sheath potential (shth) for Maxwellian distributions.',
+            synced=False
+        ),
+        CustomRowField(
             unique='qumax',
             label='Max conc.',
             tooltip='<i>qumax</i><br>The maximum allowed concentration of each element in the target (only dynamic calculations).' + syncHint
@@ -1381,6 +1824,31 @@ class CompRowBeamSettings(CompRow):
             unique='inel0',
             label='Inelastic loss model',
             tooltip='<i>inel0</i><br>The inelastic loss model used for calculations.' + syncHint
+        ),
+        CustomRowField(
+            unique='ck_elec',
+            label='Inel. correction',
+            tooltip='<i>ck_elec</i><br>Correction factor for the inelastic energy loss of this element as moving particle (default 1).' + syncHint
+        ),
+        CustomRowField(
+            unique='e_cutoff',
+            label='Cutoff energy [eV]',
+            tooltip='<i>e_cutoff</i><br>Cutoff energy (in [eV]) below which particles are stopped.<br>-1: default of SDTrimSP (from the tables).' + syncHint
+        ),
+        CustomRowField(
+            unique='e_bulkb',
+            label='Bulk bind. energy [eV]',
+            tooltip='<i>e_bulkb</i><br>Bulk binding energy (in [eV]) that is subtracted from the transferred energy.<br>-1: value from the tables.' + syncHint
+        ),
+        CustomRowField(
+            unique='deltahf',
+            label='Heat of formation [eV]',
+            tooltip='<i>deltahf</i><br>Heat of formation (in [eV]) of a molecular target (since SDTrimSP 6.09 per element).<br>-1: value from table.compound.' + syncHint
+        ),
+        CustomRowField(
+            unique='isot',
+            label='Isotopes',
+            tooltip='<i>isot</i><br>natural: mass of the natural isotope mixture (table1)<br>isotopes: isotope masses and natural abundances (table2)' + syncHint
         )
     ]
 
@@ -1389,7 +1857,7 @@ class CompRowBeamSettings(CompRow):
         self.version = version
         self.default_values = DefaultValues(self.version)
         self.dict_lookup = DictLookup(self.version)
-        self.max_concentration_field = self.rowFields[3]
+        self.max_concentration_field = self.rowFields[6]
 
         # abundances
         self.abundance = DoubleSpinBox(
@@ -1511,7 +1979,7 @@ class CompRowBeamSettings(CompRow):
             self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.TABULATED)
             self.inelastic_loss_model_tooltips.append(
                 'Manually tabulated stopping power from database "tbsp.db" in the tables-directory.\n'
-                'For SDTrimSP >= 7.07 add "tbsp_binary = .true." (or "tbsp_ascii = .true." for "tbsp.ascii") to the additional settings'
+                'Since SDTrimSP 7.07 the file (tbsp.db or tbsp.ascii) is selected in the simulation settings'
             )
 
         self.inelastic_loss_model = ComboBox(
@@ -1526,16 +1994,43 @@ class CompRowBeamSettings(CompRow):
         self.inelastic_loss_model.currentIndexChanged.connect(self.contentChanged.emit)
         self.inelastic_loss_model.mouseReleaseEvent = lambda _: setWidgetBackground(self.inelastic_loss_model, False)
 
+        # azimuthal angle, starting depth and charge of projectiles
+        self.azimuth = DoubleSpinBox(default=self.default_values.beta0, input_range=(-360, 360), step_size=0.01)
+        self.start_depth = DoubleSpinBox(default=self.default_values.x0, input_range=(-1e6, 1e6), step_size=0.01)
+        self.charge = DoubleSpinBox(default=self.default_values.charge, input_range=(0, 100), step_size=1)
+        self.azimuth.setEnabled(self.default_values.supports_beta0)
+        self.start_depth.setEnabled(self.default_values.supports_x0)
+
+        # element parameters (-1: value from the tables)
+        self.inelastic_correction = DoubleSpinBox(default=self.default_values.ck_elec, input_range=(0, 1e3), decimals=4)
+        self.cutoff_energy = DoubleSpinBox(default=self.default_values.e_cutoff, input_range=(-1, 1e6), decimals=4)
+        self.bulk_binding_energy = DoubleSpinBox(default=self.default_values.e_bulkb, input_range=(-1, 1e6), decimals=4)
+        self.heat_of_formation = DoubleSpinBox(default=self.default_values.deltahf, input_range=(-1e3, 1e3), decimals=4)
+        self.heat_of_formation.setEnabled(self.default_values.supports_deltahf)
+        self.isotopes = ComboBox(default=0, entries=['natural', 'isotopes'], entries_save=[0, 1])
+
+        for widget in (self.azimuth, self.start_depth, self.charge, self.inelastic_correction, self.cutoff_energy, self.bulk_binding_energy, self.heat_of_formation):
+            widget.valueChanged.connect(self.contentChanged.emit)
+        self.isotopes.currentIndexChanged.connect(self.contentChanged.emit)
+
         self.row_widgets += [
             self.abundance,
             self.kinetic_energy,
             self.angle,
+            self.azimuth,
+            self.start_depth,
+            self.charge,
             self.maximum_concentration,
             self.atomic_mass,
             self.atomic_density,
             self.surface_binding_energy,
             self.displacement_energy,
-            self.inelastic_loss_model
+            self.inelastic_loss_model,
+            self.inelastic_correction,
+            self.cutoff_energy,
+            self.bulk_binding_energy,
+            self.heat_of_formation,
+            self.isotopes
         ]
 
         self.updateHighlightWidgetValue(self.abundance, 0)
@@ -1632,6 +2127,14 @@ class CompRowBeamSettings(CompRow):
         if enabled and not self.max_concentration_field.enabled:
             self.maximum_concentration.setEnabled(False)
 
+        # parameters that are not supported by the version
+        if not self.default_values.supports_beta0:
+            self.azimuth.setEnabled(False)
+        if not self.default_values.supports_x0:
+            self.start_depth.setEnabled(False)
+        if not self.default_values.supports_deltahf:
+            self.heat_of_formation.setEnabled(False)
+
     def getArguments(self) -> RowArguments:
         """Returns <RowArguments> container of parameters for row"""
 
@@ -1643,7 +2146,15 @@ class CompRowBeamSettings(CompRow):
             energy=self.kinetic_energy.value(),  # e0
             angle=self.angle.value(),  # alpha0
             max_atomic_fraction=self.maximum_concentration.value(),  # qumax
-            inelastic_loss_model=self.inelastic_loss_model.getValue(save=True)  # inel0
+            inelastic_loss_model=self.inelastic_loss_model.getValue(save=True),  # inel0
+            azimuth=self.azimuth.value(),  # beta0
+            start_depth=self.start_depth.value(),  # x0
+            charge=self.charge.value(),  # charge
+            inelastic_correction=self.inelastic_correction.value(),  # ck_elec
+            cutoff_energy=self.cutoff_energy.value(),  # e_cutoff
+            bulk_binding_energy=self.bulk_binding_energy.value(),  # e_bulkb
+            heat_of_formation=self.heat_of_formation.value(),  # deltahf
+            isotopes=self.isotopes.getValue(save=True)  # isot
         )
 
     def setArguments(self, arguments: RowArguments, general_arguments: SimulationArguments):
@@ -1680,6 +2191,21 @@ class CompRowBeamSettings(CompRow):
             alpha0 = self.default_values.alpha0
         self.angle.setValue(alpha0)
 
+        # further parameters (default if not given)
+        for key, widget, default in [
+            ('azimuth', self.azimuth, self.default_values.beta0),
+            ('start_depth', self.start_depth, self.default_values.x0),
+            ('charge', self.charge, self.default_values.charge),
+            ('inelastic_correction', self.inelastic_correction, self.default_values.ck_elec),
+            ('cutoff_energy', self.cutoff_energy, self.default_values.e_cutoff),
+            ('bulk_binding_energy', self.bulk_binding_energy, self.default_values.e_bulkb),
+            ('heat_of_formation', self.heat_of_formation, self.default_values.deltahf)
+        ]:
+            value = arguments.get(key)
+            widget.setValue(float(value) if isinstance(value, (int, float)) else default)
+        isot = arguments.get('isotopes')
+        self.isotopes.setValue(isot if isot in (0, 1) else self.default_values.isot, from_entries_save=True)
+
         # inelastic loss model
         inel0 = arguments.get('inelastic_loss_model')
         if inel0 not in self.dict_lookup.inel0:
@@ -1715,11 +2241,11 @@ class CompRowTargetSettings(CompRowBeamSettings):
     :param version: version of simulation
     """
 
-    rowFields = CompRowBeamSettings.rowFields[3:]
+    rowFields = CompRowBeamSettings.rowFields[6:]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.row_widgets = self.row_widgets[0:3] + self.row_widgets[6:]
+        self.row_widgets = self.row_widgets[0:3] + self.row_widgets[9:]
 
     def receive(self, value_dict: dict):
         """Receives other settingsChanged pyqtSignal -> dict"""
@@ -1874,6 +2400,7 @@ class SimulationInput(SimulationsInput):
         Versions.V_609,
         Versions.V_700,
         Versions.V_702,
+        Versions.V_707,
     ]
     Description = '''
 SDTrimSP is designed for atomic collisions in amorphous
@@ -2046,6 +2573,7 @@ Andreas Mutzke
 
         # default values
         self.default_values = DefaultValues(version)
+        self.simulation_folder = folder
 
         # get compounds
         # open compound file and read contents
@@ -2475,6 +3003,43 @@ Andreas Mutzke
         dns0 = [f'{e}' for e in dns0]
         a_mass = [f'{e}' for e in a_mass]
 
+        def speciesValues(key: str, default, beam_only: bool = False) -> list:
+            """Returns the value of a row parameter for all species (in the order of symbol)"""
+
+            values = []
+            if group_elements:
+                for beam_row_i, target_row_i in grouped_rows:
+                    row_i = beam_row_i if (beam_only or target_row_i is None) else target_row_i
+                    value_i = row_i.get(key) if row_i is not None else None
+                    values.append(default if value_i is None else value_i)
+            else:
+                for row_i in rows:
+                    value_i = row_i.get(key) if (not beam_only or row_i in arguments.beam_rows) else None
+                    values.append(default if value_i is None else value_i)
+            return values
+
+        # further parameters of the species, only written if they differ from the defaults
+        species_settings = ''
+        species_parameters = [
+            ('beta0', 'azimuth', default_values.beta0, True, default_values.supports_beta0),
+            ('x0', 'start_depth', default_values.x0, True, default_values.supports_x0),
+            ('charge', 'charge', default_values.charge, True, True),
+            ('e_cutoff', 'cutoff_energy', default_values.e_cutoff, False, True),
+            ('e_bulkb', 'bulk_binding_energy', default_values.e_bulkb, False, True),
+            ('deltahf', 'heat_of_formation', default_values.deltahf, False, default_values.supports_deltahf),
+            ('isot', 'isotopes', default_values.isot, False, True),
+        ]
+        for name, key, default, beam_only, supported in species_parameters:
+            values = speciesValues(key, default, beam_only)
+            if supported and any(value != default for value in values):
+                species_settings += f'    {name} = ' + ', '.join(f'{value}' for value in values) + '\n'
+
+        # correction of the inelastic energy loss of species i (moving particle) in all species j: ck_elec(i, j)
+        ck_elec = speciesValues('inelastic_correction', default_values.ck_elec)
+        if any(value != default_values.ck_elec for value in ck_elec):
+            # column major order of the matrix ck_elec(ncp, ncp)
+            species_settings += '    ck_elec = ' + ', '.join(f'{ck_elec[i]}' for _ in ck_elec for i in range(len(ck_elec))) + '\n'
+
         modifications = ''
         if e_surfb_modified:
             modifications += '    e_surfb = ' + ', '.join(e_surfb) + '\n'
@@ -2570,6 +3135,8 @@ Andreas Mutzke
         # --- target ---
 
         iq0 = 1 - len(arguments.structure)
+        if usesCrystalLayerFile(arguments, version):
+            iq0 = -1
 
         if group_elements:
             qu = [1.0 if target_row is not None else 0.0 for _, target_row in grouped_rows]
@@ -2616,13 +3183,18 @@ text = "--- crystal ---"
 '''
             crystal_args = arguments.crystal_args
             if crystal_flag and crystal_args is not None:
+                crystals = tableCrystals(crystal_args)
+                crystal_list = ''
+                for i, crystal in enumerate(crystals, start=1):
+                    miller = ', '.join(f'{float(m):g}' for m in crystal['miller'])
+                    crystal_list += f'''
+    name_cryst{i} = '{crystal['name']}'
+    miller_ind{i} = {miller}'''
                 crystal_settings = f'''
 text = "--- crystal ---"
     l_crystal = .true.
     l_crystal_dyn = .{str(bool(crystal_args.get('crystal_dyn', False))).lower()}.
-    l_crystal1 = .true.
-    name_cryst1 = '{crystal_args.name}'
-    miller_ind1 = {crystal_args.miller_ind.crystal_inp_str()}
+    l_crystal{len(crystals)} = .true.{crystal_list}
     dy_crystal_beam = {float(crystal_args.get('beam_dy', 0) or 0)}
     dz_crystal_beam = {float(crystal_args.get('beam_dz', 0) or 0)}
 '''
@@ -2675,6 +3247,37 @@ text = "--- compound ---"
         if not isinstance(lmatrices, bool):
             lmatrices = default_values.lmatrices
 
+        # further settings, only written if they differ from the defaults
+        extra_settings = ''
+        if arguments.settings.get('trajectories_projectiles'):
+            extra_settings += '\n    ltraj_p = .true.'
+        if arguments.settings.get('trajectories_recoils'):
+            extra_settings += '\n    ltraj_r = .true.'
+        if arguments.settings.get('trajectories_projectiles') or arguments.settings.get('trajectories_recoils'):
+            numb_hist = arguments.settings.get('trajectories_number')
+            extra_settings += f'\n    numb_hist = {numb_hist if isinstance(numb_hist, int) else default_values.numb_hist}'
+        if arguments.settings.get('energy_distribution'):
+            grid = arguments.settings.get('distribution_grid')
+            if not isinstance(grid, list) or len(grid) != 4:
+                grid = [default_values.dist_nx, default_values.dist_ny, default_values.dist_nz, default_values.dist_delta]
+            extra_settings += f'\n    lenergy_distr = .true.\n    dist_nx = {int(grid[0])}\n    dist_ny = {int(grid[1])}\n    dist_nz = {int(grid[2])}\n    dist_delta = {float(grid[3])}'
+        irand = arguments.settings.get('random_seed')
+        if isinstance(irand, int) and irand != default_values.irand:
+            extra_settings += f'\n    irand = {irand}'
+        if arguments.settings.get('inelastic_outside') and default_values.supports_sfin:
+            extra_settings += '\n    sfin = 1'
+        shth = arguments.beam_args.get('sheath_potential')
+        if isinstance(shth, (int, float)) and shth > 0:
+            extra_settings += f'\n    shth = {float(shth)}'
+
+        # file of tabulated stopping power (since 7.07)
+        tbsp_settings = ''
+        if default_values.tbsp_file_selection:
+            tbsp_ascii = arguments.settings.get('tbsp_format') == 'ascii'
+            tbsp_settings = f'''
+    tbsp_binary = .{str(not tbsp_ascii).lower()}.
+    tbsp_ascii = .{str(tbsp_ascii).lower()}.'''
+
         # --- extra ---
 
         tableinp = pathToStr(folder / 'tables')
@@ -2687,7 +3290,7 @@ text = "--- elements ---"
     symbol = {symbol}
     !globaldensity = {global_density}
     inel0 = {inel0}
-{modifications}
+{modifications}{species_settings}
 text = "--- general ---"
     idrel = {idrel}
     flc = {flc}
@@ -2715,7 +3318,7 @@ text = "--- target ---"
 text = "--- output options ---"
     lparticle_p = {lparticle_p_str}
     lparticle_r = {lparticle_r_str}
-    lmatrices = .{str(lmatrices).lower()}.
+    lmatrices = .{str(lmatrices).lower()}.{tbsp_settings}{extra_settings}
 
 text = "--- extra ---"
     tableinp = "{tableinp}"
@@ -2723,6 +3326,77 @@ text = "--- extra ---"
 /
 '''
         return f'{out.strip()}\n'
+
+    def exactVersion(self) -> Optional[float]:
+        """Returns the version number of the simulation folder (e.g. 7.02) or None if unknown"""
+
+        folder = getattr(self, 'simulation_folder', None)
+        name = self.getVersionName(folder, None) if folder is not None else False
+        numbers = findall(r'\d+\.\d+', name) if name else []
+        return float(numbers[0]) if numbers else None
+
+    def supportsEnergyAngleFile(self, version: str) -> bool:
+        """
+        Returns True if the distribution of energies and angles from ene_ang.inp (case_e0 = 6) is implemented:
+        until 6.09 and since 7.05 (7.02 shares the settings with 7.05, therefore the version of the folder is checked)
+
+        :param version: version of simulation
+        """
+
+        if not DefaultValues(version).supports_energy_angle_file:
+            return False
+        if version == Versions.V_702:
+            exact = self.exactVersion()
+            return exact is None or exact >= 7.05
+        return True
+
+    def legacyEnergyAngleFormat(self, version: str) -> bool:
+        """
+        Returns True if ene_ang.inp has the format until 7.02 (the format changed with 7.05).
+        7.02 and 7.05 share the settings, therefore the version of the simulation folder is checked
+
+        :param version: version of simulation
+        """
+
+        if not Versions.atLeast(version, Versions.V_702):
+            return True
+        if version != Versions.V_702:
+            return False
+        exact = self.exactVersion()
+        return exact is not None and exact < 7.05
+
+    def makeDistributionFiles(self, arguments: SimulationArguments, version: str) -> Dict[str, str]:
+        """
+        Returns the files of the distributions of energies and angles (energy.inp, angle.inp, ene_ang.inp) as {file name: content}
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+        """
+
+        group_elements = arguments.settings.get('group_elements')
+        if not isinstance(group_elements, bool):
+            group_elements = DefaultValues(version).group_elements
+        distributions = arguments.beam_args.get('distributions')
+        if not isinstance(distributions, dict):
+            distributions = {}
+
+        files = {}
+        names = distributionFileNames(arguments, version, group_elements)
+        for symbol, name in names['energy']:
+            rows = distributions.get('energy', {}).get(symbol)
+            if rows:
+                files[name] = writeDistributionFile(rows, f'! E [eV] distribution [-/dE] ({symbol}, created with BCA-GUIDE)')
+        for symbol, name in names['angle']:
+            rows = distributions.get('angle', {}).get(symbol)
+            if rows is None and symbol == 'all':
+                rows = next(iter(distributions.get('angle', {}).values()), None)
+            if rows:
+                files[name] = writeDistributionFile(rows, f'! alpha [degree] distribution [-/dalpha] ({symbol}, created with BCA-GUIDE)')
+        for _, name in names['energy_angle']:
+            data = distributions.get('energy_angle')
+            if data:
+                files[name] = writeEnergyAngleFile(data, legacy=self.legacyEnergyAngleFormat(version))
+        return files
 
     @staticmethod
     def makeLayerFile(arguments: SimulationArguments, folder: Path, version: str) -> str:
@@ -2735,10 +3409,27 @@ text = "--- extra ---"
         """
 
         structures = arguments.structure
-        if len(structures) < 2:
+        crystal_layer_file = usesCrystalLayerFile(arguments, version)
+        if len(structures) < 2 and not crystal_layer_file:
             return ''
 
         default_values = DefaultValues(version)
+
+        # crystals from table.crystal: additional columns for the atomic fractions of the crystal species and the miller index
+        crystal_species = []
+        crystal_layers = []
+        if crystal_layer_file:
+            try:
+                table = CrystalTableFile(folder / 'tables' / 'table.crystal', CrystalTableLimits(version))
+            except CrystalTableError:
+                table = None
+            for k, crystal in enumerate(tableCrystals(arguments.crystal_args), start=1):
+                table_crystal = table.crystal(crystal['name']) if table is not None else None
+                if table_crystal is None:
+                    continue
+                for element, count in table_crystal.composition().items():
+                    crystal_species.append((k - 1, f'{element}_{k}', count / len(table_crystal.elements)))
+            crystal_layers = crystalLayers(arguments)
 
         group_elements = arguments.settings.get('group_elements')
         if not isinstance(group_elements, bool):
@@ -2776,7 +3467,7 @@ text = "--- extra ---"
 
         abundances = rows_len - 1
         layer_info_total = []
-        for structure in structures:
+        for layer_index, structure in enumerate(structures):
             if structure.segments == 0:
                 continue
             layer_info = f'{structure.segments:>6} {structure.thickness / structure.segments:>12.5E}  '
@@ -2787,13 +3478,35 @@ text = "--- extra ---"
                     if m == 1:
                         abundance_list[i] = structure.abundances[j]
                         j += 1
-            layer_info += '  '.join([f'{abundance:>13.5E}' for abundance in abundance_list[1:]])
+
+            if crystal_layer_file:
+                # amorphous part of the layer and crystal species (stoichiometric fractions of the crystal)
+                fractions = crystal_layers[layer_index]['fractions']
+                amorphous = max(0., 1 - sum(fractions))
+                abundance_list = [abundance * amorphous for abundance in abundance_list]
+                abundance_list += [fractions[k] * stoichiometry for k, _, stoichiometry in crystal_species]
+                layer_info += '  '.join([f'{abundance:>13.5E}' for abundance in abundance_list[1:]])
+                layer_info += '   ' + '  '.join(f'{float(m):5.2f}' for m in crystal_layers[layer_index]['miller'])
+            else:
+                layer_info += '  '.join([f'{abundance:>13.5E}' for abundance in abundance_list[1:]])
             layer_info += f'    {structure.name}'
             layer_info_total.append(layer_info)
         layer_info_total = '\n'.join(layer_info_total)
+
+        if crystal_layer_file:
+            labels = [f'qu_{i + 2}' for i in range(abundances)] + [name for _, name, _ in crystal_species]
+            out = f'''
+! number of    thick-    target composition 2...ncp (crystal species: element_crystal)    miller index    name of layer
+! layers       ness      {'           '.join(labels)}    h  k  l
+{layer_info_total}
+     0            0    {'    '.join(['          0' for _ in labels])}    0  0  0    end
+'''
+            return f'{out.strip()}\n'
+
+        # since 7.07 both header lines must start with "!" or "#"
         out = f'''
-number of    thick-    target composition 2...ncp    name of layer
-layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundances)])}
+! number of    thick-    target composition 2...ncp    name of layer
+! layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundances)])}
 {layer_info_total}
      0            0    {'    '.join(['          0' for _ in range(abundances)])}    end
 '''
@@ -3033,6 +3746,11 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         lparticle_p = getValueBool(contents.get('lparticle_p'), default_values.lparticle_p)
         lparticle_r = getValueBool(contents.get('lparticle_r'), default_values.lparticle_r)
         lmatrices = getValueBool(contents.get('lmatrices'), default_values.lmatrices)
+        tbsp_format = default_values.tbsp_format
+        if default_values.tbsp_file_selection:
+            contents.get('tbsp_binary')
+            if getValueBool(contents.get('tbsp_ascii'), False):
+                tbsp_format = 'ascii'
         globaldensity = getValueBoolInt(contents.get('!globaldensity'))
         case_e0 = getValueDict(contents.get('case_e0'), dict_lookup.case_e0, default_values.case_e0, 'kinetic_energy_mode', assumed_cls=assumed)
         case_alpha = getValueDict(contents.get('case_alpha'), dict_lookup.case_alpha, default_values.case_alpha, 'angle_mode', assumed_cls=assumed)
@@ -3049,6 +3767,38 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         alpha0 = getValueList(contents.get('alpha0'), float, default_values.alpha0, 'angle', assumed_cls=assumed)
         ncp = getValue(contents.get('ncp'), int, -1, assumed_cls=assumed)
         e_surfb = getValueList(contents.get('e_surfb'), float, -1.0, assumed_cls=assumed)
+
+        # further parameters of the species
+        def optionalList(name: str, value_type, default) -> list:
+            """Returns list of values of a parameter (empty if not given)"""
+            value = contents.get(name)
+            if not isinstance(value, str):
+                return []
+            return getValueList(value, value_type, default)
+
+        beta0 = optionalList('beta0', float, default_values.beta0)
+        x0 = optionalList('x0', float, default_values.x0)
+        charge = optionalList('charge', float, default_values.charge)
+        e_cutoff = optionalList('e_cutoff', float, default_values.e_cutoff)
+        e_bulkb = optionalList('e_bulkb', float, default_values.e_bulkb)
+        deltahf = optionalList('deltahf', float, default_values.deltahf)
+        isot = optionalList('isot', SafeInt, default_values.isot)
+        ck_elec_matrix = optionalList('ck_elec', float, default_values.ck_elec)
+
+        # further settings
+        ltraj_p = getValueBool(contents.get('ltraj_p'), default_values.ltraj_p)
+        ltraj_r = getValueBool(contents.get('ltraj_r'), default_values.ltraj_r)
+        numb_hist = getValue(contents.get('numb_hist'), SafeInt, default_values.numb_hist)
+        lenergy_distr = getValueBool(contents.get('lenergy_distr'), default_values.lenergy_distr)
+        distribution_grid = [
+            getValue(contents.get('dist_nx'), SafeInt, default_values.dist_nx),
+            getValue(contents.get('dist_ny'), SafeInt, default_values.dist_ny),
+            getValue(contents.get('dist_nz'), SafeInt, default_values.dist_nz),
+            getValue(contents.get('dist_delta'), float, default_values.dist_delta)
+        ]
+        irand = getValue(contents.get('irand'), SafeInt, default_values.irand)
+        sfin = getValue(contents.get('sfin'), SafeInt, default_values.sfin)
+        shth = getValue(contents.get('shth'), float, default_values.shth)
         e_displ = getValueList(contents.get('e_displ'), float, -1.0, assumed_cls=assumed)
         dns0 = getValueList(contents.get('dns0'), float, -1.0, assumed_cls=assumed)
         a_mass = getValueList(contents.get('a_mass'), float, -1.0, assumed_cls=assumed)
@@ -3061,11 +3811,21 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
         table_crystal = None
         if l_crystal and default_values.crystal_table:
-            # since 7.02: crystal from tables/table.crystal
-            miller_ind = MillerIndex(getValueList(contents.get('miller_ind1'), SafeInt, 0, 'miller_indices_list', assumed_cls=assumed))
-            contents.get('l_crystal1')
+            # since 7.02: up to three crystals from tables/table.crystal (l_crystal1, l_crystal2 or l_crystal3)
+            crystal_count = 1
+            for i in range(1, CrystalTableLimits.max_crystals + 1):
+                if getValueBool(contents.get(f'l_crystal{i}'), False):
+                    crystal_count = i
+            crystals = []
+            for i in range(1, CrystalTableLimits.max_crystals + 1):
+                name = str(contents.get(f'name_cryst{i}') or '').strip().strip('"\'')
+                miller = getValueList(contents.get(f'miller_ind{i}'), float, 0, 'miller_indices_list' if i <= crystal_count else None, assumed_cls=assumed)
+                if i <= crystal_count:
+                    crystals.append({'name': name, 'miller': [SafeInt(m) if float(m).is_integer() else m for m in miller]})
+            miller_ind = MillerIndex(list(crystals[0]['miller']))
             table_crystal = {
-                'name': str(contents.get('name_cryst1') or '').strip().strip('"\''),
+                'name': crystals[0]['name'],
+                'crystals': crystals,
                 'crystal_dyn': getValueBool(contents.get('l_crystal_dyn'), default_values.l_crystal_dyn),
                 'beam_dy': getValue(contents.get('dy_crystal_beam'), float, default_values.beam_dy, 'beam_dy', assumed_cls=assumed),
                 'beam_dz': getValue(contents.get('dz_crystal_beam'), float, default_values.beam_dz, 'beam_dz', assumed_cls=assumed),
@@ -3076,8 +3836,13 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         elif l_crystal:
             miller_ind = MillerIndex(getValueList(contents.get('miller_ind'), SafeInt, 0, 'miller_indices_list', assumed_cls=assumed))
 
-        # get rid of 'tableinp' since it is not used
-        contents.get('tableinp')
+        # tables of the simulation (needed for the crystals in the layer file), 'tableinp' is not loaded otherwise
+        tables_folder = None
+        if getattr(self, 'simulation_folder', None) is not None:
+            tables_folder = self.simulation_folder / 'tables'
+        tableinp = str(contents.get('tableinp') or '').strip().strip('"\'')
+        if tables_folder is None and tableinp and Path(tableinp).is_dir():
+            tables_folder = Path(tableinp)
 
         # get rid of 'ioutput_part(x)'
         contents.get('ioutput_part(2)')
@@ -3140,6 +3905,18 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                     'max_atomic_fraction': qumax_i
                 }
 
+                # further parameters of the species
+                species_index = symbol.index(symbol_i) if symbol_i in symbol else -1
+                for key, values in [
+                    ('azimuth', beta0), ('start_depth', x0), ('charge', charge), ('cutoff_energy', e_cutoff),
+                    ('bulk_binding_energy', e_bulkb), ('heat_of_formation', deltahf), ('isotopes', isot)
+                ]:
+                    if 0 <= species_index < len(values):
+                        row_parameters[key] = values[species_index]
+                # ck_elec(i, j) in column major order, the value for species i is taken from j = 1
+                if 0 <= species_index < len(ck_elec_matrix):
+                    row_parameters['inelastic_correction'] = ck_elec_matrix[species_index]
+
                 if typ == 'beam':
                     if e0_i is None:
                         e0_i = default_values.e0
@@ -3160,16 +3937,78 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             return row_arguments
 
         # beam_rows data (List[<RowArguments>])
+        # crystal species in layer.inp (since 7.02): (crystal index, stoichiometric fraction) of each additional column
+        crystal_species = []
+        crystal_layers = []
+        crystal_elements = set()
+        if iq0 < 0 and table_crystal is not None:
+            try:
+                if tables_folder is None:
+                    raise CrystalTableError('the simulation folder is unknown')
+                table = CrystalTableFile(tables_folder / 'table.crystal', CrystalTableLimits(version))
+                for k, crystal in enumerate(table_crystal['crystals']):
+                    table_entry = table.crystal(crystal['name'])
+                    if table_entry is None:
+                        raise CrystalTableError(f'crystal "{crystal["name"]}" not found')
+                    for element, count in table_entry.composition().items():
+                        crystal_species.append((k, count / len(table_entry.elements)))
+                        crystal_elements.add(element)
+            except CrystalTableError as table_error:
+                error_list.append(f'Could not read the crystals of the layer file from table.crystal: {table_error}')
+                crystal_species = []
+
         beam_rows = rowList(qubeam, 'beam')
 
         # target_rows data (List[<RowArguments>])
+        # elements that are only part of crystals in the layer file have qu = 0, but are target elements
+        if crystal_elements:
+            qu = [q if q or s not in crystal_elements or b else 1.0 for q, s, b in zip(qu, symbol, qubeam)]
         target_rows = rowList(qu, 'target')
 
         # beam_args data (<GeneralBeamArguments>)
+        # distributions of energies and angles from files
+        distributions = {}
+        projectiles = [(index, symbol_i) for index, (symbol_i, qubeam_i) in enumerate(zip(symbol, qubeam), start=1) if qubeam_i and qubeam_i > 0]
+
+        def numbered(name: str, index: int) -> str:
+            return f'{name}.inp' if index == 1 else f'{name}{index:02d}.inp'
+
+        if case_e0 == ArgumentValues.KineticEnergy.FILE:
+            if Versions.atLeast(version, Versions.V_700):
+                energy_files = [(symbol_i, numbered('energy', index)) for index, symbol_i in projectiles]
+            else:
+                energy_files = [(symbol_i, name) for (_, symbol_i), name in zip(projectiles, ['energy.inp', 'energy2.inp'])]
+            for symbol_i, name in energy_files:
+                if (folder / name).is_file():
+                    distributions.setdefault('energy', {})[symbol_i] = readDistributionFile(folder / name)
+                else:
+                    error_list.append(f'Energy distribution "{name}" not found')
+        if case_alpha == ArgumentValues.Angle.FILE:
+            if Versions.atLeast(version, Versions.V_702):
+                angle_files = [(symbol_i, numbered('angle', index)) for index, symbol_i in projectiles]
+                # 7.02 reads only angle.inp
+                if version == Versions.V_702 and projectiles and all(name != 'angle.inp' for _, name in angle_files):
+                    angle_files.append((projectiles[0][1], 'angle.inp'))
+            else:
+                angle_files = [('all', 'angle.inp')]
+            for symbol_i, name in angle_files:
+                if (folder / name).is_file() and symbol_i not in distributions.get('angle', {}):
+                    distributions.setdefault('angle', {})[symbol_i] = readDistributionFile(folder / name)
+            if not distributions.get('angle'):
+                error_list.append(f'Angle distribution "{angle_files[0][1] if angle_files else "angle.inp"}" not found')
+        # ene_ang.inp is loaded whenever it exists (it does not depend on the projectiles)
+        energy_angle = readEnergyAngleFile(folder / 'ene_ang.inp') if (folder / 'ene_ang.inp').is_file() else None
+        if energy_angle is not None:
+            distributions['energy_angle'] = energy_angle
+        elif case_e0 == ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE:
+            error_list.append('Distribution of energies and angles "ene_ang.inp" not found or not readable')
+
         beam_args = GeneralBeamArguments(
             kinetic_energy_mode=case_e0,
             angle_mode=case_alpha,
-            sweep=number_calc
+            sweep=number_calc,
+            sheath_potential=shth,
+            distributions=distributions
         )
 
         # target_args data (<GeneralTargetArguments>)
@@ -3193,7 +4032,15 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
             surface_binding_model=isbv,
             log_reflected=lparticle_p,
             log_sputtered=lparticle_r,
-            log_matrix=lmatrices
+            log_matrix=lmatrices,
+            tbsp_format=tbsp_format,
+            trajectories_projectiles=ltraj_p,
+            trajectories_recoils=ltraj_r,
+            trajectories_number=int(numb_hist),
+            energy_distribution=lenergy_distr,
+            distribution_grid=distribution_grid,
+            random_seed=int(irand),
+            inelastic_outside=bool(sfin)
         )
 
         layer_counter = RunningIndex()
@@ -3211,13 +4058,34 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                         if not line[0].isdigit() and line[0] != '.':
                             continue
 
-                        content = [p.strip() for p in line.split(' ') if p.strip()]
-                        if not content or content[-1] == 'end' or all(v == 0 for v in content[:-1]):
+                        content = [p.strip() for p in line.replace(',', ' ').split(' ') if p.strip()]
+                        if not content:
                             continue
+                        # the layers end with a line with 0 segments ("end"), SDTrimSP does not read further
+                        if content[-1] == 'end' or content[0] == '0':
+                            break
                         if len(content) < 1 + ncp:
                             if error_layer not in error_list:
                                 error_list.append(error_layer)
                             continue
+
+                        # crystal species and miller index after the amorphous species
+                        crystal_columns = len(crystal_species)
+                        if crystal_columns:
+                            try:
+                                crystal_values = [float(value) for value in content[ncp + 1:ncp + 1 + crystal_columns]]
+                                miller = [float(value) for value in content[ncp + 1 + crystal_columns:ncp + 4 + crystal_columns]]
+                                if len(crystal_values) != crystal_columns or len(miller) != 3:
+                                    raise ValueError
+                            except ValueError:
+                                if error_layer not in error_list:
+                                    error_list.append(error_layer)
+                                continue
+                            fractions = [0.] * len(table_crystal['crystals'])
+                            for (k, stoichiometry), value in zip(crystal_species, crystal_values):
+                                fractions[k] += value
+                            crystal_layers.append({'fractions': fractions, 'miller': miller})
+                            content = content[:ncp + 1] + content[ncp + 4 + crystal_columns:]
 
                         name = f'Layer{layer_counter.get()}'
                         abundances = content[2:ncp + 1]
@@ -3226,7 +4094,10 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
 
                         try:
                             abundances = [float(a) for a in abundances]
-                            abundances.insert(0, 1 - sum(abundances))
+                            abundances.insert(0, 1 - sum(abundances) - (sum(crystal_layers[-1]['fractions']) if crystal_columns else 0))
+                            # abundances of the amorphous part are normalized
+                            if crystal_columns and sum(abundances) > 1e-12:
+                                abundances = [a / sum(abundances) for a in abundances]
                         except ValueError:
                             if error_layer not in error_list:
                                 error_list.append(error_layer)
@@ -3237,11 +4108,15 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                         segments = getValue(content[0], int, default_values.nqx, 'layer_segments')
                         thickness_per_segment = getValue(content[1], float, default_values.ttarget, 'layer_thickness')
 
+                        crystal_arguments = {}
+                        if crystal_columns:
+                            crystal_arguments = {'crystal_fractions': crystal_layers[-1]['fractions'], 'miller': crystal_layers[-1]['miller']}
                         structure.append(StructureArguments(
                             name=name,
                             segments=segments,
                             thickness=segments * thickness_per_segment,
-                            abundances=abundances
+                            abundances=abundances,
+                            **crystal_arguments
                         ))
 
             except FileNotFoundError:
@@ -3273,6 +4148,7 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
                 beam_dy=table_crystal['beam_dy'],
                 beam_dz=table_crystal['beam_dz'],
                 crystal_dyn=table_crystal['crystal_dyn'],
+                crystals=table_crystal['crystals'],
                 table_crystal=True
             )
 
@@ -3408,6 +4284,80 @@ layers       ness      {'           '.join([f'qu_{i + 2}' for i in range(abundan
         )
 
         return simulation, error_list
+
+    def checkArguments(self, arguments: SimulationArguments, version: str) -> List[str]:
+        """
+        Checks combinations of parameters that SDTrimSP does not accept and returns list of errors
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+        """
+
+        errors = []
+
+        # crystals from table.crystal in the layers
+        if DefaultValues(version).crystal_table and arguments.target_args.get('crystal_flag', False) and arguments.crystal_args is not None:
+            layers = crystalLayers(arguments)
+            for structure, layer in zip(arguments.structure, layers):
+                if sum(layer['fractions']) > 1 + 1e-6:
+                    errors.append(f'The crystal fractions of layer "{structure.name}" are larger than 1')
+            if layers and not any(fraction > 0 for layer in layers for fraction in layer['fractions']):
+                errors.append('No layer of the target structure contains a crystal')
+
+        # distributions of energies and angles from files must be defined
+        group_elements = arguments.settings.get('group_elements')
+        if not isinstance(group_elements, bool):
+            group_elements = DefaultValues(version).group_elements
+        names = distributionFileNames(arguments, version, group_elements)
+        distributions = arguments.beam_args.get('distributions')
+        if not isinstance(distributions, dict):
+            distributions = {}
+        for symbol, name in names['energy']:
+            if not distributions.get('energy', {}).get(symbol):
+                errors.append(f'The energy distribution of {symbol} ({name}) is not defined, use the "Distributions..." button')
+        for symbol, name in names['angle']:
+            angles = distributions.get('angle', {})
+            if not (angles.get(symbol) or (symbol == 'all' and any(angles.values()))):
+                errors.append(f'The angle distribution{"" if symbol == "all" else " of " + symbol} ({name}) is not defined, use the "Distributions..." button')
+        if names['energy_angle'] and not self.supportsEnergyAngleFile(version):
+            errors.append('The distribution of energies and angles from ene_ang.inp (case_e0 = 6) is not implemented in SDTrimSP 7.00 - 7.02')
+        elif names['energy_angle'] and not distributions.get('energy_angle'):
+            errors.append('The distribution of energies and angles (ene_ang.inp) is not defined, use the "Distributions..." button')
+        if not Versions.atLeast(version, Versions.V_700) and arguments.beam_args.kinetic_energy_mode == ArgumentValues.KineticEnergy.FILE:
+            if sum(1 for _, beam in speciesList(arguments, group_elements) if beam) > 2:
+                errors.append(f'SDTrimSP {version} reads energy distributions (energy.inp, energy2.inp) for at most two projectiles')
+
+        # SDTrimSP.F90: inel0 = 2 or 3 is only allowed for the KrC potential (ipot = 1)
+        ipot = arguments.settings.get('interaction_potential')
+        if ipot is not None and ipot != ArgumentValues.InteractionPotential.KRC:
+            models = [arguments.settings.get('inelastic_loss_model')]
+            models += [row.get('inelastic_loss_model') for row in arguments.beam_rows + arguments.target_rows if row.symbol]
+            not_allowed = (ArgumentValues.InelasticLossModel.OEN_ROBINSON, ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON)
+            if any(model in not_allowed for model in models):
+                errors.append('The inelastic loss models "Oen-Robinson" (2) and "average of (1) and (2)" (3) are only allowed for the KrC interaction potential')
+
+        return errors
+
+    def runFailed(self, save_folder: Optional[Path], log: str, exit_code: int, version: str) -> Optional[str]:
+        """
+        Returns a description of the problem if the finished simulation failed, otherwise None.
+        SDTrimSP sometimes terminates with exit code 0 after an error, so the log and the output files are checked as well
+
+        :param save_folder: folder of the simulation
+        :param log: output of the simulation process
+        :param exit_code: exit code of the simulation process
+        :param version: version of simulation
+        """
+
+        if 'stop from subroutine' in log or exit_code == 66:
+            return 'the simulation stopped because of an error, see the log'
+        if 'code terminates' in log:
+            return 'the simulation terminated because of an error, see the log'
+        if exit_code != 0:
+            return f'exit code {exit_code}'
+        if save_folder is not None and save_folder.is_dir() and not any(save_folder.glob('output*.dat')):
+            return 'the simulation finished without writing the results (output.dat), see the log'
+        return None
 
     def checkAdditional(self, settings: str, version: str) -> List[str]:
         """
@@ -5576,7 +6526,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
             # use very fine resolution in binning for sputtered atoms because lower energies are of more interest
             else:
-                hist, bin_edges = np.histogram(energies, bins=int(np.max(energies) / 0.2))
+                hist, bin_edges = np.histogram(energies, bins=max(1, int(np.max(energies) / 0.2)))
 
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             mpl_settings.axes.plot(bin_edges_new,
@@ -5650,7 +6600,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
             # use very fine resolution in binning for sputtered atoms because lower energies are of more interest
             else:
-                hist, bin_edges = np.histogram(energies, bins=int(np.max(energies) / 0.2))
+                hist, bin_edges = np.histogram(energies, bins=max(1, int(np.max(energies) / 0.2)))
 
             bin_edges_new = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             mpl_settings.axes.plot(bin_edges_new,

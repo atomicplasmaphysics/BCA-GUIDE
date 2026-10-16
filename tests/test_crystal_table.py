@@ -5,15 +5,17 @@ import pytest
 from conftest import SIMULATION_PROGRAMS, DATA
 
 from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError
+from Simulations.SDTrimSP import CrystalTableLimits
 from Utility.CrystalImport import importCrystal, CrystalImportError
 
 
+LIMITS = CrystalTableLimits()
 TABLES = sorted(SIMULATION_PROGRAMS.glob('SDTrimSP/*/tables/table.crystal'))
 
 
 @pytest.mark.parametrize('table', TABLES, ids=lambda path: path.parents[1].name)
 def test_read_table(table):
-    table_file = CrystalTableFile(table)
+    table_file = CrystalTableFile(table, LIMITS)
     assert table_file.structures
     assert table_file.crystals
     for crystal in table_file.crystals:
@@ -27,7 +29,7 @@ def table_copy(tmp_path):
     if not TABLES:
         pytest.skip('no table.crystal found')
     shutil.copy(TABLES[-1], tmp_path / 'table.crystal')
-    return CrystalTableFile(tmp_path / 'table.crystal')
+    return CrystalTableFile(tmp_path / 'table.crystal', LIMITS)
 
 
 def test_add_crystal_existing_structure(table_copy):
@@ -35,7 +37,7 @@ def test_add_crystal_existing_structure(table_copy):
     crystal = table_copy.addCrystal(TableCrystal('Au_fcc', 4.078, 4.078, 4.078, 0.05898, elements=['Au'] * 4), fcc)
     assert table_copy.structure(crystal.structure).name == 'fcc-type'
 
-    reread = CrystalTableFile(table_copy.path)
+    reread = CrystalTableFile(table_copy.path, LIMITS)
     assert reread.crystal('Au_fcc') is not None
     assert len(reread.structures) == len(table_copy.structures)
     assert table_copy.path.with_name('table.crystal.bck').exists()
@@ -44,7 +46,7 @@ def test_add_crystal_existing_structure(table_copy):
 def test_add_crystal_new_structure(table_copy):
     count = len(table_copy.structures)
     crystal = table_copy.addCrystal(TableCrystal('TiO_test', 3., 3., 5., 0.03, elements=['Ti', 'Ti', 'O']), [(0, 0, 0), (0.5, 0.5, 0.5), (0.3, 0.3, 0)])
-    reread = CrystalTableFile(table_copy.path)
+    reread = CrystalTableFile(table_copy.path, LIMITS)
     assert len(reread.structures) == count + 1
     assert reread.crystal('TiO_test').structure == crystal.structure
 
@@ -88,7 +90,7 @@ def test_import_poscar():
 def test_import_matches_table_structures():
     if not TABLES:
         pytest.skip('no table.crystal found')
-    table_file = CrystalTableFile(TABLES[-1])
+    table_file = CrystalTableFile(TABLES[-1], LIMITS)
     for file, structure_name in [('NaCl.cif', 'NaCl-type'), ('Si_diamond.vasp', 'diamond-type')]:
         crystal = importCrystal(DATA / file)
         structure, order = table_file.findStructure(crystal.positions)

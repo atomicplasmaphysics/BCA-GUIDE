@@ -20,14 +20,13 @@ from PyQt6.QtWidgets import (
     QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication
 )
 
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 from GlobalConf import GlobalConf
 from Styles import Styles
 
 from Utility.Layouts import (
     TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview,
-    CrystalPreview, TimeProgressBar
+    CrystalPreview, TimeProgressBar, PlotToolbar
 )
 from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
@@ -284,6 +283,8 @@ class SimulationPage(TabWithToolbar):
         # General beam settings
         self.general_beam_settings = self.simulation_class.HlBeamSettings(self.simulation_configuration.version)  # QHBoxLayout()
         self.settings_group_layout_beam.addLayout(self.general_beam_settings)
+        if hasattr(self.general_beam_settings, 'projectiles'):
+            self.general_beam_settings.projectiles = lambda: [row.symbol for row in self.table_beam.getArguments()]
 
         # Beam composition title and composition
         self.beam_composition_vbox = VBoxTitleLayout(self, 'Beam composition', add_stretch=True)
@@ -576,7 +577,7 @@ class SimulationPage(TabWithToolbar):
         # Output and plots
         self.parent_widget_plot = QWidget(self)
         self.plot_vbox.title.setMaximumHeight(20)
-        self.output_plot_toolbar = NavigationToolbar2QT(self.output_plot_view, self)
+        self.output_plot_toolbar = PlotToolbar(self.output_plot_view, self)
         self.plot_vbox.addWidget(self.output_plot_view, stretch=1)
         self.plot_vbox.addWidget(self.output_plot_toolbar)
         self.plot_hbox = self.evaluation_class.HlPlot(self.simulation_configuration.version)
@@ -693,6 +694,7 @@ class SimulationPage(TabWithToolbar):
         self.crystal_editor_dialog.crystalBasisChanged.connect(lambda basis_vecs: self.crystal_preview.updateParams(basis_vecs=basis_vecs))
         self.crystal_editor_dialog.crystalDefinedChanged.connect(lambda state: setWidgetHighlight(self.crystal_editor_button, state))
         self.table_target.elementChanged.connect(self.crystal_editor_dialog.elementChanged)
+        self.crystal_editor_dialog.crystalListChanged.connect(lambda _: self.updateCrystalColumns())
 
         #
         # TIMERS
@@ -858,6 +860,7 @@ class SimulationPage(TabWithToolbar):
         crystal_state = value_dict.get('crystal_state')
         if crystal_state is not None:
             self.crystal_editor_vbox_widget.setHidden(not crystal_state)
+            self.updateCrystalColumns()
 
     def updateGroupElements(self, value_dict: dict):
         """
@@ -1367,6 +1370,18 @@ EOF
             )
             return None
 
+        # check combinations of parameters that the simulation does not accept
+        problems = self.simulation_class.checkArguments(arguments, self.simulation_configuration.version)
+        if problems:
+            showMessageBox(
+                self,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'The simulation does not accept these parameters',
+                detailed_message='\n'.join(problems)
+            )
+            return None
+
         # check if crystal is fully defined
         if self.crystal_editor_button.isVisible() and self.crystal_editor_dialog.undefined_state:
             showMessageBox(
@@ -1374,17 +1389,6 @@ EOF
                 QMessageBox.Icon.Warning,
                 'Warning!',
                 'Crystal must be defined in order to save the input file'
-            )
-            return None
-
-        # crystals from table.crystal are only supported for a homogeneous target
-        if self.crystal_editor_button.isVisible() and self.crystal_editor_dialog.table_mode and arguments.structure and len(arguments.structure) > 1:
-            showMessageBox(
-                self,
-                QMessageBox.Icon.Warning,
-                'Warning!',
-                'Crystals are only supported for a target with one layer',
-                'Please remove the additional layers in the target structure or disable the crystal'
             )
             return None
 
@@ -1453,6 +1457,12 @@ EOF
             filelist.append(file_name_layer)
         else:
             path_layer.unlink(missing_ok=True)
+
+        # save distributions of energies and angles
+        for file_name, text in self.simulation_class.makeDistributionFiles(arguments, self.simulation_configuration.version).items():
+            with open(self.simulation_configuration.save_folder / file_name, 'w', encoding='utf-8') as file:
+                file.write(text)
+            filelist.append(file_name)
 
         # save crystal input (or remove if not needed)
         # TODO: change for later SDtrimSP versions!
@@ -1674,10 +1684,14 @@ EOF
     def processFinished(self, exit_code: int, exit_status: int):
         """Called when process has finished"""
 
-        # check if there were errors in log
+        # check if there were errors (in log, exit code or results)
         log = self.simulation_output.toPlainText()
-        if 'stop from subroutine' in log or exit_code == 66:
+        problem = None
+        if exit_status == QProcess.ExitStatus.NormalExit:
+            problem = self.simulation_class.runFailed(self.simulation_configuration.save_folder, log, exit_code, self.simulation_configuration.version)
+        if problem is not None:
             exit_status = -1
+            self.simulation_output.appendPlainText(f'\n\nThe simulation failed: {problem}')
 
         if exit_status == QProcess.ExitStatus.NormalExit:
             result = 'finished'
@@ -1925,6 +1939,14 @@ EOF
             file.write(plot_data)
 
         self.main_window.writeStatusBar(f'Plot data saved as "{file_path}"')
+
+    def updateCrystalColumns(self):
+        """Shows the columns for the crystal fractions in the target structure if crystals from table.crystal are used"""
+
+        names = []
+        if self.crystal_editor_dialog.table_mode and not self.crystal_editor_vbox_widget.isHidden():
+            names = [crystal['name'] for crystal in self.crystal_editor_dialog.tableCrystalsList()]
+        self.target_layers.setCrystals(names)
 
     def openCrystalEditorDialog(self):
         """
