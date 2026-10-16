@@ -1,6 +1,6 @@
 {
     "general": {
-        "title": "Example 1: 2 keV Ar on Au at 60 degree (static)",
+        "title": "Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target",
         "simulation": "SDTrimSP"
     },
     "beam_arguments": {
@@ -88,7 +88,8 @@
                     0,
                     0
                 ]
-            }
+            },
+            "layer_file_flag": -1
         },
         "thickness": 1000.0,
         "segments": 100
@@ -185,17 +186,17 @@
             "trajectories_projectiles": false,
             "trajectories_recoils": false,
             "trajectories_number": 20,
-            "energy_distribution": false,
+            "energy_distribution": true,
             "distribution_grid": [
-                60,
-                60,
-                60,
-                2.0
+                40,
+                40,
+                40,
+                2.5
             ],
             "random_seed": 1,
             "inelastic_outside": false
         },
-        "title": "Example 1: 2 keV Ar on Au at 60 degree (static)",
+        "title": "Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target",
         "comment": "",
         "mode": "STATIC",
         "fluence": 1.0,

@@ -441,7 +441,8 @@ class ArgumentEncoderJSON(JSONEncoder):
     """Json encoder for <Arguments> classes"""
 
     def default(self, obj):
-        obj_dict = obj.__dict__
+        # copy, the arguments must not be changed by saving them
+        obj_dict = dict(obj.__dict__)
         if obj_dict.get('optional') == {}:
             del obj_dict['optional']
         if isinstance(obj, Enum):

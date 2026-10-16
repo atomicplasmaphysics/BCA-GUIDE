@@ -2,6 +2,7 @@
 Runs the test cases that come with SDTrimSP (folder "case") directly with their SDTrimSP version and through the GUI
 (the GUI loads the input files of the case, writes its own input files and runs the simulation) and compares the
 results. With the same input and the same random seed both runs must give identical results.
+The same for the samples of TRIDYN 2022 (TRIDYN2022_sample.ZIP).
 
 Only executed with:  python -m pytest tests/test_case_comparison.py --simulations
 With --simulation-data DIR (or --test-dir=DIR) both runs are kept in DIR/cases/<version>-<case>/{native,gui}.
@@ -9,6 +10,7 @@ With --simulation-data DIR (or --test-dir=DIR) both runs are kept in DIR/cases/<
 Environment variables:
   BCA_TEST_CASE_PROJECTILES  cases with more projectiles (histories * projectiles per history) are skipped (default 20000)
   BCA_TEST_TIMEOUT           timeout per simulation in seconds (default 900)
+  BCA_TEST_TRIDYN_FULL       run the dynamic TRIDYN samples with their full fluence (takes hours), otherwise it is reduced
 """
 
 import os
@@ -17,10 +19,12 @@ import subprocess
 from pathlib import Path
 from re import findall, sub, IGNORECASE, MULTILINE
 from typing import Dict, List, Optional, Tuple
+from zipfile import ZipFile
 
 import pytest
 
-from conftest import addSimulationPage, pump
+from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
+from Simulations.TRIDYN2022 import SimulationInput as TridynInput
 from Utility.Functions import inFileList
 from test_simulation_runs import INSTALLATIONS, TIMEOUT, runAndCheckOutputs
 
@@ -34,17 +38,10 @@ INPUT_FILES = ['*.inp', '*.data']
 IGNORED_FILES = {'time.dat', 'time_run.dat', 'ausdat.dat'}
 
 # lines with dates, times, run times or paths differ between the runs
-IGNORED_LINE = r'(\d\d:\d\d:\d\d|\d\d\.\d\d\.\d{4}|\btime\b|cpu|\bsec\b|tableinp|version|sdtrimsp -|[a-z]:\\)'
+IGNORED_LINE = r'(\d\d:\d\d:\d\d|\d\d\.\d\d\.\d{4}|\d\d-[a-z]{3}-\d{4}|\btime\b|cpu|\bsec\b|tableinp|version|sdtrimsp -|[a-z]:\\)'
 
 # known differences that are not caused by the GUI: (folder name or None, case or None) -> reason
-INEL0_606 = ('SDTrimSP 6.06 supports the inelastic loss model 7 (LZ7, also its default), the GUI treats 6.06 like 6.01 '
-             '(version group "6.01, 6.06") and writes model 3 instead, see TODO.md')
-KNOWN_DIFFERENCES: Dict[Tuple[Optional[str], Optional[str]], str] = {
-    (None, 'Ar_2_Cu_W_layer_crystal'): 'qu of tri.inp (0, 1, 0) is not the composition of the layers, the GUI writes the mean composition '
-                                      'of the layers; SDTrimSP uses qu with a layer file only to estimate the dynamic depth (TTDYN)',
-    (None, 'Ar_3_Cu_NaCl_W_layer_crystal'): 'layer.inp covers 19 of 20 segments, SDTrimSP fills the last segment with the first layer, '
-                                           'the GUI extends the last layer',
-}
+KNOWN_DIFFERENCES: Dict[Tuple[Optional[str], Optional[str]], str] = {}
 
 
 def triValue(text: str, name: str) -> Optional[str]:
@@ -85,10 +82,6 @@ def comparisonCases():
             marks = []
             if not projectiles or projectiles > CASE_PROJECTILES:
                 marks = [pytest.mark.skip(reason=f'{projectiles} projectiles (more than BCA_TEST_CASE_PROJECTILES={CASE_PROJECTILES})')]
-            text = (case / 'tri.inp').read_text(encoding='utf-8', errors='replace')
-            inel0 = findall(r'^\s*inel0\s*=([^!\n]*)', text, flags=IGNORECASE | MULTILINE)
-            if folder.name == 'SDTrimSP_6.06' and (not inel0 or '7' in inel0[0].replace(',', ' ').split()):
-                marks = marks or [pytest.mark.xfail(reason=INEL0_606, strict=False)]
             for (problem_folder, problem_case), reason in KNOWN_DIFFERENCES.items():
                 if problem_folder in (None, folder.name) and problem_case in (None, case.name):
                     marks = marks or [pytest.mark.xfail(reason=reason, strict=False)]
@@ -113,22 +106,36 @@ def resultLines(path: Path) -> List[str]:
     for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
         if findall(IGNORED_LINE, line, flags=IGNORECASE):
             continue
-        line = ' '.join(line.split())
+        # the title of the original input is not encoded in UTF-8 (TRIDYN samples), the GUI writes UTF-8
+        line = ' '.join(''.join(char if ord(char) < 128 else '?' for char in line).split())
         if line:
             lines.append(line)
     return lines
 
 
-def compareResults(native: Path, gui: Path) -> List[str]:
-    """Returns the differences of the result files of both runs"""
+def compareResults(native: Path, gui: Path, extra_gui_files: bool = False) -> List[str]:
+    """
+    Returns the differences of the result files of both runs
+
+    :param extra_gui_files: the GUI run may write further files
+    """
 
     differences = []
     native_files = {path.name for path in native.glob('*.dat')} - IGNORED_FILES
     gui_files = {path.name for path in gui.glob('*.dat')} - IGNORED_FILES
+    if extra_gui_files:
+        gui_files &= native_files
     for name in sorted(native_files ^ gui_files):
         differences.append(f'{name}: only in the {"native" if name in native_files else "GUI"} run')
     for name in sorted(native_files & gui_files):
         native_lines, gui_lines = resultLines(native / name), resultLines(gui / name)
+        # the requested outputs (lines of T/F flags in TRIDYN's *_indat.dat) differ, if the GUI requests further outputs
+        if extra_gui_files:
+            native_lines = [line for line in native_lines if set(line) - set('TF ')]
+            gui_lines = [line for line in gui_lines if set(line) - set('TF ')]
+        # TRIDYN writes the lists of particles (*lst.dat) in the order the threads finish
+        if name.endswith('lst.dat'):
+            native_lines, gui_lines = sorted(native_lines), sorted(gui_lines)
         if native_lines == gui_lines:
             continue
         for i, (native_line, gui_line) in enumerate(zip(native_lines, gui_lines)):
@@ -186,4 +193,74 @@ def test_case_native_and_gui(main_window, qapp, case_folder, tmp_path, monkeypat
     assert runAndCheckOutputs(qapp, page, sc, errors) > 0
 
     differences = compareResults(native, gui)
+    assert not differences, 'the results of the native and the GUI run differ:\n' + '\n'.join(differences)
+
+
+# --- TRIDYN: samples of TRIDYN2022_sample.ZIP ---
+
+TRIDYN_FOLDER = SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022'
+TRIDYN_SAMPLES = TRIDYN_FOLDER / 'TRIDYN2022_sample.ZIP'
+# the dynamic samples take hours, their fluence is reduced to this value (unless BCA_TEST_TRIDYN_FULL is set)
+TRIDYN_FLUENCE = 1.0
+
+
+def tridynSamples() -> List[str]:
+    """Names of the samples (input files *.in) in TRIDYN2022_sample.ZIP"""
+
+    if not TRIDYN_SAMPLES.is_file():
+        return []
+    with ZipFile(TRIDYN_SAMPLES) as archive:
+        return sorted(Path(name).stem for name in archive.namelist() if name.lower().endswith('.in'))
+
+
+def reducedFluence(text: str) -> str:
+    """Reduces the fluence (cdat flct) of a TRIDYN input file to TRIDYN_FLUENCE"""
+
+    def replace(match):
+        values = match.group(2).split()
+        if len(values) >= 3 and float(values[1]) > TRIDYN_FLUENCE:
+            values[1] = f'{TRIDYN_FLUENCE}'
+        return match.group(1) + ' '.join(values)
+
+    return sub(r'(?im)^(cdat\s+)(.*)$', replace, text)
+
+
+@pytest.mark.simulation
+@pytest.mark.skipif(TridynInput.findBinary(TRIDYN_FOLDER) is None, reason='TRIDYN 2022 not available')
+@pytest.mark.parametrize('sample', tridynSamples())
+def test_tridyn_sample_native_and_gui(main_window, qapp, case_folder, tmp_path, monkeypatch, errors, sample):
+    monkeypatch.chdir(tmp_path)
+    binary = TridynInput.findBinary(TRIDYN_FOLDER)
+    native = case_folder / 'native'
+    gui = case_folder / 'gui'
+    with ZipFile(TRIDYN_SAMPLES) as archive:
+        for name in archive.namelist():
+            if Path(name).stem == sample and Path(name).suffix.lower() in ('.in', '.lay'):
+                for folder in (native, gui):
+                    folder.mkdir(parents=True, exist_ok=True)
+                    (folder / Path(name).name).write_bytes(archive.read(name))
+    if not os.environ.get('BCA_TEST_TRIDYN_FULL'):
+        for folder in (native, gui):
+            path = folder / f'{sample}.in'
+            path.write_text(reducedFluence(path.read_text(encoding='latin-1')), encoding='latin-1')
+
+    # native run: the input file is read from stdin
+    with open(native / f'{sample}.in', 'rb') as input_file:
+        try:
+            result = subprocess.run([str(binary)], cwd=native, stdin=input_file, capture_output=True, text=True, errors='replace', timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f'the native run did not finish within {TIMEOUT} s')
+    (native / 'native_log.txt').write_text(result.stdout + result.stderr, encoding='utf-8')
+    if result.returncode != 0 or not any(native.glob('*_out.dat')):
+        pytest.skip(f'the sample fails without the GUI (exit code {result.returncode}): {(result.stdout + result.stderr)[-300:]}')
+
+    # GUI run: the GUI loads the input files of the sample and writes its own
+    sc, page = addSimulationPage(main_window, sample, 1, TRIDYN_FOLDER, binary, '2022')
+    pump(qapp)
+    assert page.loadSettings(gui, from_json=False, unsaved_warning=False)
+    pump(qapp)
+    assert runAndCheckOutputs(qapp, page, sc, errors) > 0
+
+    # the GUI requests further lists of particles
+    differences = compareResults(native, gui, extra_gui_files=True)
     assert not differences, 'the results of the native and the GUI run differ:\n' + '\n'.join(differences)

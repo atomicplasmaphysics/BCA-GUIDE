@@ -119,7 +119,7 @@ class TableCrystal:
             f'{self.deltahf:10.4f}{self.p_max:9.4f}{self.matrix_id:7d}{self.structure:9d}'
             f'{len(self.distinctElements()):8d}{len(self.elements):7d}     '
             + ' '.join(f'{element:<4}' for element in self.elements)
-            + f'   ! created with BCA-GUIDE'
+            + '   ! created with BCA-GUIDE'
         )
 
 
@@ -369,3 +369,32 @@ class CrystalTableFile:
         for element, position in zip(crystal.elements, structure.positions):
             coordinates.setdefault(element, []).append(position)
         return basis, {element: np.array(positions) for element, positions in coordinates.items()}
+
+
+def layerMillerError(miller: list) -> Optional[str]:
+    """
+    Returns why SDTrimSP (since 7.02) does not accept the miller index of a layer in layer.inp or None.
+    In layer.inp only the reduced form [1, 0...1, 0...1] of the direction is allowed: h >= 1 after normalization,
+    h >= k and h >= l (k and l are divided by h, negative values are set to 0)
+
+    :param miller: miller index [h, k, l]
+    """
+
+    try:
+        h, k, l = [float(m) for m in miller]
+    except (TypeError, ValueError):
+        return 'it must consist of three numbers'
+    if h <= 0:
+        return 'h must be larger than 0'
+    if k > h or l > h:
+        return 'h must be at least as large as k and l'
+    if k < 0 or l < 0:
+        return 'k and l must not be negative'
+    return None
+
+
+def layerMillerSuggestion(miller: list) -> list:
+    """Returns the miller index with sorted absolute values (equivalent for cubic crystals), e.g. [0, 0, 1] -> [1, 0, 0]"""
+
+    values = sorted((abs(float(m)) for m in miller), reverse=True)
+    return [int(m) if m.is_integer() else m for m in values]

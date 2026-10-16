@@ -1,0 +1,286 @@
+{
+    "general": {
+        "title": "ex03_ArSiO",
+        "simulation": "TRIDYN"
+    },
+    "beam_arguments": {
+        "kinetic_energy_mode": "FIXED",
+        "angle_mode": "FIXED"
+    },
+    "beam_rows": [
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 1,
+            "symbol": "Ar",
+            "element": {
+                "symbol": "Ar",
+                "name": {
+                    "en": "argon",
+                    "de": "Argon"
+                },
+                "atomic_nr": 18,
+                "period": 3,
+                "group": 18,
+                "atomic_mass": 39.948,
+                "atomic_density": 0.02488,
+                "periodic_table_symbol": "Ar",
+                "mass_density": null,
+                "surface_binding_energy": 0.0,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "Ar",
+                    "name": {
+                        "en": "argon",
+                        "de": "Argon"
+                    },
+                    "atomic_nr": 18,
+                    "period": 3,
+                    "group": 18,
+                    "atomic_mass": 39.948,
+                    "atomic_density": 0.02488,
+                    "periodic_table_symbol": "Ar",
+                    "mass_density": null,
+                    "surface_binding_energy": 0.0,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 0.9999,
+            "energy": 1000.0,
+            "angle": 0.0
+        }
+    ],
+    "target_arguments": {
+        "optional": {
+            "film_thickness": 0.0,
+            "global_density": false
+        },
+        "thickness": 200.0,
+        "segments": 100
+    },
+    "target_rows": [
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 2,
+            "symbol": "Si",
+            "element": {
+                "symbol": "Si",
+                "name": {
+                    "en": "silicon",
+                    "de": "Silicium"
+                },
+                "atomic_nr": 14,
+                "period": 3,
+                "group": 14,
+                "atomic_mass": 28.086,
+                "atomic_density": 0.04977,
+                "periodic_table_symbol": "Si",
+                "mass_density": null,
+                "surface_binding_energy": 4.7,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "Si",
+                    "name": {
+                        "en": "silicon",
+                        "de": "Silicium"
+                    },
+                    "atomic_nr": 14,
+                    "period": 3,
+                    "group": 14,
+                    "atomic_mass": 28.086,
+                    "atomic_density": 0.04977,
+                    "periodic_table_symbol": "Si",
+                    "mass_density": null,
+                    "surface_binding_energy": 4.7,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 1.0,
+            "energy": 0.0,
+            "angle": 0.0
+        },
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 3,
+            "symbol": "O",
+            "element": {
+                "symbol": "O",
+                "name": {
+                    "en": "oxygen",
+                    "de": "Sauerstoff"
+                },
+                "atomic_nr": 8,
+                "period": 2,
+                "group": 16,
+                "atomic_mass": 15.999,
+                "atomic_density": 0.04302,
+                "periodic_table_symbol": "O",
+                "mass_density": null,
+                "surface_binding_energy": 0.0,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "O",
+                    "name": {
+                        "en": "oxygen",
+                        "de": "Sauerstoff"
+                    },
+                    "atomic_nr": 8,
+                    "period": 2,
+                    "group": 16,
+                    "atomic_mass": 15.999,
+                    "atomic_density": 0.04302,
+                    "periodic_table_symbol": "O",
+                    "mass_density": null,
+                    "surface_binding_energy": 0.0,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 0.67,
+            "max_atomic_fraction": 1.0,
+            "energy": 0.0,
+            "angle": 0.0
+        }
+    ],
+    "structure": [
+        {
+            "name": "SiO2",
+            "segments": 10,
+            "thickness": 20.0,
+            "abundances": [
+                0.33333,
+                0.66667
+            ]
+        },
+        {
+            "name": "Si",
+            "segments": 90,
+            "thickness": 180.0,
+            "abundances": [
+                1.0,
+                0.0
+            ]
+        }
+    ],
+    "settings": {
+        "optional": {
+            "no_recoils": false,
+            "inelastic_loss_model": "LINDHARD_SCHARFF_AND_OEN_ROBINSON",
+            "collisions": 1,
+            "projectiles": 10000,
+            "precision": false,
+            "vacancy_level": 0.0,
+            "log_frequency": 100,
+            "integral_frequency": 100,
+            "output_frequency": 100,
+            "profile_output": true,
+            "profile_energy": true,
+            "integral_outputs": [],
+            "projectile_outputs": [
+                "rang",
+                "incd",
+                "scat",
+                "incd",
+                "sput",
+                "scat",
+                "sput"
+            ],
+            "log_reflected": true,
+            "log_sputtered": true
+        },
+        "title": "ex03_ArSiO",
+        "comment": "Example 3: 1 keV Ar on 20 A SiO2 on Si (static)",
+        "mode": "STATIC",
+        "fluence": 1.0,
+        "threads": 1,
+        "compounds": []
+    },
+    "crystal_args": {
+        "optional": {
+            "p_max": 3.0,
+            "beam_dy": 0.0,
+            "beam_dz": 0.0,
+            "matrix_id": 3
+        },
+        "name": "MyLittleCrystal",
+        "lattice_id": 1,
+        "lattice_constant": 3.0,
+        "basis_vec_a1": {
+            "vec": [
+                1.0,
+                0.0,
+                0.0
+            ]
+        },
+        "basis_vec_a2": {
+            "vec": [
+                0.0,
+                1.0,
+                0.0
+            ]
+        },
+        "basis_vec_a3": {
+            "vec": [
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "miller_ind": {
+            "vec": [
+                0,
+                0,
+                0
+            ]
+        }
+    },
+    "crystal_rows": null,
+    "additional": [
+        ""
+    ]
+}

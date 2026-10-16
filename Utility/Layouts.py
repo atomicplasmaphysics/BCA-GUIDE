@@ -5,11 +5,11 @@ from pathlib import Path
 from Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QElapsedTimer, QEvent, QTimer
-from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap
+from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle, QSizePolicy
+    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle, QSizePolicy, QToolTip
 )
 
 import numpy as np
@@ -1168,6 +1168,44 @@ class FileEditor(QPlainTextEdit):
             mono_font = QFont('Courier New')
             mono_font.setStyleHint(QFont.StyleHint.TypeWriter)
             self.setFont(mono_font)
+
+        # marked lines (e.g. unknown parameters): {line index: message}
+        self.marked_lines: Dict[int, str] = {}
+
+    def setMarkedLines(self, marked_lines: Dict[int, str]):
+        """
+        Marks lines with a red wavy underline, the message is shown as tooltip of the line
+
+        :param marked_lines: {line index (starting at 0): message}
+        """
+
+        self.marked_lines = dict(marked_lines)
+        selections = []
+        for line in self.marked_lines:
+            block = self.document().findBlockByNumber(line)
+            if not block.isValid():
+                continue
+            selection = QTextEdit.ExtraSelection()
+            cursor = QTextCursor(block)
+            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+            selection.cursor = cursor
+            selection.format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
+            selection.format.setUnderlineColor(QColor(Styles.red_hex))
+            selections.append(selection)
+        self.setExtraSelections(selections)
+
+    def event(self, event):
+        """Shows the message of a marked line as tooltip"""
+
+        if event.type() == QEvent.Type.ToolTip and self.marked_lines:
+            block = self.cursorForPosition(self.viewport().mapFromGlobal(event.globalPos())).block()
+            message = self.marked_lines.get(block.blockNumber())
+            if message:
+                QToolTip.showText(event.globalPos(), message, self)
+            else:
+                QToolTip.hideText()
+            return True
+        return super().event(event)
 
     def updateOffset(self, offset: int):
         """Updates the offset of the line numbers"""

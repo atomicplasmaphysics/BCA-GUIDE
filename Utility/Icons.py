@@ -40,7 +40,8 @@ ICONS: Dict[str, Tuple[Optional[str], str]] = {
     'book': ('blue', '<path d="M12 7v14" /> <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />'),  # lucide: book-open
     'help': ('blue', '<circle cx="12" cy="12" r="10" /> <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /> <path d="M12 17h.01" />'),  # lucide: circle-help
     'play': ('green', '<circle cx="12" cy="12" r="10" /> <polygon points="10 8 16 12 10 16 10 8" />'),  # lucide: circle-play
-    'play_detached': ('green', '<path d="m7 11 2-2-2-2" /> <path d="M11 13h4" /> <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />'),  # lucide: square-terminal
+    'pause': (None, '<circle cx="12" cy="12" r="10" /> <line x1="10" x2="10" y1="15" y2="9" /> <line x1="14" x2="14" y1="15" y2="9" />'),  # lucide: circle-pause
+    'play_detached':('green', '<path d="m7 11 2-2-2-2" /> <path d="M11 13h4" /> <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />'),  # lucide: square-terminal
     'abort': ('red', '<circle cx="12" cy="12" r="10" /> <path d="m4.9 4.9 14.2 14.2" />'),  # lucide: ban
     'okay': ('green', '<path d="M20 6 9 17l-5-5" />'),  # lucide: check
     'warning': ('orange', '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" />'),  # lucide: triangle-alert

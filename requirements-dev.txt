@@ -1,5 +1,8 @@
 -r requirements.txt
 pytest>=8.0
 pytest-xdist>=3.0
+# linting and type checking (also in the continuous integration, .github/workflows/ci.yml)
+ruff==0.15.0
+mypy==1.18.2
 # only needed to rebuild resources.py (python setup/build_resources.py)
 pyside6>=6.5.0

@@ -4,7 +4,7 @@
  W.Eckstein and R.Dohmen, 2002, version 4.01, target one dimensional
  last edition   A.Mutzke, 2024, version 7.07, target one dimensional
 
- Example 1: 2 keV Ar on Au at 60 degree (static)                                 
+ Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target 
 
  ------------------------------
   INPUT DATA:  STATIC CASE

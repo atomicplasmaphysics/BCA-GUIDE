@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from PyQt6.QtCore import QDir, QSettings, QLocale
@@ -12,7 +13,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
-    version = '1.5.06'
+    version = '1.5.07'
 
     # settings object
     settings = QSettings('TU Wien', title)
@@ -55,6 +56,10 @@ class GlobalConf:
     no_autodetect_version_name = 'no_autodetect_version'
     no_autodetect_version = settings.value(no_autodetect_version_name, defaultValue=False, type=bool)
 
+    # maximum number of simulations that run at the same time with "Run all" (default: number of processor cores)
+    max_parallel_runs_name = 'max_parallel_runs'
+    max_parallel_runs = settings.value(max_parallel_runs_name, defaultValue=max(1, os.cpu_count() or 1), type=int)
+
     # window parameters
     window_width_name = 'window_width'
     window_height_name = 'window_height'
@@ -87,7 +92,8 @@ class GlobalConf:
             GlobalConf.skip_delete_info_name: GlobalConf.skip_delete_info,
             GlobalConf.skip_open_multiple_info_name: GlobalConf.skip_open_multiple_info,
             GlobalConf.keep_configurations_info_name: GlobalConf.keep_configurations_info,
-            GlobalConf.no_autodetect_version_name: GlobalConf.no_autodetect_version
+            GlobalConf.no_autodetect_version_name: GlobalConf.no_autodetect_version,
+            GlobalConf.max_parallel_runs_name: GlobalConf.max_parallel_runs
         }
 
         for key, value in update_dict.items():

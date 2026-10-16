@@ -1,14 +1,14 @@
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint, QTimer
+from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint, QTimer, QElapsedTimer
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
+from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication, QWidgetAction, QWidget, QHBoxLayout, QLabel, QSpinBox
 
 from GlobalConf import GlobalConf
 
 from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
-from Utility.Layouts import ProgressTabBar
+from Utility.Layouts import ProgressTabBar, TimeProgressBar
 from Utility.Icons import getIcon
 
 from Pages.ConfigurationPage import ConfigurationPage
@@ -108,9 +108,19 @@ class MainWindow(QMainWindow):
 
         self.menu_simulation.addSeparator()
 
+        # queue of "Run all": pages that wait, pages that run and all pages of the current batch
+        self.run_queue: List[SimulationPage] = []
+        self.run_active: List[SimulationPage] = []
+        self.run_batch: List[SimulationPage] = []
+        self.run_durations: List[float] = []
+        self.run_batch_timer = QElapsedTimer()
+        self.run_status_timer = QTimer(self)
+        self.run_status_timer.setInterval(1000)
+        self.run_status_timer.timeout.connect(self.updateRunAllStatus)
+
         # Run all tabs
         self.action_run_all = self.menu_simulation.addAction(getIcon('play'), 'Run all tabs')
-        self.action_run_all.setToolTip('Runs all opened tab')
+        self.action_run_all.setToolTip('Runs all opened tabs, at most the given number of simulations at the same time (the others wait in a queue)')
         self.action_run_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_R))
         self.action_run_all.triggered.connect(lambda: self.menuRun())
 
@@ -119,6 +129,34 @@ class MainWindow(QMainWindow):
         self.action_run_all_detached.setToolTip('Runs all opened tab in detached mode')
         self.action_run_all_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Modifier.SHIFT | Qt.Key.Key_R))
         self.action_run_all_detached.triggered.connect(lambda: self.menuRun(detached=True))
+
+        # number of simultaneous simulations of "Run all"
+        self.max_parallel_runs = QSpinBox()
+        self.max_parallel_runs.setRange(1, 1024)
+        self.max_parallel_runs.setValue(GlobalConf.max_parallel_runs)
+        self.max_parallel_runs.setToolTip('Maximum number of simulations that run at the same time with "Run all tabs" (also in the preferences)')
+        self.max_parallel_runs.valueChanged.connect(self.setMaxParallelRuns)
+        max_parallel_widget = QWidget()
+        max_parallel_layout = QHBoxLayout(max_parallel_widget)
+        max_parallel_layout.setContentsMargins(28, 2, 8, 2)
+        max_parallel_layout.addWidget(QLabel('Simultaneous simulations:'))
+        max_parallel_layout.addWidget(self.max_parallel_runs)
+        self.action_max_parallel_runs = QWidgetAction(self)
+        self.action_max_parallel_runs.setDefaultWidget(max_parallel_widget)
+        self.menu_simulation.addAction(self.action_max_parallel_runs)
+        self.menu_simulation.aboutToShow.connect(lambda: self.max_parallel_runs.setValue(GlobalConf.max_parallel_runs))
+
+        self.menu_simulation.addSeparator()
+
+        # parameter scan and comparison of simulations
+        self.action_parameter_scan = self.menu_simulation.addAction(getIcon('play'), 'Parameter scan of current tab...')
+        self.action_parameter_scan.setToolTip('Runs a series of simulations in which one parameter of the current tab is varied and compares the results')
+        self.action_parameter_scan.triggered.connect(lambda: self.openParameterScan())
+        self.action_compare = self.menu_simulation.addAction(getIcon('search'), 'Compare simulations...')
+        self.action_compare.setToolTip('Compares the results of several simulations of the program of the current tab in one table and plot')
+        self.action_compare.triggered.connect(lambda: self.openComparison())
+
+        self.menu_simulation.addSeparator()
 
         # Abort all tabs
         self.action_abort_all = self.menu_simulation.addAction(getIcon('abort'), 'Abort all tabs')
@@ -448,12 +486,199 @@ class MainWindow(QMainWindow):
             )
             return
 
-        for sc in self.simulation_configs:
-            sc.tab_widget.runSimulation(detached=detached)
+        self.runSimulations([sc for sc in self.simulation_configs if sc.tab_widget is not None], detached=detached)
+
+    def currentSimulationPage(self) -> Optional[SimulationPage]:
+        """Returns the page of the current simulation tab or None"""
+
+        page = self.tab_simulations.currentWidget()
+        return page if isinstance(page, SimulationPage) else None
+
+    def openParameterScan(self):
+        """Opens the parameter scan of the current simulation tab"""
+
+        from Pages.ParameterScanDialog import ParameterScanDialog
+
+        page = self.currentSimulationPage()
+        if page is None:
+            self.writeStatusBar('Select the tab of a simulation for the parameter scan')
+            return
+        dialog = ParameterScanDialog(page)
+        dialog.show()
+
+    def openComparison(self, page: Optional[SimulationPage] = None):
+        """Opens the comparison of simulations (of the program of the current tab, starting with its folder)"""
+
+        from Pages.CompareDialog import CompareDialog
+
+        page = page or self.currentSimulationPage()
+        if page is None:
+            self.writeStatusBar('Select the tab of a simulation to compare it with other simulations')
+            return
+        folders = [page.simulation_configuration.save_folder] if page.simulation_configuration.save_folder else []
+        dialog = CompareDialog(self, type(page.evaluation_class.analysis), page.simulation_class.element_data, folders)
+        dialog.show()
+
+    def setMaxParallelRuns(self, value: int):
+        """Sets the maximum number of simultaneous simulations of "Run all" and starts waiting simulations"""
+
+        GlobalConf.max_parallel_runs = int(value)
+        GlobalConf.setValue(GlobalConf.max_parallel_runs_name, GlobalConf.max_parallel_runs)
+        self.startQueuedSimulations()
+
+    def runSimulations(self, configurations: List[SimulationConfiguration], detached: bool = False):
+        """
+        Runs several simulations. The warnings about the parameters are shown once for all simulations and at most
+        GlobalConf.max_parallel_runs simulations run at the same time, the others wait in a queue
+
+        :param configurations: configurations of the simulations
+        :param detached: (optional) run in detached mode (all at once, they can not be tracked)
+        """
+
+        pages = [
+            sc.tab_widget for sc in configurations
+            if sc.tab_widget is not None and not sc.running and sc.tab_widget not in self.run_queue
+        ]
+        if not pages:
+            return
+
+        # warnings of all simulations, the user decides
+        warnings = []
+        for page in pages:
+            warnings += [f'{page.simulation_configuration.title}: {warning}' for warning in page.runWarnings()]
+        if warnings:
+            _, result = showMessageBox(
+                self,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'Some simulations might fail, give wrong results or create very large files',
+                info_message='Press "OK" to run all simulations anyway.',
+                detailed_message='\n\n'.join(warnings),
+                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                expand_details=True
+            )
+            if result == QMessageBox.StandardButton.Cancel:
+                return
+
+        # the files of previous runs are deleted (asked once)
+        if not GlobalConf.skip_delete_info:
+            msg_box, result = showMessageBox(
+                self,
+                QMessageBox.Icon.Information,
+                'Attention!',
+                'Files in the working directories will be deleted',
+                info_message='In order to run the simulations, all non-input files in their working directories will be deleted automatically.',
+                detailed_message='\n'.join(str(page.simulation_configuration.save_folder) for page in pages if page.simulation_configuration.save_folder),
+                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                check_box_text='Do not show again'
+            )
+            if result == QMessageBox.StandardButton.Cancel:
+                return
+            if msg_box.checkBox().isChecked():
+                GlobalConf.skip_delete_info = True
+
+        if detached:
+            for page in pages:
+                page.runSimulation(detached=True, check_warnings=False, ask_delete=False)
+            return
+
+        if not self.run_queue and not self.run_active:
+            self.run_batch = []
+            self.run_durations = []
+            self.run_batch_timer.restart()
+        for page in pages:
+            page.setRunStatus(SimulationPage.RunStatus.QUEUED)
+        self.run_queue += pages
+        self.run_batch += pages
+        self.startQueuedSimulations()
+        self.run_status_timer.start()
+        self.updateRunAllStatus()
+
+    def startQueuedSimulations(self):
+        """Starts simulations of the queue until GlobalConf.max_parallel_runs simulations run"""
+
+        while self.run_queue and len(self.run_active) < max(1, GlobalConf.max_parallel_runs):
+            page = self.run_queue.pop(0)
+            try:
+                started = page.runSimulation(check_warnings=False, ask_delete=False)
+            except RuntimeError:
+                # tab was closed
+                continue
+            if started:
+                self.run_active.append(page)
+            else:
+                if page.run_status == SimulationPage.RunStatus.QUEUED:
+                    page.setRunStatus(SimulationPage.RunStatus.READY)
+                self.run_batch.remove(page)
+
+    def simulationFinished(self, page: SimulationPage):
+        """A simulation has finished: the next simulations of the queue are started"""
+
+        if page in self.run_active:
+            self.run_active.remove(page)
+            self.run_durations.append(page.run_progress.elapsed_timer_final / 1000)
+        self.startQueuedSimulations()
+        self.updateRunAllStatus()
+
+    def runAllRemainingTime(self) -> Optional[float]:
+        """
+        Returns an estimate of the remaining time (in s) of all simulations of "Run all" or None if unknown.
+        The remaining time of running simulations follows from their progress, waiting simulations take the mean
+        duration of the finished and running ones and start when a simulation finishes
+        """
+
+        slots = []
+        durations = list(self.run_durations)
+        for page in self.run_active:
+            progress = page.run_progress.value()
+            elapsed = page.run_progress.elapsed_timer.elapsed() / 1000
+            if progress < 1 or elapsed <= 0:
+                slots.append(None)
+                continue
+            total = elapsed * 100 / progress
+            durations.append(total)
+            slots.append(max(total - elapsed, 0.))
+        if not durations:
+            return None
+        mean_duration = sum(durations) / len(durations)
+        slots = [mean_duration if slot is None else slot for slot in slots]
+        slots += [0.] * max(0, max(1, GlobalConf.max_parallel_runs) - len(slots))
+        for _ in self.run_queue:
+            index = slots.index(min(slots))
+            slots[index] += mean_duration
+        return max(slots) if slots else 0.
+
+    def updateRunAllStatus(self):
+        """Shows the progress of all simulations of "Run all" in the status bar"""
+
+        if not self.run_batch:
+            self.run_status_timer.stop()
+            return
+        total = len(self.run_batch)
+        running = len(self.run_active)
+        waiting = len(self.run_queue)
+        finished = total - running - waiting
+        elapsed = self.run_batch_timer.elapsed() / 1000 if self.run_batch_timer.isValid() else 0
+        if not running and not waiting:
+            self.writeStatusBar(f'Run all: {total} simulation{"s" if total > 1 else ""} finished in {TimeProgressBar.formatTime(elapsed)}', visible_time=0)
+            self.run_batch = []
+            self.run_status_timer.stop()
+            return
+        remaining = self.runAllRemainingTime()
+        text = f'Run all: {finished} of {total} finished, {running} running, {waiting} waiting, elapsed {TimeProgressBar.formatTime(elapsed)}'
+        if remaining is not None:
+            text += f', about {TimeProgressBar.formatTime(remaining)} remaining'
+        self.writeStatusBar(text, visible_time=0)
 
     def menuAbort(self):
-        """Aborts all tabs"""
+        """Aborts all tabs (also the waiting simulations of "Run all")"""
 
+        for page in self.run_queue:
+            try:
+                page.setRunStatus(SimulationPage.RunStatus.READY)
+            except RuntimeError:
+                pass
+        self.run_queue = []
         for sc in self.simulation_configs:
             if sc.running:
                 sc.tab_widget.process.kill()

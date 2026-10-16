@@ -1,0 +1,18 @@
+ex07_ArW__ Example 7: 2 keV Ar on amorphous W at normal incidence, compare with the SDTrimSP examples 6 and 7
+# obligatory control parameters
+cdat 0 1.0 0
+geom 1000.0 100 0.0
+atda Ar W
+comp 0.0 1.0
+irra 1 2000.0 0.0 1.0
+# optional control parameters
+thrd 1
+pspr 5000
+coll 1 0
+damg 0.0
+elst 3
+exst 1 0.9999 3 0
+fout 100 100 100
+outp
+edep
+outl rang incd scat sput

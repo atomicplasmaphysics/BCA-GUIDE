@@ -15,14 +15,17 @@ def sdtrimspVersion(name: str) -> str:
         return Versions.V_702
     if '609' in name:
         return Versions.V_609
-    if '601' in name or '606_static' in name:
+    if '606' in name:
+        return Versions.V_606
+    if '601' in name:
         return Versions.V_601
     return Versions.V_700
 
 
 def sdtrimspFolder(version: str):
     folder_name = {
-        Versions.V_601: 'SDTrimSP_6.06',
+        Versions.V_601: 'SDTrimSP_6.01',
+        Versions.V_606: 'SDTrimSP_6.06',
         Versions.V_609: 'SDTrimSP_6.09',
         Versions.V_700: 'SDTrimSP_7.00',
         Versions.V_702: 'SDTrimSP_7.02',

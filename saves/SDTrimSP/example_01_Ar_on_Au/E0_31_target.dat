@@ -1,5 +1,5 @@
 # SDTrimSP: VERSION 7.07    16.10.2026
-Example 1: 2 keV Ar on Au at 60 degree (static)                                 
+Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target 
 #flu.-step out-layer     atoms  each-out max-layer calc_mom.  n-projec stat./dyn
 #       nh       nqx       ncp     idout      nqxm  ncp_proj     idrel
         40       100         2         4      5001         1         1

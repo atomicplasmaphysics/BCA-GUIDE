@@ -1,0 +1,19 @@
+ex02_DW___ Example 2: 1 keV D on W at normal incidence (dynamic, fluence 10 atoms/A^2), D is H with mass 2.014
+# obligatory control parameters
+cdat 0 10.0 1
+geom 500.0 100 0.0
+atda H W
+comp 0.0 1.0
+irra 1 1000.0 0.0 1.0
+# optional control parameters
+thrd 1
+pspr 20000
+coll 1 0
+damg 0.0
+mass 1 2.0141
+elst 3
+exst 1 0.5 3 0
+fout 100 100 20
+outp
+outi spyl srfc srfe reem
+outl incd rang scat rrlv

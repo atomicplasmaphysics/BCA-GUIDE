@@ -7,14 +7,14 @@ from pathlib import Path
 from shutil import copy2
 from sys import exit
 from locale import getpreferredencoding
-from re import sub
+from re import sub, findall
 from subprocess import Popen, getstatusoutput
 import subprocess
 import logging
 
 
 from PyQt6.QtCore import Qt, QUrl, QProcess, QTimer
-from PyQt6.QtGui import QKeySequence, QDesktopServices, QPalette, QColor
+from PyQt6.QtGui import QKeySequence, QDesktopServices
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton,
     QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication
@@ -40,10 +40,10 @@ from TableWidgets.CompoundList import CompoundList
 from TableWidgets.PeriodicTable import PeriodicTableDialog
 from TableWidgets.CrystalEditor import CrystalEditorDialog
 
-from Simulations.Simulations import SimulationsInput, SimulationsOutput
+from Simulations.Simulations import writeInputFiles, SimulationsInput, SimulationsOutput
 
 from Containers.SimulationConfiguration import SimulationConfiguration
-from Containers.Arguments import SimulationArguments, saveSimulationArguments, loadSimulationArguments
+from Containers.Arguments import SimulationArguments, loadSimulationArguments
 from Containers.GlobalDensity import GlobalDensity
 
 # avoiding circular import, but still get type hinting functionality
@@ -62,6 +62,7 @@ class SimulationPage(TabWithToolbar):
         """
 
         READY = auto()
+        QUEUED = auto()
         RUNNING = auto()
         DONE = auto()
         MISSING_PATHS = auto()
@@ -565,9 +566,14 @@ class SimulationPage(TabWithToolbar):
         self.plot_list_vbox.hl.addWidget(self.refresh_output_parameters_button)
         self.save_plot_button = QPushButton(getIcon('save'), '', self)
         self.save_plot_button.setMaximumWidth(50)
-        self.save_plot_button.setToolTip('Save the data of the selected plot')
+        self.save_plot_button.setToolTip('Export the data of the selected plot (CSV or tab separated text)')
         self.save_plot_button.clicked.connect(self.savePlot)
         self.plot_list_vbox.hl.addWidget(self.save_plot_button)
+        self.compare_button = QPushButton(getIcon('search'), '', self)
+        self.compare_button.setMaximumWidth(50)
+        self.compare_button.setToolTip('Compare the results with other simulations')
+        self.compare_button.clicked.connect(lambda: self.main_window.openComparison(self))
+        self.plot_list_vbox.hl.addWidget(self.compare_button)
         self.output_parameters_list = ListWidget(self)
         self.output_parameters_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.plot_list_vbox.addWidget(self.output_parameters_list)
@@ -919,20 +925,48 @@ class SimulationPage(TabWithToolbar):
             self.action_open_documentation.setEnabled(True)
             self.action_open_documentation.setToolTip('Open the simulation documentation PDF with the standard PDF viewer')
 
-    def runSimulation(self, detached: bool = False):
+    def runWarnings(self) -> List[str]:
+        """Returns the warnings of the simulation about the current parameters (see SimulationsInput.checkWarnings)"""
+
+        try:
+            return self.simulation_class.checkWarnings(self.makeArguments(), self.simulation_configuration.version)
+        except Exception as error:
+            logging.warning(f'Could not check the parameters for warnings: {error}')
+            return []
+
+    def runSimulation(self, detached: bool = False, check_warnings: bool = True, ask_delete: bool = True) -> bool:
         """
-        Executes the simulation based on input file (and layer file if provided)
+        Executes the simulation based on input file (and layer file if provided). Returns True if the simulation was started
 
         :param detached: (optional) if simulation should run in a detached window
+        :param check_warnings: (optional) show the warnings about the parameters before the run (the user decides)
+        :param ask_delete: (optional) ask before the files of a previous run are deleted
         """
 
         if not self.simulation_configuration.save_folder:
-            return
+            return False
+
+        # warnings: the simulation might fail, give wrong results or create large files, the user decides
+        if check_warnings:
+            warnings = self.runWarnings()
+            if warnings:
+                _, result = showMessageBox(
+                    self,
+                    QMessageBox.Icon.Warning,
+                    'Warning!',
+                    'The simulation might fail, give wrong results or create very large files',
+                    info_message='Press "OK" to run the simulation anyway.',
+                    detailed_message='\n\n'.join(warnings),
+                    standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                    expand_details=True
+                )
+                if result == QMessageBox.StandardButton.Cancel:
+                    return False
 
         # save files
         input_files = self.saveSettings()
         if not input_files:
-            return
+            return False
         input_file = input_files[1]
 
         # delete all files except input files (also the ones that are not written by the GUI, e.g. a0_tdiff.inp)
@@ -941,7 +975,7 @@ class SimulationPage(TabWithToolbar):
             if file.is_file() and file.name not in input_files and not inFileList(file.name, self.simulation_class.KeepFiles)
         ]
 
-        if files and not GlobalConf.skip_delete_info:
+        if files and not GlobalConf.skip_delete_info and ask_delete:
             msg_box, result = showMessageBox(
                 self,
                 QMessageBox.Icon.Information,
@@ -953,7 +987,7 @@ class SimulationPage(TabWithToolbar):
                 check_box_text='Do not show again'
             )
             if result == QMessageBox.StandardButton.Cancel:
-                return
+                return False
             if msg_box.checkBox().isChecked():
                 GlobalConf.skip_delete_info = True
 
@@ -1046,9 +1080,11 @@ EOF
 
             else:
                 self.main_window.writeStatusBar(f'OS {system()} not supported in detached mode')
-                return
+                return False
 
             self.main_window.writeStatusBar(f'Detached simulation {self.simulation_configuration.title} started')
+
+        return True
 
     def setEdited(self, state: bool = True):
         """Sets edited status"""
@@ -1069,7 +1105,7 @@ EOF
                 QMessageBox.Icon.Information,
                 'Attention!',
                 'The document has been modified',
-                info_message=f'Do you want to save your changes?',
+                info_message='Do you want to save your changes?',
                 standard_buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
             )
 
@@ -1130,7 +1166,7 @@ EOF
                 QMessageBox.Icon.Information,
                 'Attention!',
                 'The document has been modified',
-                info_message=f'Do you want to save your changes?',
+                info_message='Do you want to save your changes?',
                 standard_buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
             )
 
@@ -1174,8 +1210,7 @@ EOF
 
         # name of save folder
         if self.simulation_configuration.save_folder is not None:
-            save_folder_parts = self.simulation_configuration.save_folder.parts
-            self.working_dir.setText(f'{save_folder_parts[-1]}')
+            self.working_dir.setText(self.simulation_configuration.save_folder.resolve().name)
 
         # update parameter lists
         self.updateOutputFilesList()
@@ -1292,9 +1327,9 @@ EOF
         import_file = selectFileDialog(
             self,
             False,
-            f'Load input file "input.json"',
+            'Load input file "input.json"',
             GlobalConf.save_path,
-            file_filter=f'Import file (input.json)'
+            file_filter='Import file (input.json)'
         )
 
         if import_file is None:
@@ -1353,12 +1388,7 @@ EOF
         """
 
         old_save_folder = self.simulation_configuration.save_folder
-        arguments, input_text, layer_text, crystal_text = self.makePreview()
-
-        # file names to input files
-        file_name_input = self.simulation_class.nameInputFile(arguments, self.simulation_configuration.version)
-        file_name_layer = self.simulation_class.nameLayerFile(arguments, self.simulation_configuration.version)
-        file_name_crystal = self.simulation_class.nameCrystalFile(arguments, self.simulation_configuration.version)
+        arguments, _, _, _ = self.makePreview()
 
         # check all compound data has been inserted
         if not self.table_beam.allRowsHaveData() or not self.table_target.allRowsHaveData():
@@ -1440,39 +1470,14 @@ EOF
                 if file.is_file():
                     copy2(file, self.simulation_configuration.save_folder / file.name)
 
-        # save json simulation output
-        saveSimulationArguments(arguments, self.simulation_configuration.save_folder / 'input.json')
-        filelist = ['input.json', file_name_input]
-
-        # save input
-        path_input = self.simulation_configuration.save_folder / file_name_input
-        with open(path_input, 'w', encoding='utf-8') as file:
-            file.write(input_text)
-
-        # save layer input (or remove if not needed)
-        path_layer = self.simulation_configuration.save_folder / file_name_layer
-        if layer_text is not None:
-            with open(path_layer, 'w', encoding='utf-8') as file:
-                file.write(layer_text)
-            filelist.append(file_name_layer)
-        else:
-            path_layer.unlink(missing_ok=True)
-
-        # save distributions of energies and angles
-        for file_name, text in self.simulation_class.makeDistributionFiles(arguments, self.simulation_configuration.version).items():
-            with open(self.simulation_configuration.save_folder / file_name, 'w', encoding='utf-8') as file:
-                file.write(text)
-            filelist.append(file_name)
-
-        # save crystal input (or remove if not needed)
-        # TODO: change for later SDtrimSP versions!
-        path_crystal = self.simulation_configuration.save_folder / file_name_crystal
-        if crystal_text is not None:
-            with open(path_crystal, 'w', encoding='utf-8') as file:
-                file.write(crystal_text)
-            filelist.append(file_name_crystal)
-        else:
-            path_crystal.unlink(missing_ok=True)
+        # save all input files (input.json, input file, layer file, distributions, crystal file)
+        filelist = writeInputFiles(
+            self.simulation_class,
+            arguments,
+            self.simulation_configuration.save_folder,
+            self.simulation_configuration.folder,
+            self.simulation_configuration.version
+        )
 
         # open file
         if new_folder:
@@ -1565,6 +1570,15 @@ EOF
 
         setWidgetHighlight(self.additional_settings, bool(errors))
 
+        # mark the lines with problems (the message is shown as tooltip of the line)
+        marked_lines = {}
+        for error in errors:
+            match = findall(r'^Line (\d+): (.*)$', error)
+            if match:
+                line = int(match[0][0]) - 1
+                marked_lines[line] = (marked_lines[line] + '\n' if line in marked_lines else '') + match[0][1]
+        self.additional_settings.setMarkedLines(marked_lines)
+
         if not errors:
             if not silent:
                 showMessageBox(
@@ -1612,6 +1626,11 @@ EOF
         if status == SimulationPage.RunStatus.RUNNING:
             text = 'Running...'
             tooltip = 'The simulation is currently running'
+        elif status == SimulationPage.RunStatus.QUEUED:
+            text = 'Queued'
+            pixmap = self.pixmap_warning
+            color_style = Styles.orange
+            tooltip = 'The simulation waits until other simulations have finished ("Run all")'
         elif status == SimulationPage.RunStatus.DONE:
             text = 'Done!'
             tooltip = 'The simulation has successfully finished'
@@ -1709,6 +1728,9 @@ EOF
 
         self.setProcessWidgetsEnabled(True)
         self.stopSimulationTimer()
+
+        # next simulations of the queue ("Run all")
+        self.main_window.simulationFinished(self)
 
     def setProcessWidgetsEnabled(self, enabled):
         """Enable or disable actions which depend on the state of the process"""
@@ -1919,23 +1941,24 @@ EOF
         title = sub(r'\(.*?\)', '', title)  # delete brackets
         title = title.strip().replace(' ', '_')  # no spaces
         title = alphanumeric(title)  # only alphanumeric characters
-        plot_data = self.evaluation_class.getReturnData()
-        if plot_data is None:
-            self.main_window.writeStatusBar(f'No plot data provided - aborted')
+        if self.evaluation_class.getReturnData() is None:
+            self.main_window.writeStatusBar('No plot data provided - aborted')
             return
 
         file_path = selectFileDialog(
             self,
             True,
             'Save plot data as...',
-            self.simulation_configuration.save_folder / f'{title}.txt',
-            'Text files (*.txt)'
+            self.simulation_configuration.save_folder / f'{title}.csv',
+            'CSV files (*.csv);;Text files, tab separated (*.txt)'
         )
         if file_path is None:
             self.main_window.writeStatusBar('No file selected - aborted')
             return
 
-        with open(file_path, 'w', encoding='utf-8') as file:
+        # CSV files are comma separated, other files tab separated
+        plot_data = self.evaluation_class.getReturnData(separator=',' if file_path.suffix.lower() == '.csv' else '\t')
+        with open(file_path, 'w', encoding='utf-8', newline='') as file:
             file.write(plot_data)
 
         self.main_window.writeStatusBar(f'Plot data saved as "{file_path}"')

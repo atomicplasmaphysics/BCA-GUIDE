@@ -24,39 +24,45 @@ Basic examples are provided in the `saves` folder:
 
 Further examples for SDTrimSP (created with SDTrimSP 7.07, they can be opened with every version) are in `saves/SDTrimSP`:
 
-- `example_01_Ar_on_Au`: 2 keV Ar on Au at 60deg, sputter yields and distributions of reflected and sputtered particles
+- `example_01_Ar_on_Au`: 2 keV Ar on Au at 60deg, sputter yields, distributions of reflected and sputtered particles and
+  the energy distribution in the target
 - `example_02_D_on_W_dynamic`: 1 keV D on W, dynamic simulation (concentrations and surface level over the fluence)
 - `example_03_Ar_on_SiO2_Si_trajectories`: 1 keV Ar on a SiO2 layer on Si, trajectories of projectiles and recoils
+  (2D, 3D and animated, also as GIF)
 - `example_04_He_on_W_energy_distribution`: He on W with an energy distribution from `energy.inp`
 - `example_05_Ar_on_Si_angle_sweep`: 500 eV Ar on Si, angles of incidence from 0deg to 80deg
 - `example_06_Ar_on_W_crystal` and `example_07_Ar_on_W_amorphous`: 2 keV Ar on crystalline (bcc, 100) and amorphous W
 
+The same systems for TRIDYN 2022 are in `saves/TRIDYN` (`example_01_Ar_on_Au`, `example_02_D_on_W_dynamic` with D as H
+of mass 2.014, `example_03_Ar_on_SiO2_Si`, `example_07_Ar_on_W_amorphous`; TRIDYN has no energy distributions from files,
+angle sweeps and crystals).
+
 Open them with the *Open* button of a simulation tab and select the `input.json` of the example.
+The results of several examples (also of SDTrimSP versions or parameter scans) can be compared with
+*Simulation* > *Compare simulations...*.
 
 ## Installation
 
-The GUI needs [Python 3](https://www.python.org/downloads/) with following packages installed:
+The GUI needs [Python](https://www.python.org/downloads/) 3.10 or newer with following packages installed:
 
 ```
-Package     Version
------------ --------
-PyQt6       6.5.0
-matplotlib  3.5.3
-numpy       1.23.2
-scipy       1.9.1
+Package     minimum version   tested version
+----------- ----------------- --------------
+PyQt6       6.5.0             6.10.2
+matplotlib  3.5.3             3.10.7
+numpy       1.23.2            2.4.3
+scipy       1.9.1             1.17.1
+pillow      (with matplotlib) 12.0.0   (export of animations as GIF)
 ```
 
 and is tested for following Python versions and systems
 ```
 Version     System
 ----------- --------
-3.7.1       Windows
-3.8.2       Windows
-3.8.10      Linux
-3.10.0      Windows
-3.10.0      macOS
-3.11.0      Windows
+3.13.1      Windows 11 (all tests including the simulation runs)
+3.10, 3.13  Windows and Linux (continuous integration without simulation programs)
 ```
+Older versions of the BCA-GUIDE were also used with Python 3.7 to 3.11 on Windows, Linux and macOS.
 
 All packages can be installed using
 ```bash
@@ -99,11 +105,32 @@ Single simulations are configured manually as described below.
 
 1) Provide a title in the *Configuration title* field, e.g. **"SDTrimSP v6.01"**.
 2) Select **SDTrimSP** in the list of *Simulation programs*.
-3) Select **6.01, 6.06** in the list of *Simulation versions*.
+3) Select **6.01** in the list of *Simulation versions*.
 4) Select the *Simulation folder* of SDTrimSP v.6.01: `Simulation Programs\SDTrimSP\SDTrimSP_6.01_Windows`
 5) The *Simulation binary* of SDTrimSP v.6.01 is selected automatically: `...\bin\windows.SEQ\SDTRIM.SP.6.01x64.exe`. Otherwise, select it manually
 6) Check that the *Detected simulation* reads **SDTrimSP v.6.01**
 7) Confirm and add the new configuration by pressing *Save configuration*
+
+### Running simulations
+
+- *Run* in the toolbar of a simulation tab runs it. Before the run, the GUI warns about parameters that the simulation
+  accepts, but that might give wrong results, fail or create very large files (e.g. Lindhard-Scharff/Oen-Robinson above
+  their validity, transmission in SDTrimSP 7.00/7.01, trajectory and matrix files); the user decides whether it runs.
+- *Simulation* > *Run all tabs* runs all tabs with at most *Simultaneous simulations* at the same time (input field in the
+  *Simulation* menu and in the preferences), the others wait in a queue. The status bar shows the progress of all
+  simulations and an estimate of the remaining time.
+- *Simulation* > *Parameter scan of current tab...* runs a series of simulations in which one parameter is varied
+  (energy or angle of a beam species, fluence, number of histories, target thickness or the version, i.e. other
+  configurations of the same program) and compares the results in a table and plots.
+- The additional settings of SDTrimSP are checked against the parameters that the installed version reads (namelist
+  `TRI_INP` in `src/work.F90` if the source code is installed, otherwise `doc/tri.inp.txt`, otherwise a built-in list);
+  unknown parameters are underlined.
+
+## Development
+
+Linting with [ruff](https://docs.astral.sh/ruff/) (`ruff check .`) and type checking with [mypy](https://mypy-lang.org)
+(`mypy`, configured in `mypy.ini`) also run in the continuous integration (`.github/workflows/ci.yml`) together with the
+tests on Windows and Linux.
 
 ## Tests
 
@@ -125,7 +152,11 @@ With `--test-dir=DIR` (with `=`, otherwise pytest treats DIR as test folder; or 
 `tests/test_case_comparison.py` runs the test cases that come with SDTrimSP (folder `case`) directly with their version
 and through the GUI (the GUI loads the input files of the case, writes its own input files and runs them) and checks
 that both runs give identical results. Cases with more than `BCA_TEST_CASE_PROJECTILES` projectiles (default 20000)
-are skipped.
+are skipped. The same is done for the samples of TRIDYN 2022 (`TRIDYN2022_sample.ZIP`); the fluence of the dynamic
+sample is reduced, unless `BCA_TEST_TRIDYN_FULL=1` is set (takes hours).
+
+`tests/test_json_import.py` loads the `input.json` of every example into every installed version of SDTrimSP and into
+TRIDYN (and vice versa) and checks that loading never fails and that only parameters are written that the version reads.
 
 The simulation runs vary the input (energies from 10 eV to 1 GeV, angles, sweeps, angle and energy distributions,
 distributions from files (energy.inp, angle.inp, ene_ang.inp), Maxwellian distributions, dynamic mode, potentials,

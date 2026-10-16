@@ -4,10 +4,9 @@ import shutil
 
 import pytest
 
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFileDialog, QGraphicsDropShadowEffect
 
-from conftest import SAVES, SIMULATION_PROGRAMS, DATA, addSimulationPage, copySave, pump
+from conftest import SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
 from GlobalConf import GlobalConf
 from Containers.SimulationConfiguration import SimulationConfiguration
@@ -283,6 +282,28 @@ def test_layered_crystals(main_window, qapp, tmp_path, errors):
         assert page.loadSettings(sc.save_folder, from_json=from_json, unsaved_warning=False)
         pump(qapp)
         assert [cell.value() for cell in page.target_layers.rows[0].crystal_cells] == pytest.approx([0.5, 0.25])
+
+    # SDTrimSP only accepts miller indices [1, 0...1, 0...1] in layer.inp, the cells are marked and the run is refused
+    miller_cells = page.target_layers.rows[0].miller_cells
+    for cell, value in zip(miller_cells, (0, 0, 1)):
+        cell.setValue(value)
+    pump(qapp)
+    assert all(cell.graphicsEffect() is not None for cell in miller_cells)
+    problems = page.simulation_class.checkArguments(page.makeArguments(), sc.version)
+    assert any('miller index (0 0 1)' in problem and '(1 0 0)' in problem for problem in problems), problems
+    for cell, value in zip(miller_cells, (1, 0, 0.1)):
+        cell.setValue(value)
+    pump(qapp)
+    assert all(cell.graphicsEffect() is None for cell in miller_cells)
+
+    # layers without crystal get the miller index [1, 0, 0] (SDTrimSP checks all layers)
+    for cell in page.target_layers.rows[1].crystal_cells:
+        cell.setValue(0)
+    for cell, value in zip(page.target_layers.rows[1].miller_cells, (0, 0, 1)):
+        cell.setValue(value)
+    _, _, layer_text, _ = page.makePreview()
+    assert '1.00   0.00   0.00' in layer_text.splitlines()[3]
+    assert not page.simulation_class.checkArguments(page.makeArguments(), sc.version)
 
     # fractions larger than 1 are not accepted
     page.target_layers.rows[0].crystal_cells[1].setValue(0.75)

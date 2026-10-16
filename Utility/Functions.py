@@ -514,3 +514,40 @@ def pathToStr(path: Path | None) -> str:
     if isinstance(path, Path):
         return str(path)
     return ''
+
+
+def bestVersion(versions: List[str], version_name: str) -> Tuple[int, bool]:
+    """
+    Returns the index of the selectable version that suits the detected version best and if it matches exactly.
+    If the detected version is not listed, the highest listed version below it is used (or the lowest listed version)
+
+    :param versions: selectable versions, e.g. ['6.01', '7.00, 7.01', '7.07']
+    :param version_name: detected version name, e.g. 'SDTrimSP v7.05'
+
+    :return: (index or -1 if no version number is found, exact match)
+    """
+
+    version_numbers = findall(r'\d+(?:\.\d+)?', version_name)
+    if not version_numbers:
+        return -1, False
+    detected = version_numbers[0]
+
+    candidates = []
+    for i, entry in enumerate(versions):
+        for version in entry.split(','):
+            version = version.strip()
+            if version == detected:
+                return i, True
+            try:
+                candidates.append((float(version), i))
+            except ValueError:
+                pass
+
+    if not candidates:
+        return -1, False
+
+    detected_value = float(detected)
+    lower = [candidate for candidate in candidates if candidate[0] <= detected_value]
+    if lower:
+        return max(lower)[1], False
+    return min(candidates)[1], False

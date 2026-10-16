@@ -9,7 +9,7 @@ from PyQt6.QtGui import QFont, QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox, QMessageBox, QDialog, QFileDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QProgressBar, QGridLayout, QStackedWidget,
-    QWidget, QDialogButtonBox, QComboBox
+    QWidget, QDialogButtonBox, QComboBox, QSpinBox
 )
 
 from GlobalConf import GlobalConf
@@ -363,6 +363,19 @@ class PreferencesDialog(QDialog):
         self.no_autodetect_version.setChecked(GlobalConf.no_autodetect_version)
         self.layout.addWidget(self.no_autodetect_version)
 
+        # Simultaneous simulations of "Run all"
+        self.max_parallel_runs = QSpinBox(self)
+        self.max_parallel_runs.setRange(1, 1024)
+        self.max_parallel_runs.setValue(GlobalConf.max_parallel_runs)
+        self.layout_max_parallel_runs = InputHBoxLayout(
+            'Simultaneous simulations ("Run all"):',
+            self.max_parallel_runs,
+            tooltip='Maximum number of simulations that run at the same time when all tabs are run. The other simulations wait '
+                    'in a queue.<br>Each simulation uses one processor core (except MPI builds)',
+            split=0
+        )
+        self.layout.addLayout(self.layout_max_parallel_runs)
+
         # Ok button
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         self.button_box.accepted.connect(self.updatePreferences)
@@ -389,6 +402,8 @@ class PreferencesDialog(QDialog):
         # GlobalConf.skip_open_multiple_info = self.skip_open_multiple_info.isChecked()
         GlobalConf.keep_configurations_info = self.keep_configurations_info.isChecked()
         GlobalConf.no_autodetect_version = self.no_autodetect_version.isChecked()
+        GlobalConf.max_parallel_runs = self.max_parallel_runs.value()
+        GlobalConf.setValue(GlobalConf.max_parallel_runs_name, GlobalConf.max_parallel_runs)
 
         GlobalConf.use_default_language = self.use_default_language.isChecked()
         GlobalConf.setLanguage()

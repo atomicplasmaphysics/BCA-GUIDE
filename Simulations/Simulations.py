@@ -18,7 +18,7 @@ from TableWidgets.CrystalTable import CrystalRow
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Element import Element, Elements
-from Containers.Arguments import GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments
+from Containers.Arguments import GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments, saveSimulationArguments
 from Containers.Compound import Compound
 
 
@@ -2067,6 +2067,19 @@ class SimulationsInput:
 
         return []
 
+    def checkWarnings(self, arguments: SimulationArguments, version: str) -> List[str]:
+        """
+        Returns warnings about parameters that the simulation accepts, but that might give wrong results, fail or create very
+        large files. They are shown before the run and the user decides whether the simulation is run
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+
+        :return: list of warnings
+        """
+
+        return []
+
     def checkArguments(self, arguments: SimulationArguments, version: str) -> List[str]:
         """
         Checks combinations of parameters that the simulation does not accept and returns list of errors
@@ -2125,6 +2138,44 @@ class SimulationsInput:
         """
 
         return -1
+
+
+def writeInputFiles(simulation: 'SimulationsInput', arguments: SimulationArguments, save_folder: Path, simulation_folder: Path, version: str) -> List[str]:
+    """
+    Writes all input files of a simulation (input.json, input file, layer file, distributions, crystal file) into a folder
+    and returns the names of the written files. Layer and crystal files that are not needed are removed
+
+    :param simulation: <SimulationsInput> of the simulation
+    :param arguments: <SimulationArguments> container
+    :param save_folder: folder of the simulation
+    :param simulation_folder: folder of the installation of the simulation program
+    :param version: version of simulation
+    """
+
+    save_folder.mkdir(parents=True, exist_ok=True)
+    saveSimulationArguments(arguments, save_folder / 'input.json')
+    files = ['input.json']
+
+    def write(name: str, text: Optional[str]):
+        if not name:
+            return
+        path = save_folder / name
+        if text is None:
+            path.unlink(missing_ok=True)
+            return
+        with open(path, 'w', encoding='utf-8') as file:
+            file.write(text)
+        files.append(name)
+
+    write(simulation.nameInputFile(arguments, version), simulation.makeInputFile(arguments, simulation_folder, version))
+    write(simulation.nameLayerFile(arguments, version), simulation.makeLayerFile(arguments, simulation_folder, version) or None)
+    for name, text in simulation.makeDistributionFiles(arguments, version).items():
+        write(name, text)
+    crystal_text = None
+    if simulation.default_values.enable_crystal:
+        crystal_text = simulation.makeCrystalFile(arguments, simulation_folder, version) or None
+    write(simulation.nameCrystalFile(arguments, version), crystal_text)
+    return files
 
 
 class SimulationsOutput(QObject):
@@ -2287,11 +2338,13 @@ class SimulationsOutput(QObject):
 
         raise NotImplementedError
 
-    def getReturnData(self, precision: int = 7) -> Optional[str]:
+    def getReturnData(self, precision: int = 7, separator: str = '\t') -> Optional[str]:
         """
-        Returns data from plot as string ready to be written in file or None if no data is available
+        Returns data from plot as string ready to be written in file or None if no data is available.
+        Columns of different lengths are filled with empty values
 
         :param precision: precision of floats
+        :param separator: separator of the columns, e.g. tab or ',' (CSV)
         """
 
         analysis_data = self.analysis.data
@@ -2300,13 +2353,25 @@ class SimulationsOutput(QObject):
             return None
 
         data, labels = analysis_data
-        output = '\t'.join(labels) + '\n'
-        data_len = len(data)
-        for i in range(len(data[0])):
-            data_i = []
-            for j in range(data_len):
-                data_i.append(f'{data[j][i]:.{precision}E}')
-            output += '\t'.join(data_i) + '\n'
+        if data is None or labels is None or not len(data):
+            return None
+
+        def formatValue(value) -> str:
+            try:
+                return f'{float(value):.{precision}E}'
+            except (TypeError, ValueError):
+                return str(value)
+
+        def formatLabel(label) -> str:
+            label = str(label)
+            if separator == ',' and (',' in label or '"' in label):
+                label = '"' + label.replace('"', '""') + '"'
+            return label
+
+        columns = [np.ravel(np.asarray(column)) for column in data]
+        output = separator.join(formatLabel(label) for label in labels) + '\n'
+        for i in range(max(len(column) for column in columns)):
+            output += separator.join(formatValue(column[i]) if i < len(column) else '' for column in columns) + '\n'
         return output
 
 
@@ -2361,6 +2426,28 @@ class SimulationsAnalysis(QObject):
         if value_dict is None:
             return
         self.hlChange.emit(value_dict)
+
+    # plots that can be compared between several simulations (analysis functions without arguments): name -> title
+    ComparablePlots: Dict[str, str] = {}
+
+    def loadFolder(self, save_folder: Path) -> bool:
+        """
+        Reads the general information of the output in a folder, so that the analysis functions can be used for it.
+        Returns False if the folder contains no (readable) output
+
+        :param save_folder: folder of the simulation
+        """
+
+        self.save_folder = save_folder
+        return False
+
+    def summary(self) -> Dict[str, Dict[str, float]]:
+        """
+        Returns the main results of the simulation in the folder of loadFolder as {quantity: {species or "total": value}},
+        e.g. {'Sputter yield [atoms/ion]': {'W': 0.5, 'total': 0.5}}
+        """
+
+        return {}
 
     @pyqtSlot(str, dict, int)
     def analyse(self, func: str, func_args: dict, identifier: int):

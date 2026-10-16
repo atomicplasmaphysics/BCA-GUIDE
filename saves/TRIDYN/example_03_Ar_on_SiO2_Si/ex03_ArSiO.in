@@ -1,0 +1,17 @@
+ex03_ArSiO Example 3: 1 keV Ar on 20 A SiO2 on Si (static)
+# obligatory control parameters
+cdat 1 1.0 0
+geom 200.0 100 0.0
+atda Ar Si O
+irra 1 1000.0 0.0 1.0
+# optional control parameters
+thrd 1
+pspr 10000
+coll 1 0
+damg 0.0
+elst 3
+exst 1 0.9999 3 0
+fout 100 100 100
+outp
+edep
+outl rang incd scat sput

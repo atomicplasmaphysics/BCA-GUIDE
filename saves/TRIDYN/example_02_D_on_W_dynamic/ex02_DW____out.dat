@@ -1,0 +1,108 @@
+ program TRIDYN2022 - version Nov-2022
+ 1D dynamic composition under ion bombardment
+
+ Example 2: 1 keV D on W at normal incidence (dynamic, fluence 10 atoms/A^2), D is H with 
+
+ run ID: ex02_DW___
+ elapsed time:      0: 0:10
+ total cpu time:    0: 0:10
+ terminated: 16-Oct-2026 19:53
+
+ dynamic mode
+
+ nr. of components:  2
+ nr. of irradiation conditions:  1
+ total fluence: 0.1000E+02 A^-2
+ nr. of incident pseudoprojectiles:      20000
+ one pseudoatom corresponds to  0.5000E-03 atoms/A^2
+ resulting precision parameter= 0.1582E-02
+ random seed:     12345
+ nr. of threads:   1
+
+ computational volume:
+ initial computational depth:    500.0 A
+ nr. of depth intervals: 100
+ initial depth spacing:   5.0 A
+ semi-infinite body 
+ initial composition homogeneous
+
+  list of atomic components:
+  cpt. cs   z     m      be    ed    ef     dns0     ck
+  1    H     1.   2.01  0.00  8.00  8.68 0.4271E-01 1.00
+  2    W    74. 183.85  0.00  8.00  8.68 0.6320E-01 1.00
+
+  irradiation conditions:
+  cond.  1: constant incident energy; component=  1; energy(keV)=    1.000; angle of incidence(deg)=   0.00; fraction= 1.000
+
+ collisional control and parameters:
+ equipartitioned Lindhard-Scharff nonlocal and Oen-Robinson local electronic stopping
+
+  sbe:  cpt.     1     2
+         1      0.00  0.00
+         2      0.00  8.68
+
+ dynamic relaxation after     20 pseudoprojectile histories each
+ direct reemission of component  1 above max. atomic fraction 0.500
+ integral output after      200 pseudoprojectile histories each
+ compositional profile and damage outputs  after     1000 pseudoprojectile histories each
+
+ results and statistics:
+ initial average atomic density= 0.06320 A^-3
+ irrad.condition  1: fluence= 0.10000E+02 A^-2
+ max. nr. of simultaneous pseudoatoms=           5
+ total nr. of cascade atoms per unit area= 0.610555E+02 A^-2; av. start energy= 0.1605E+02 eV
+ total backward sputtering yield= 0.1300E-01; av. energy= 0.3873E+02 eV
+ total nr. of vacancies per unit area= 0.610555E+02 A^-2
+ max. rel. change of layer areal density per pseudoprojectile=  0.0148
+ final swelling=   117.471 A
+
+ areal densities and fluences (A^-2):
+ (bottom: added/lost at bottom by dynamic adjustment)
+ cpt.  initial     incident  scatt/transm  reemitted   sputtered    bottom     final
+   1   0.0000E+00  0.1000E+02 -0.4876E+01 -0.0000E+00 -0.6000E-01 -0.1650E-01  0.5048E+01
+   2   0.3160E+02  0.0000E+00 -0.0000E+00 -0.0000E+00 -0.7000E-01 -0.4740E+01  0.2679E+02
+
+ pseudoprojectile statistics:
+   backscatt.: projectiles scattered from top surface
+   disc_bottom: projectiles discarded after reaching bottom within body
+ irradiation condition  1: component=  1
+   launched   = 0.20000E+05  av.energy= 0.1000E+04 eV
+   slowed down= 0.10249E+05  av.range = 0.1895E+03 A  max.range= 0.5717E+03 A
+   backscatt. = 0.97380E+04  av.energy= 0.5705E+03 eV
+   disc_bottom= 0.13000E+02  av.energy= 0.7208E+02 eV
+
+ pseudo recoil atom statistics:
+   backsputt.: recoil atoms sputtered from top surface
+   disc_bottom: recoil atom discarded after reaching bottom within body
+   interstitials: deposited in body by over-threshold recoil atoms
+   vacancies: left in body by over-threshold or sub-threshold sputtered recoil atoms
+ component  1:
+   generated  = 0.12848E+05  av.energy= 0.2974E+02 eV
+   backsputt. = 0.12000E+03  av.energy= 0.7428E+02 eV  yield= 0.6000E-02
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.12728E+05
+   vacancies  = 0.12848E+05
+ component  2:
+   generated  = 0.10926E+06  av.energy= 0.1444E+02 eV
+   backsputt. = 0.14000E+03  av.energy= 0.8267E+01 eV  yield= 0.7000E-02
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.10912E+06
+   vacancies  = 0.10926E+06
+ all:
+   generated  = 0.12211E+06  av.energy= 0.1605E+02 eV
+   backsputt. = 0.26000E+03  av.energy= 0.3873E+02 eV  yield= 0.1300E-01
+   disc_bottom= 0.00000E+00  av.energy= 0.0000E+00 eV
+   interstit. = 0.12185E+06
+   vacancies  = 0.12211E+06
+
+ deposited energy (total run)
+                 by projectiles  by recoils     by all
+ component  1:
+   electronic =    0.1098E+08    0.1433E+06    0.1112E+08 eV
+   nuclear    =    0.2039E+07    0.2032E+06    0.2242E+07 eV
+ component  2:
+   electronic =    0.0000E+00    0.9754E+05    0.9754E+05 eV
+   nuclear    =    0.0000E+00    0.9718E+06    0.9718E+06 eV
+ all:
+   electronic =    0.1098E+08    0.2409E+06    0.1122E+08 eV
+   nuclear    =    0.2039E+07    0.1175E+07    0.3214E+07 eV

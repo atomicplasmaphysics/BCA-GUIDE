@@ -1,0 +1,225 @@
+{
+    "general": {
+        "title": "ex02_DW___",
+        "simulation": "TRIDYN"
+    },
+    "beam_arguments": {
+        "kinetic_energy_mode": "FIXED",
+        "angle_mode": "FIXED"
+    },
+    "beam_rows": [
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 1,
+            "symbol": "H",
+            "element": {
+                "symbol": "H",
+                "name": {
+                    "en": "hydrogen",
+                    "de": "Wasserstoff"
+                },
+                "atomic_nr": 1,
+                "period": 1,
+                "group": 1,
+                "atomic_mass": 2.0141,
+                "atomic_density": 0.04271,
+                "periodic_table_symbol": "H",
+                "mass_density": null,
+                "surface_binding_energy": 0.0,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": true,
+                "original": {
+                    "symbol": "H",
+                    "name": {
+                        "en": "hydrogen",
+                        "de": "Wasserstoff"
+                    },
+                    "atomic_nr": 1,
+                    "period": 1,
+                    "group": 1,
+                    "atomic_mass": 1.008,
+                    "atomic_density": 0.04271,
+                    "periodic_table_symbol": "H",
+                    "mass_density": null,
+                    "surface_binding_energy": 0.0,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 0.5,
+            "energy": 1000.0,
+            "angle": 0.0
+        }
+    ],
+    "target_arguments": {
+        "optional": {
+            "film_thickness": 0.0,
+            "global_density": false
+        },
+        "thickness": 500.0,
+        "segments": 100
+    },
+    "target_rows": [
+        {
+            "optional": {
+                "max_atomic_fraction_action": 3
+            },
+            "index": 2,
+            "symbol": "W",
+            "element": {
+                "symbol": "W",
+                "name": {
+                    "en": "tungsten",
+                    "de": "Wolfram"
+                },
+                "atomic_nr": 74,
+                "period": 6,
+                "group": 6,
+                "atomic_mass": 183.85,
+                "atomic_density": 0.0632,
+                "periodic_table_symbol": "W",
+                "mass_density": null,
+                "surface_binding_energy": 8.68,
+                "displacement_energy": 8.0,
+                "cutoff_energy": null,
+                "dissociation_heat": null,
+                "melt_enthalpy": null,
+                "vaporization_energy": null,
+                "formation_enthalpy": null,
+                "modified": false,
+                "original": {
+                    "symbol": "W",
+                    "name": {
+                        "en": "tungsten",
+                        "de": "Wolfram"
+                    },
+                    "atomic_nr": 74,
+                    "period": 6,
+                    "group": 6,
+                    "atomic_mass": 183.85,
+                    "atomic_density": 0.0632,
+                    "periodic_table_symbol": "W",
+                    "mass_density": null,
+                    "surface_binding_energy": 8.68,
+                    "displacement_energy": 8.0,
+                    "cutoff_energy": null,
+                    "dissociation_heat": null,
+                    "melt_enthalpy": null,
+                    "vaporization_energy": null,
+                    "formation_enthalpy": null,
+                    "modified": false,
+                    "original": null
+                }
+            },
+            "abundance": 1.0,
+            "max_atomic_fraction": 1.0,
+            "energy": 0.0,
+            "angle": 0.0
+        }
+    ],
+    "structure": [
+        {
+            "name": "Layer",
+            "segments": 100,
+            "thickness": 500.0,
+            "abundances": [
+                1.0
+            ]
+        }
+    ],
+    "settings": {
+        "optional": {
+            "no_recoils": false,
+            "inelastic_loss_model": "LINDHARD_SCHARFF_AND_OEN_ROBINSON",
+            "collisions": 1,
+            "projectiles": 20000,
+            "precision": false,
+            "vacancy_level": 0.0,
+            "log_frequency": 100,
+            "integral_frequency": 100,
+            "output_frequency": 20,
+            "profile_output": true,
+            "profile_energy": false,
+            "integral_outputs": [
+                "spyl",
+                "srfc",
+                "srfe",
+                "reem"
+            ],
+            "projectile_outputs": [
+                "incd",
+                "rang",
+                "scat",
+                "rrlv",
+                "incd",
+                "scat",
+                "scat"
+            ],
+            "log_reflected": true,
+            "log_sputtered": false
+        },
+        "title": "ex02_DW___",
+        "comment": "Example 2: 1 keV D on W at normal incidence (dynamic, fluence 10 atoms/A^2), D is H with mass 2.014",
+        "mode": "DYNAMIC",
+        "fluence": 10.0,
+        "threads": 1,
+        "compounds": []
+    },
+    "crystal_args": {
+        "optional": {
+            "p_max": 3.0,
+            "beam_dy": 0.0,
+            "beam_dz": 0.0,
+            "matrix_id": 3
+        },
+        "name": "MyLittleCrystal",
+        "lattice_id": 1,
+        "lattice_constant": 3.0,
+        "basis_vec_a1": {
+            "vec": [
+                1.0,
+                0.0,
+                0.0
+            ]
+        },
+        "basis_vec_a2": {
+            "vec": [
+                0.0,
+                1.0,
+                0.0
+            ]
+        },
+        "basis_vec_a3": {
+            "vec": [
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "miller_ind": {
+            "vec": [
+                0,
+                0,
+                0
+            ]
+        }
+    },
+    "crystal_rows": null,
+    "additional": [
+        ""
+    ]
+}

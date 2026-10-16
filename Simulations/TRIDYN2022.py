@@ -87,6 +87,48 @@ class DefaultValues(GeneralDefaultValues):
     rrlv = False
 
 
+def tridynSpecies(arguments: SimulationArguments) -> List[dict]:
+    """
+    Returns the species of the TRIDYN input in the order of "atda" as list of
+    {'symbol': str, 'beam': <RowArguments> or None, 'target': <RowArguments> or None, 'target_index': int or None}.
+    An element in the beam and in the target is one species (an element must not occur twice in "atda").
+    'target_index' is the index of the abundances of the target structure
+
+    :param arguments: <SimulationArguments> container
+    """
+
+    rows = sorted(row for row in arguments.beam_rows + arguments.target_rows if row.symbol)
+    target_rows = [row for row in rows if row in arguments.target_rows]
+    species: List[dict] = []
+    for row in rows:
+        entry = next((entry for entry in species if entry['symbol'] == row.symbol), None)
+        if entry is None:
+            entry = {'symbol': row.symbol, 'beam': None, 'target': None, 'target_index': None}
+            species.append(entry)
+        if row in arguments.target_rows:
+            if entry['target'] is None:
+                entry['target'] = row
+                entry['target_index'] = target_rows.index(row)
+        elif entry['beam'] is None:
+            entry['beam'] = row
+    return species
+
+
+def speciesAbundances(arguments: SimulationArguments, species: List[dict], structure) -> List[float]:
+    """Returns the atomic fractions of all species in a layer of the target structure (0 for projectiles that are not in the target)"""
+
+    target_count = sum(entry['target'] is not None for entry in species)
+    abundances = []
+    for entry in species:
+        if entry['target'] is None:
+            abundances.append(0.0)
+        elif structure is not None and len(structure.abundances) == target_count:
+            abundances.append(float(structure.abundances[entry['target_index']]))
+        else:
+            abundances.append(float(entry['target'].abundance))
+    return abundances
+
+
 class DictLookup:
     """
     Class to store lookup dictionaries that link simulation values to meaningful values
@@ -506,8 +548,12 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>thrd nrthr</i><br>Number of used threads. 0 will use the max. number of threads available'
         )
 
+        self.threads.setSpecialValueText('all')
         self.threads.valueChanged.connect(lambda _: self.edited())
         self.addLayout(self.layout_threads)
+
+        # outputs of a loaded input file that have no input fields (they are written again)
+        self.loaded_outputs = {'outi': [], 'outl': [], 'edep': False}
 
         # vacancy level
         self.vacancy_level = DoubleSpinBox(
@@ -812,6 +858,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         """Resets all input fields"""
 
         self.simulation_title.default = f'TRIDYN{dateStr("%d%m")}'
+        self.loaded_outputs = {'outi': [], 'outl': [], 'edep': False}
         self.layout_simulation_title.reset()
         self.layout_comment.reset()
         self.layout_calculation_method.reset()
@@ -889,6 +936,12 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
 
         if self.layout_sputtered_recoils.checkbox.isChecked():
             outl.extend(['incd', 'sput'])
+
+        # outputs of a loaded input file
+        loaded = getattr(self, 'loaded_outputs', {})
+        outi += [item for item in loaded.get('outi', []) if item not in outi]
+        outl += [item for item in loaded.get('outl', []) if item not in outl]
+        edep = edep or bool(loaded.get('edep'))
 
         """
         if self.outProfile.checkbox.isChecked():
@@ -1013,15 +1066,16 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             not_loadable.append('Number of collisions')
         self.collisions.setValue(iwc)
 
-        # number of pseudo-particles
+        # number of pseudo-particles (not needed, if the precision is given)
         nh = settings.get('projectiles')
         hist = settings.get('histories')
         try:
             nh = int(float(nh))
         except (ValueError, TypeError):
             nh = DefaultValues.nh
-            self.layout_projectiles.mark()
-            not_loadable.append('Pseudo-particles')
+            if not isinstance(settings.get('precision'), float):
+                self.layout_projectiles.mark()
+                not_loadable.append('Pseudo-particles')
         if isinstance(hist, int):
             nh = nh * hist
         self.layout_projectiles.checkbox.setChecked(True)
@@ -1090,6 +1144,12 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         outl = settings.get('projectile_outputs')
         if not isinstance(outl, list):
             outl = []
+
+        self.loaded_outputs = {
+            'outi': [str(item) for item in outi],
+            'outl': [str(item) for item in outl],
+            'edep': settings.get('profile_energy') is True
+        }
 
         # reflected projectiles and sputtered recoils
         self.layout_reflected_projectiles.checkbox.setChecked(all(item in outl for item in ['incd', 'scat']))
@@ -3516,14 +3576,10 @@ Wolfhard Möller
         :return: input file for simulation as string
         """
 
-        rows = arguments.beam_rows + arguments.target_rows
-        rows = [row for row in rows if row.symbol]
-        rows = sorted(rows)
-        mask_beam = [1 if row in arguments.beam_rows else 0 for row in rows]
-
-        abundances = [round(row.abundance, 2) for row in rows]
-        elements = [row.element for row in rows]
-        original_elements = [row.element if not row.element.modified else row.element.getOriginal() for row in rows]
+        # an element in the beam and in the target is one species
+        species = tridynSpecies(arguments)
+        elements = [(entry['target'] or entry['beam']).element for entry in species]
+        original_elements = [element if not element.modified else element.getOriginal() for element in elements]
         changed_elements = any(element.modified for element in elements)
 
         # obligatory control parameters
@@ -3552,15 +3608,7 @@ Wolfhard Möller
 
         atda = ' '.join([element.symbol for element in elements])
 
-        qu = [1.0 - m for m in mask_beam]
-        if arguments.structure and len(arguments.structure[0].abundances) == sum(qu):
-            j = 0
-            abundance_list = arguments.structure[0].abundances
-            for i, q in enumerate(qu):
-                if q == 1:
-                    qu[i] = abundance_list[j]
-                    j += 1
-
+        qu = speciesAbundances(arguments, species, arguments.structure[0] if arguments.structure else None)
         qu = normalizeList(qu)
         qu = [f'{q}' for q in qu]
         qu = ' '.join(qu)
@@ -3570,13 +3618,12 @@ Wolfhard Möller
             comp = f'\ncomp {qu}'
 
         irra = ''
-        qubeam = [round(a, 2) if m == 1 else 0.0 for a, m in zip(abundances, mask_beam)]
+        qubeam = [round(entry['beam'].abundance, 2) if entry['beam'] is not None else 0.0 for entry in species]
         qubeam = normalizeList(qubeam)
-        for i, mask in enumerate(mask_beam):
-            if mask != 1:
+        for i, entry in enumerate(species):
+            if entry['beam'] is None:
                 continue
-            row = rows[i]
-            irra += f'\nirra {i + 1} {row.energy} {row.angle} {qubeam[i]}'
+            irra += f'\nirra {i + 1} {entry["beam"].energy} {entry["beam"].angle} {qubeam[i]}'
 
         # optional control parameters
         cmpd = []
@@ -3664,7 +3711,8 @@ Wolfhard Möller
             inel = DefaultValues.inel
 
         exst = '\n'
-        for i, row in enumerate(rows):
+        for i, entry in enumerate(species):
+            row = entry['target'] or entry['beam']
             ires = row.get('max_atomic_fraction_action')
             if ires is None:
                 ires = DefaultValues.ires
@@ -3811,22 +3859,13 @@ fout {idfout} {iddout} {idqout}{output}
         if len(structures) < 2:
             return ''
 
-        rows = arguments.beam_rows + arguments.target_rows
-        rows = [row for row in rows if row.symbol]
-        rows = sorted(rows)
-        mask_target = [0 if row in arguments.beam_rows else 1 for row in rows]
+        species = tridynSpecies(arguments)
 
         layer_info_total = []
         for structure in structures:
             if not structure.segments:
                 continue
-            abundance_list = [0.0] * len(rows)
-            if arguments.structure and len(arguments.structure[0].abundances) == sum(mask_target):
-                j = 0
-                for i, m in enumerate(mask_target):
-                    if m == 1:
-                        abundance_list[i] = structure.abundances[j]
-                        j += 1
+            abundance_list = speciesAbundances(arguments, species, structure)
             layer_line = ('  '.join([f'{abundance:>13.5E}' for abundance in abundance_list])).strip()
             layer_line_rest = (layer_line + '\n') * (structure.segments - 1)
             layer_info_total.append(f'{layer_line}    {structure.name}\n{layer_line_rest}'.strip())
@@ -3856,8 +3895,13 @@ fout {idfout} {iddout} {idqout}{output}
 
         # get all contents from input file
         try:
-            with open(folder / input_file, 'r', encoding='utf-8', errors='replace') as file:
-                contents = [line.strip() for line in file.readlines() if line.strip()]
+            # the samples of TRIDYN are not encoded in UTF-8 (e.g. "°" in the title)
+            raw = (folder / input_file).read_bytes()
+            try:
+                text = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                text = raw.decode('latin-1')
+            contents = [line.strip() for line in text.splitlines() if line.strip()]
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{input_file}"!')
@@ -3940,7 +3984,8 @@ fout {idfout} {iddout} {idqout}{output}
         e0 = {}
         alpha = {}
         qubeam = {}
-        nrthr = DefaultValues.nrthr
+        # TRIDYN uses all processors if "thrd" is not given (nrthr = 0)
+        nrthr = 0
         nh = -1
         iwc = DefaultValues.iwc
         iproj = 0 - int(DefaultValues.iproj)
@@ -3956,9 +4001,8 @@ fout {idfout} {iddout} {idqout}{output}
         qumax = {}
         ires = {}
         prcs = -1
-        idfout = DefaultValues.idfout
-        iddout = DefaultValues.iddout
-        idqout = DefaultValues.idqout
+        # defaults of TRIDYN if "fout" is not given
+        idfout, iddout, idqout = 100, 50, 10
         outp = False
         outi = []
         outl = []
@@ -4219,7 +4263,7 @@ fout {idfout} {iddout} {idqout}{output}
                         structure.append(StructureArguments(
                             name=name,
                             segments=segment_count,
-                            thickness=xmax / segment_count,
+                            thickness=xmax / max(nqx, 1) * segment_count,
                             abundances=last_abundances
                         ))
 
@@ -4341,9 +4385,11 @@ fout {idfout} {iddout} {idqout}{output}
         )
 
         # settings data (<GeneralArguments>)
+        # without "pspr" and "prec" TRIDYN uses the default precision
         if prcs == -1:
             prcs = False
             if nh == -1:
+                prcs = DefaultValues.prcs
                 nh = DefaultValues.nh
 
         settings = GeneralArguments(
@@ -4808,6 +4854,69 @@ class SimulationAnalysis(SimulationsAnalysis):
     """
     Class for calculating TRIDYN2022 specific parameters and plots
     """
+
+    # plots that can be compared between several simulations
+    ComparablePlots = {
+        'plotImplantationDepth': 'Implantation depth',
+        'plotEnergyLossDepth': 'Projectile energy loss',
+        'plotVacanciesDepth': 'Ion-induced damages',
+        'plotEnergyScatter': 'Energy of backscattered ions',
+        'plotEnergySputter': 'Energy of backsputtered recoils',
+        'plotParticlesPolarScatter': 'Polar angles of backscattered ions',
+        'plotParticlesPolarSputter': 'Polar angles of backsputtered recoils',
+        'plotSputterYields': 'Sputter yields over fluence (dynamic)',
+        'plotSputterYieldsTotal': 'Total sputter yield over fluence (dynamic)',
+        'plotSurfaceLevel': 'Surface level over fluence (dynamic)',
+        'plotReflectionCoefficients': 'Reflection coefficients over fluence (dynamic)',
+    }
+
+    def loadFolder(self, save_folder: Path) -> bool:
+        """Reads the general information of the output in a folder"""
+
+        self.reset()
+        return bool(self.updateData(save_folder))
+
+    def summary(self) -> Dict[str, Dict[str, float]]:
+        """
+        Returns the main results of the simulation in the folder of loadFolder as {quantity: {species or "total": value}}.
+        Static simulations: yields, coefficients, depths and energy losses; dynamic simulations: the values at the end
+        """
+
+        result: Dict[str, Dict[str, float]] = {}
+
+        def add(quantity: str, values, total: Optional[float] = None, skip_zero: bool = True):
+            entries = {}
+            for element, value in zip(self.elements, values):
+                if not skip_zero or value:
+                    entries[str(element)] = float(value)
+            if total is not None:
+                entries['total'] = float(total)
+            if entries:
+                result[quantity] = entries
+
+        if self.save_folder is None:
+            return result
+        if not self.is_dynamic:
+            data = self.getProtocolData()
+            if data is None:
+                return result
+            sputter_yield, transmission_yield, reflection, transmission, implantation, energy_loss = data
+            add('Sputter yield [atoms/ion]', sputter_yield, np.sum(sputter_yield))
+            add('Mass sputter yield [amu/ion]', [], np.sum(np.dot(sputter_yield, self.masses)))
+            add('Reflection coefficient', reflection)
+            add('Mean implantation depth [Å]', implantation)
+            if np.any(transmission) or np.any(transmission_yield):
+                add('Transmission coefficient', transmission)
+                add('Transmission sputter yield [atoms/ion]', transmission_yield, np.sum(transmission_yield))
+            return result
+
+        data = self.getSputterYieldData()
+        if data is not None:
+            fluence, sputtered_yield = data
+            if len(fluence):
+                add('Sputter yield [atoms/ion]', sputtered_yield[-1], np.sum(sputtered_yield[-1]))
+                result['Fluence [10^20 ions/m²]'] = {'total': float(fluence[-1])}
+        return result
     
     def __init__(self, element_data: Elements):
         super().__init__(element_data)

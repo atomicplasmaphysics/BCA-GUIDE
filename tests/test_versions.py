@@ -24,6 +24,7 @@ def test_version_order():
 
 @pytest.mark.parametrize('version, isbv', [
     (Versions.V_601, {1, 2, 3, 4, 5, 6, 7}),
+    (Versions.V_606, {1, 2, 3, 4, 5, 6, 7}),
     (Versions.V_609, {1, 2, 3, 4, 6, 8}),  # 5 and 7 do not work since 6.09
     (Versions.V_700, {1, 2, 3, 4, 6, 8}),
     (Versions.V_702, {1, 2, 3, 4, 6, 8}),
@@ -35,6 +36,7 @@ def test_surface_binding_models(version, isbv):
 
 @pytest.mark.parametrize('version, inel0', [
     (Versions.V_601, {1, 2, 3, 4, 5, 6, 7}),
+    (Versions.V_606, {1, 2, 3, 4, 5, 6, 7}),
     (Versions.V_609, {1, 2, 3, 4, 5, 6, 7}),
     (Versions.V_700, {1, 2, 3, 4, 5, 6, 7, 8}),  # tabulated stopping power since 7.00
     (Versions.V_702, {1, 2, 3, 4, 5, 6, 7, 8}),

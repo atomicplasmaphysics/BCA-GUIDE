@@ -25,7 +25,7 @@ from PyQt6.QtCore import Qt, QSize, QRect
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QIcon, QColor
 
-import resources
+import resources  # noqa: F401 (registers the resources of Qt)
 
 from GlobalConf import GlobalConf
 from MainWindow import MainWindow

@@ -77,8 +77,11 @@ VARIANTS = {
     'energy_1GeV': {'beam.energy': 1e9, '_projectiles': 100},
     'normal_incidence': {'beam.angle': 0.},
     'grazing_89deg': {'beam.angle': 89.},
-    'energy_sweep': {'beam_arguments.kinetic_energy_mode': 'SWEEP', 'beam_arguments.optional.sweep': 3, 'beam.energy': 500.},
-    'angle_sweep': {'beam_arguments.angle_mode': 'SWEEP', 'beam_arguments.optional.sweep': 3, 'beam.angle': 30.},
+    # the energy distribution in the target (example 1) crashes SDTrimSP in sweeps
+    'energy_sweep': {'beam_arguments.kinetic_energy_mode': 'SWEEP', 'beam_arguments.optional.sweep': 3, 'beam.energy': 500.,
+                     'settings.optional.energy_distribution': False},
+    'angle_sweep': {'beam_arguments.angle_mode': 'SWEEP', 'beam_arguments.optional.sweep': 3, 'beam.angle': 30.,
+                    'settings.optional.energy_distribution': False},
     'random_angles': {'beam_arguments.angle_mode': 'RANDOM_DISTRIBUTION'},
     'cos_angles': {'beam_arguments.angle_mode': 'COS_DISTRIBUTION_1'},
     'maxwell_velocity': {'beam_arguments.kinetic_energy_mode': 'MAXWELLIAN_VELOCITY_DISTRIBUTION', 'beam.energy': 50.,
@@ -120,6 +123,8 @@ KNOWN_PROBLEMS = {
     ('SDTrimSP_6.06', 'H_Ar_FeW', None): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) for this target with two layers',
     ('SDTrimSP_6.06', None, 'all_outputs'): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
     ('SDTrimSP_7.00', None, 'all_outputs'): 'SDTrimSP 7.00 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
+    ('SDTrimSP_6.06', 'Ar_Au', 'dynamic'): 'SDTrimSP 6.06 stops ("DEPTH INTERVAL COMPLETELY DEPLETED", "DECREASE FLC OR INCREASE NH") or '
+                                           'crashes, the few projectiles of the test deplete the surface interval of Au at 60 degree',
 }
 
 # known problems where the simulation does not terminate (not run, they would block a process until the timeout)

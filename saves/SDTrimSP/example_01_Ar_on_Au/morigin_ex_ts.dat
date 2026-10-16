@@ -1,5 +1,5 @@
 # SDTrimSP: VERSION 7.07    16.10.2026
-Example 1: 2 keV Ar on Au at 60 degree (static)                                 
+Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target 
            2          40         100    number species of particle , NH, NR
    4000.00000000000        nproj
 TRANSMITTED SPUTTERED ATOMS COMPONENT( 1): Ar   

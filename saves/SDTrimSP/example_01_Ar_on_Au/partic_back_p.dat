@@ -1,5 +1,5 @@
 # SDTrimSP: VERSION 7.07    16.10.2026
-Example 1: 2 keV Ar on Au at 60 degree (static)                                 
+Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target 
         4000   maxnumber (backscattered-projectile)    
           40         100  ! NH NR
 #     species     gen/coll      fluence   end-energy      x_start      y_start      z_start        x_end        y_end        z_end        x_max        y_max        z_max         cosp         cosa   pathlength e_transf_sum     e_transf   e_con_elec  e_transf>ED         time

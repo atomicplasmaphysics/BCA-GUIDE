@@ -1,5 +1,5 @@
 # SDTrimSP: VERSION 7.07    16.10.2026
-Example 1: 2 keV Ar on Au at 60 degree (static)                                 
+Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target 
    2          4000.     8.0000       number of species, NH*NR, e_tot_p[MeV]
 # DEPTH DISTRIBUTIONS, COMPONENT( 1): Ar   
           10 number of depth

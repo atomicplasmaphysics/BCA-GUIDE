@@ -1,5 +1,6 @@
-from typing import List, Union, Tuple, Optional, Dict
+from typing import List, Union, Tuple, Optional, Dict, Callable
 from itertools import zip_longest
+from copy import deepcopy
 from pathlib import Path
 from re import findall, sub, split
 import logging
@@ -7,9 +8,16 @@ import logging
 import numpy as np
 from scipy.optimize import curve_fit
 from matplotlib import colormaps
+from matplotlib.cm import ScalarMappable
+from matplotlib.collections import LineCollection
+from matplotlib.colors import to_rgb, LogNorm, Normalize, ListedColormap, BoundaryNorm
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from matplotlib.ticker import MaxNLocator
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QApplication
 
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, InputHBoxLayouts, VBoxTitleLayout,
@@ -18,7 +26,7 @@ from Utility.Layouts import (
 )
 from Utility.Indexing import RunningIndex, DefaultAssumed, DeleteDict, ElementList
 from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt, readlines, pathToStr
-from Utility.Dialogs import DownloadDialog
+from Utility.Dialogs import DownloadDialog, selectFileDialog
 
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
@@ -35,7 +43,7 @@ from Containers.Arguments import (
 from Containers.Element import Element, Elements
 from Containers.Compound import Compound
 from Containers.Crystal import MillerIndex, BasisVector, Coordinate
-from Containers.CrystalTableFile import CrystalTableFile, CrystalTableError
+from Containers.CrystalTableFile import CrystalTableFile, CrystalTableError, layerMillerError, layerMillerSuggestion
 from Containers.Particle import Particle
 
 from Simulations.Simulations import (
@@ -45,14 +53,15 @@ from Simulations.Simulations import (
 
 
 class Versions:
-    V_601 = '6.01, 6.06'
+    V_601 = '6.01'
+    V_606 = '6.06'  # inelastic loss model LZ7 (inel0 = 7) as default
     V_609 = '6.09'
     V_700 = '7.00, 7.01'  # introduction of crystal input files
     V_702 = '7.02, 7.05'  # introduction of global crystal files
     V_707 = '7.07'  # file of tabulated stopping power must be selected (tbsp_binary, tbsp_ascii)
 
     # versions in chronological order
-    ORDER = [V_601, V_609, V_700, V_702, V_707]
+    ORDER = [V_601, V_606, V_609, V_700, V_702, V_707]
 
     @staticmethod
     def atLeast(version: str, minimum: str) -> bool:
@@ -301,13 +310,16 @@ def readTrajectoryFile(path: Path) -> List[dict]:
     """
     Reads the trajectories of trajec_all.dat (or trajec_stop_p.dat, ...), written with ltraj_p/ltraj_r.
     Each trajectory starts with a line of "i_traj ihist iproj parent ncoll species ibn termflag",
-    followed by the points "k x y z ptime energy".
+    followed by the points "k x y z ptime energy" (ptime in fs).
     Since SDTrimSP 6.09 "parent" is the generation of a recoil (0: projectile), until 6.06 it is the species of the parent.
+    Since 6.09 the time of a recoil starts at 0, the absolute time is reconstructed from the trajectories of the
+    previous generation (see trajectoryStartTimes)
 
     :param path: path of the file
 
     :return: list of trajectories {'projectile': (ihist, iproj), 'recoil': bool, 'generation': int or None if unknown,
-             'species': index of species starting at 0, 'termflag': int, 'points': array of (x, y, z, energy)}
+             'species': index of species starting at 0, 'termflag': int, 'collisions': int,
+             'points': array of (x, y, z, energy, absolute time)}
     """
 
     try:
@@ -327,7 +339,7 @@ def readTrajectoryFile(path: Path) -> List[dict]:
 
     def finish():
         if current is not None:
-            current['points'] = np.array(points, dtype=float).reshape(-1, 4)
+            current['points'] = np.array(points, dtype=float).reshape(-1, 5)
             trajectories.append(current)
 
     for line in lines[3:]:
@@ -347,7 +359,7 @@ def readTrajectoryFile(path: Path) -> List[dict]:
         if expect_info:
             expect_info = False
             try:
-                _, ihist, iproj, parent, _, species, _, termflag = (int(value) for value in values[:8])
+                _, ihist, iproj, parent, ncoll, species, _, termflag = (int(value) for value in values[:8])
             except ValueError:
                 continue
             # termflag 1-3: stopped, backscattered, transmitted projectile; 4-6: the same for recoils
@@ -358,16 +370,48 @@ def readTrajectoryFile(path: Path) -> List[dict]:
                 'generation': (parent if recoil else 0) if generation_known else (1 if recoil else 0),
                 'generation_known': generation_known,
                 'species': species - 1,
-                'termflag': termflag
+                'termflag': termflag,
+                'collisions': ncoll
             }
             continue
         if current is not None and len(values) >= 6:
             try:
-                points.append([float(values[1]), float(values[2]), float(values[3]), float(values[5])])
+                points.append([float(values[1]), float(values[2]), float(values[3]), float(values[5]), float(values[4])])
             except ValueError:
                 pass
     finish()
+    trajectoryStartTimes(trajectories)
     return trajectories
+
+
+def trajectoryStartTimes(trajectories: List[dict]):
+    """
+    Changes the times of the recoils to absolute times (since the start of the projectile).
+    Since SDTrimSP 6.09 the time of each recoil starts at 0. A recoil is created at a collision of a particle of the
+    previous generation, its start time is the time of the nearest point of the trajectories of the previous generation
+    of the same projectile. Until 6.06 the times are already absolute (and the generation is unknown)
+
+    :param trajectories: trajectories of readTrajectoryFile (changed in place)
+    """
+
+    by_projectile: Dict[tuple, List[dict]] = {}
+    for trajectory in trajectories:
+        by_projectile.setdefault(trajectory['projectile'], []).append(trajectory)
+
+    for group in by_projectile.values():
+        if not all(trajectory.get('generation_known', True) for trajectory in group):
+            continue
+        for generation in sorted({trajectory['generation'] for trajectory in group if trajectory['generation'] > 0}):
+            parents = [t['points'] for t in group if t['generation'] == generation - 1 and len(t['points'])]
+            if not parents:
+                continue
+            parent_points = np.vstack(parents)
+            for trajectory in group:
+                points = trajectory['points']
+                if trajectory['generation'] != generation or not len(points) or points[0, 4] > 0:
+                    continue
+                distances = np.sum((parent_points[:, :3] - points[0, :3]) ** 2, axis=1)
+                points[:, 4] += parent_points[np.argmin(distances), 4]
 
 
 def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
@@ -408,6 +452,375 @@ def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
     except (OSError, ValueError):
         pass
     return []
+
+
+def numbersOfLine(line: str) -> List[float]:
+    """
+    Returns all numbers of a line or an empty list if the line contains other text.
+    Fortran exponents with D are accepted, numbers without blank in between (e.g. "0.24525E-04-0.10110E-04") are separated
+    """
+
+    if findall(r'[a-cf-zA-CF-Z]', line):
+        return []
+    values = findall(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[EeDd][-+]?\d+)?', line)
+    try:
+        return [float(value.replace('D', 'E').replace('d', 'e')) for value in values]
+    except ValueError:
+        return []
+
+
+def readEnergyDistribution(path: Path) -> Optional[dict]:
+    """
+    Reads a file of the energy distribution in the target (lenergy_distr: E_distr_all.dat, E_distr_stop.dat, E_distr_inel.dat,
+    E_distr_nucl.dat). The file contains the edges of the intervals in x (depth), y and z and for each depth interval a matrix
+    of nz lines with ny values. The number of z intervals in the header is wrong (ny is written twice), so the edges are used
+
+    :param path: path of the file
+
+    :return: {'x', 'y', 'z': edges of the intervals [Å], 'values': array (nx, ny, nz) in [eV/Å³/projectile], 'projectiles': number}
+             or None if the file can not be read
+    """
+
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as file:
+            lines = file.read().splitlines()
+    except OSError:
+        return None
+
+    edges: Dict[str, List[float]] = {}
+    blocks: List[List[List[float]]] = []
+    projectiles = 0.
+    delta = 0.
+    normalized = False
+    section = None
+    for line in lines[2:]:
+        text = line.strip().lower()
+        if not text:
+            continue
+        if 'nh*nr_pproj' in text:
+            numbers = numbersOfLine(text.split('nh')[0])
+            projectiles = numbers[0] if numbers else 0.
+            continue
+        if 'dist_delta' in text and not blocks:
+            numbers = numbersOfLine(text.split('dx')[0])
+            delta = numbers[0] if numbers else 0.
+            continue
+        if text.startswith('intervals'):
+            section = text.split()[1]
+            edges[section] = []
+            continue
+        if 'depth-interval' in text:
+            section = 'values'
+            normalized = 'delta**3' in text
+            blocks.append([])
+            continue
+        if text.startswith(('normalized', 'sum ')):
+            section = None
+            continue
+        numbers = numbersOfLine(text)
+        if not numbers:
+            continue
+        if section in ('x', 'y', 'z'):
+            edges[section] += numbers
+        elif section == 'values':
+            blocks[-1].append(numbers)
+
+    if any(len(edges.get(axis, [])) < 2 for axis in 'xyz') or not blocks:
+        return None
+    nx, ny, nz = len(edges['x']) - 1, len(edges['y']) - 1, len(edges['z']) - 1
+    try:
+        values = np.array([block[:nz] for block in blocks[:nx]], dtype=float)  # (nx, nz, ny)
+    except ValueError:
+        return None
+    if values.shape != (nx, nz, ny):
+        return None
+    values = np.transpose(values, (0, 2, 1))
+
+    # E_distr_stop/inel/nucl are written in eV, E_distr_all is normalized to [eV/delta**3/nh/nr_pproj]
+    if not normalized and projectiles > 0 and delta > 0:
+        values = values / (delta ** 3 * projectiles)
+    return {'x': np.array(edges['x']), 'y': np.array(edges['y']), 'z': np.array(edges['z']), 'values': values, 'projectiles': projectiles}
+
+
+def readEnergyDepthMatrix(path: Path) -> List[dict]:
+    """
+    Reads a matrix of counts over the energy and the depth (morigin_ex_bs.dat, morigin_ex_ts.dat: depth of origin of
+    sputtered atoms, mpe_ex_p.dat: maximum penetration depth of backscattered projectiles)
+
+    :param path: path of the file
+
+    :return: list of {'species': name, 'energies': array, 'depths': array (centers), 'counts': array (energies, depths),
+             'projectiles': number of projectiles}
+    """
+
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as file:
+            lines = file.read().splitlines()
+    except OSError:
+        return []
+
+    matrices = []
+    projectiles = 0.
+    current = None
+    for line in lines[2:]:
+        text = line.strip()
+        lower = text.lower()
+        if 'nproj' in lower or 'nh*nr' in lower:
+            numbers = numbersOfLine(text.split()[0])
+            projectiles = numbers[0] if numbers else projectiles
+            continue
+        if 'component(' in lower:
+            name = text.split(':')[-1].strip() if ':' in text else f'Species {len(matrices) + 1}'
+            current = {'species': name, 'energies': [], 'depths': None, 'counts': [], 'projectiles': projectiles, 'dimensions': None}
+            matrices.append(current)
+            continue
+        if current is None or lower.startswith(('#', 'energy')):
+            continue
+        numbers = numbersOfLine(text)
+        if not numbers:
+            continue
+        if current['dimensions'] is None:
+            # line with the dimensions (energies, depths, logarithmic energies)
+            current['dimensions'] = numbers
+            continue
+        if current['depths'] is None:
+            # line with 0 and the depths
+            if len(numbers) > 1:
+                current['depths'] = numbers[1:]
+            continue
+        if numbers[0] == 0 and current['energies']:
+            # sums of the columns
+            continue
+        if len(numbers) > len(current['depths']):
+            current['energies'].append(numbers[0])
+            current['counts'].append(numbers[1:1 + len(current['depths'])])
+
+    result = []
+    for matrix in matrices:
+        if matrix['depths'] is None or not matrix['counts']:
+            continue
+        matrix['energies'] = np.array(matrix['energies'])
+        matrix['depths'] = np.array(matrix['depths'])
+        matrix['counts'] = np.array(matrix['counts'], dtype=float)
+        if not matrix['projectiles']:
+            matrix['projectiles'] = projectiles
+        del matrix['dimensions']
+        result.append(matrix)
+    return result
+
+
+def matrixSpecies(path: Path) -> List[str]:
+    """Returns the names of the species of the matrices with linear energy intervals in a matrix file (e.g. meagb_p.dat)"""
+
+    names = []
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as file:
+            previous = ''
+            for line in file:
+                if 'lin.energy' in line.lower() and 'COMPONENT(' in previous.upper():
+                    names.append(previous.split(':')[-1].strip() if ':' in previous else f'Species {len(names) + 1}')
+                previous = line
+    except OSError:
+        pass
+    return names
+
+
+def readEnergyAngleMatrix(path: Path) -> List[dict]:
+    """
+    Reads the matrix of the energy, azimuthal and polar angle of backscattered or transmitted particles (lmatrices:
+    meagb_p.dat, meagb_s.dat, meagt_p.dat, meagt_s.dat). Only the matrices with linear energy intervals are read,
+    the counts are summed over the azimuthal angle
+
+    :param path: path of the file
+
+    :return: list of {'species': name, 'energies': array, 'polar': array, 'counts': array (energies, polar angles), 'projectiles': number}
+    """
+
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as file:
+            lines = file.read().splitlines()
+    except OSError:
+        return []
+
+    matrices = []
+    i = 0
+    while i < len(lines):
+        text = lines[i].strip()
+        if 'COMPONENT(' not in text.upper() or i + 2 >= len(lines) or 'lin.energy' not in lines[i + 1].lower():
+            i += 1
+            continue
+        name = text.split(':')[-1].strip() if ':' in text else f'Species {len(matrices) + 1}'
+        dimensions = numbersOfLine(lines[i + 2])
+        if len(dimensions) < 3:
+            i += 1
+            continue
+        n_energy, n_azimuth, n_polar = (int(value) for value in dimensions[:3])
+        projectiles = dimensions[3] if len(dimensions) > 3 else 0.
+        i += 3
+
+        def readValues(label: str) -> List[float]:
+            nonlocal i
+            while i < len(lines) and label not in lines[i].upper():
+                i += 1
+            i += 1
+            values = []
+            while i < len(lines) and not lines[i].lstrip().startswith('#'):
+                numbers = numbersOfLine(lines[i])
+                if not numbers:
+                    break
+                values += numbers
+                i += 1
+                if len(values) >= (n_energy if label == 'ENERGY' else n_azimuth if label == 'AZIMUTHAL' else n_polar):
+                    break
+            return values
+
+        energies = readValues('ENERGY')
+        readValues('AZIMUTHAL')
+        polar = readValues('POLAR')
+        counts = np.zeros((n_energy, n_polar))
+        for k in range(n_energy):
+            # line with the polar angles, then one line per azimuthal angle
+            i += 1
+            block = []
+            for _ in range(n_azimuth):
+                if i >= len(lines):
+                    break
+                block.append(numbersOfLine(lines[i])[:n_polar])
+                i += 1
+            try:
+                counts[k] = np.sum(np.array(block, dtype=float), axis=0)
+            except ValueError:
+                pass
+        matrices.append({'species': name, 'energies': np.array(energies[:n_energy]), 'polar': np.array(polar[:n_polar]),
+                         'counts': counts, 'projectiles': projectiles})
+
+    # the number of projectiles is only written for the first species
+    projectiles = max([matrix['projectiles'] for matrix in matrices], default=0.)
+    for matrix in matrices:
+        matrix['projectiles'] = matrix['projectiles'] or projectiles
+    return matrices
+
+
+NAMELIST_CACHE: Dict[str, Optional[set]] = {}
+
+
+def namelistParameters(folder: Optional[Path]) -> Optional[set]:
+    """
+    Returns the names (lower case) of the parameters of tri.inp that an installation of SDTrimSP accepts or None if unknown.
+    The names are taken from the definition of the namelist TRI_INP in the source code (src/work.F90), otherwise from
+    the list of variables in the documentation (doc/tri.inp.txt)
+
+    :param folder: folder of the installation
+    """
+
+    if folder is None:
+        return None
+    key = str(folder)
+    if key in NAMELIST_CACHE:
+        return NAMELIST_CACHE[key]
+
+    names = None
+    for source in sorted((folder / 'src').glob('*.[fF]90')) if (folder / 'src').is_dir() else []:
+        try:
+            text = source.read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            continue
+        if not findall(r'(?i)namelist\s*/\s*tri_inp\s*/', text):
+            continue
+        # continuation lines end with "&", comments start with "!"
+        lines = []
+        started = False
+        for line in text.splitlines():
+            if not started:
+                if findall(r'(?i)namelist\s*/\s*tri_inp\s*/', line):
+                    started = True
+                    line = line.split('/', 2)[-1]
+                else:
+                    continue
+            code = line.split('!')[0]
+            if not code.strip() and line.strip().startswith('!'):
+                continue
+            lines.append(code.replace('&', ' '))
+            if not code.rstrip().endswith('&'):
+                break
+        names = {name.lower() for name in findall(r'[A-Za-z_][A-Za-z0-9_]*', ' '.join(lines))}
+        break
+
+    if names is None:
+        try:
+            text = (folder / 'doc' / 'tri.inp.txt').read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            text = ''
+        if 'variable in tri.inp' in text:
+            names = set()
+            for line in text.split('variable in tri.inp', 1)[1].splitlines():
+                match = findall(r'^\s([a-z][a-z0-9_]*)', line)
+                if match and not line.lstrip().startswith('!'):
+                    names.add(match[0].lower())
+            names = names or None
+
+    NAMELIST_CACHE[key] = names
+    return names
+
+
+def electronicStopping(energy: float, z1: int, m1: float, z2: float) -> float:
+    """
+    Returns an estimate of the electronic stopping cross-section in [eV Å²]: Lindhard-Scharff at low energies, Bethe at high
+    energies, combined as 1 / (1 / S_LS + 1 / S_Bethe)
+
+    :param energy: energy of the projectile in [eV]
+    :param z1: atomic number of the projectile
+    :param m1: mass of the projectile in [amu]
+    :param z2: (mean) atomic number of the target
+    """
+
+    lindhard = 1.212 * z1 ** (7 / 6) * z2 * np.sqrt(energy / m1) / (z1 ** (2 / 3) + z2 ** (2 / 3)) ** 1.5
+    # Bethe: 4 pi e^4 Z1^2 Z2 / (m_e v^2) ln(2 m_e v^2 / I) with e^2 = 14.4 eV Å, m_e v^2 = 2 E m_e / M1, I = 10 Z2 eV
+    electron_energy = 2 * energy * 5.4858e-4 / m1
+    argument = 2 * electron_energy / (10 * z2)
+    if argument <= np.e:
+        return lindhard
+    bethe = 4 * np.pi * 14.4 ** 2 * z1 ** 2 * z2 / electron_energy * np.log(argument)
+    return 1 / (1 / lindhard + 1 / bethe)
+
+
+def nuclearStopping(energy: float, z1: int, m1: float, z2: float, m2: float) -> float:
+    """
+    Returns the nuclear stopping cross-section of the universal ZBL potential in [eV Å²]
+
+    :param energy: energy of the projectile in [eV]
+    :param z1: atomic number of the projectile
+    :param m1: mass of the projectile in [amu]
+    :param z2: (mean) atomic number of the target
+    :param m2: (mean) mass of the target in [amu]
+    """
+
+    screening = z1 ** 0.23 + z2 ** 0.23
+    reduced = 32.53 * m2 * energy / 1000 / (z1 * z2 * (m1 + m2) * screening)
+    if reduced <= 30:
+        reduced_stopping = np.log(1 + 1.1383 * reduced) / (2 * (reduced + 0.01321 * reduced ** 0.21226 + 0.19593 * reduced ** 0.5))
+    else:
+        reduced_stopping = np.log(reduced) / (2 * reduced)
+    return 84.62 * z1 * z2 * m1 * reduced_stopping / ((m1 + m2) * screening)
+
+
+def estimateRange(energy: float, z1: int, m1: float, z2: float, m2: float, density: float) -> float:
+    """
+    Returns an estimate of the path length (upper limit of the projected range) of a projectile in [Å]
+
+    :param energy: energy of the projectile in [eV]
+    :param z1: atomic number of the projectile
+    :param m1: mass of the projectile in [amu]
+    :param z2: (mean) atomic number of the target
+    :param m2: (mean) mass of the target in [amu]
+    :param density: atomic density of the target in [atoms/Å³]
+    """
+
+    if energy <= 1 or density <= 0 or z1 <= 0 or z2 <= 0:
+        return 0.
+    energies = np.geomspace(1., energy, 400)
+    stopping = np.array([density * (nuclearStopping(e, z1, m1, z2, m2) + electronicStopping(e, z1, m1, z2)) for e in energies])
+    return float(np.trapezoid(1 / stopping, energies)) if hasattr(np, 'trapezoid') else float(np.trapz(1 / stopping, energies))
 
 
 def usesCrystalLayerFile(arguments: SimulationArguments, version: str) -> bool:
@@ -531,9 +944,10 @@ class DefaultValues(GeneralDefaultValues):
 
     def __init__(self, version: str):
         # defaults according to the documentation (doc/default_init.txt, doc/tri.inp.txt) of each version
+        if Versions.atLeast(version, Versions.V_606):
+            self.inel0 = 7
         if Versions.atLeast(version, Versions.V_609):
             self.isbv = 8
-            self.inel0 = 7
 
         # crystal input
         if Versions.atLeast(version, Versions.V_700):
@@ -1150,6 +1564,9 @@ class HlTargetSettings(HlGeneralTargetSettings):
         self.layout_segments.reset()
         self.layout_global_density.reset()
 
+        # loaded options of the layer file without input fields (iq0, qu), they are written again
+        self.layer_file_options = {}
+
         self.updateSegmentThickness()
         self.changedGlobDens()
 
@@ -1173,7 +1590,8 @@ class HlTargetSettings(HlGeneralTargetSettings):
             segments=self.segments.value(),  # nqx
             global_density=global_density,  # !globaldensity
             crystal_flag=crystal_flag,
-            miller_ind=miller_ind
+            miller_ind=miller_ind,
+            **getattr(self, 'layer_file_options', {})
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
@@ -1181,6 +1599,9 @@ class HlTargetSettings(HlGeneralTargetSettings):
 
         self.reset()
         target_args = arguments.target_args
+        self.layer_file_options = {
+            name: target_args.get(name) for name in ('layer_file_flag', 'layer_file_qu') if target_args.get(name) is not None
+        }
         assumed = arguments.get('assumed')
         if not isinstance(assumed, list):
             assumed = []
@@ -1261,8 +1682,9 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             'Simulation Title:',
             self.title,
             split=20,
-            tooltip='The first line of the <i>tri.inp</i> file'
+            tooltip='The first line of the <i>tri.inp</i> file (at most 80 characters, SDTrimSP reads only 80 characters)'
         )
+        self.title.setMaxLength(80)
         self.title.textChanged.connect(lambda _: self.edited())
         self.addLayout(self.layout_title)
 
@@ -2183,7 +2605,7 @@ class CompRowBeamSettings(CompRow):
             'Values are calculated for each element based on values taken from "table6a" and "table6b"'
         ]
 
-        if Versions.atLeast(self.version, Versions.V_609):
+        if Versions.atLeast(self.version, Versions.V_606):
             self.inelastic_loss_model_entries.append('LZ7')
             self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER)
             self.inelastic_loss_model_tooltips.append('Combination of Lindhard-Scharff and Ziegler-Biersack with corretion')
@@ -2549,43 +2971,154 @@ class HlPlot(HlGeneralPlot):
         # trajectories
         self.trajectory_number = SpinBox(default=1, input_range=(1, 1), buttons=True, scroll=True)
         self.layout_trajectory_number = InputHBoxLayout(
-            'Projectiles',
+            'Projectile',
             self.trajectory_number,
-            tooltip='Number of projectiles whose trajectories (and the ones of their recoils) are shown.<br>'
+            tooltip='Number of the projectile whose trajectory (and the ones of its recoils) is shown.<br>'
                     'The number of traced projectiles is set in the simulation settings (numb_hist)'
         )
-        self.trajectory_view = ComboBox(entries=['depth x – lateral y', 'depth x – lateral z'], entries_save=['y', 'z'])
-        self.layout_trajectory_view = InputHBoxLayout('View', self.trajectory_view, tooltip='Plane in which the trajectories are shown')
-        self.trajectory_recoils = InputHBoxLayout('Recoils', None, checkbox=True, tooltip='Show the trajectories of the recoils, colored by their generation in the collision cascade')
+        self.trajectory_view = ComboBox(
+            entries=['depth x – lateral y', 'depth x – lateral z', 'both lateral directions', 'top view (y – z)', '3D'],
+            entries_save=['y', 'z', 'both', 'top', '3d']
+        )
+        self.layout_trajectory_view = InputHBoxLayout('View', self.trajectory_view, tooltip='Plane in which the trajectories are shown (the 3D view can be rotated)')
+        self.trajectory_color = ComboBox(entries=['species and generation', 'energy', 'time'], entries_save=['species', 'energy', 'time'])
+        self.layout_trajectory_color = InputHBoxLayout(
+            'Color',
+            self.trajectory_color,
+            tooltip='Color of the trajectories:<br>'
+                    '<b>species and generation</b>: each species has its own color, recoils of later generations of the cascade are darker<br>'
+                    '<b>energy</b>: kinetic energy of the particle on its flight path<br>'
+                    '<b>time</b>: time since the projectile entered the target'
+        )
+        self.trajectory_recoils = InputHBoxLayout('Recoils', None, checkbox=True, tooltip='Show the trajectories of the recoils')
         self.trajectory_layers = InputHBoxLayout('Layers', None, checkbox=True, tooltip='Show the layers of the target structure below the trajectories')
-        self.trajectory_layouts = [self.layout_trajectory_number, self.layout_trajectory_view, self.trajectory_recoils, self.trajectory_layers]
+
+        # animation of the cascade: time slider (the maximum shows the whole cascade), play and export as GIF
+        self.trajectory_time_steps = 200
+        self.trajectory_time = QSlider(Qt.Orientation.Horizontal)
+        self.trajectory_time.setRange(0, self.trajectory_time_steps)
+        self.trajectory_time.setValue(self.trajectory_time_steps)
+        self.trajectory_time.setMinimumWidth(100)
+        self.layout_trajectory_time = InputHBoxLayout(
+            'Time',
+            self.trajectory_time,
+            tooltip='Time in the collision cascade on a logarithmic scale (right end: the whole cascade)'
+        )
+        self.trajectory_play = QPushButton(getIcon('play'), '')
+        self.trajectory_play.setCheckable(True)
+        self.trajectory_play.setToolTip('Animate the collision cascade')
+        self.trajectory_gif = QPushButton('GIF')
+        self.trajectory_gif.setToolTip('Save the animation of the collision cascade with the current settings as GIF')
+        self.layout_trajectory_time.addWidget(self.trajectory_play)
+        self.layout_trajectory_time.addWidget(self.trajectory_gif)
+        self.layout_trajectory_time.widgets_list += [self.trajectory_play, self.trajectory_gif]
+        self.trajectory_timer = QTimer()
+        self.trajectory_timer.setInterval(60)
+        self.trajectory_timer.timeout.connect(self.animationStep)
+        self.trajectory_play.toggled.connect(self.animate)
+        self.trajectory_gif.clicked.connect(lambda: self.emit({'trajectory_gif': self.trajectoryArguments(animation=False)}))
+
+        self.trajectory_layouts = [
+            self.layout_trajectory_number, self.layout_trajectory_view, self.layout_trajectory_color, self.trajectory_recoils,
+            self.trajectory_layers, self.layout_trajectory_time
+        ]
         for layout in self.trajectory_layouts:
             layout.setHidden(True)
             self.addLayout(layout)
         self.trajectory_number.valueChanged.connect(self.emitTrajectories)
         self.trajectory_view.currentIndexChanged.connect(self.emitTrajectories)
+        self.trajectory_color.currentIndexChanged.connect(self.emitTrajectories)
         self.trajectory_recoils.checkbox.stateChanged.connect(self.emitTrajectories)
         self.trajectory_layers.checkbox.stateChanged.connect(self.emitTrajectories)
+        self.trajectory_time.valueChanged.connect(self.emitTrajectories)
+
+        # energy distribution in the target
+        self.energy_distribution_view = ComboBox(
+            entries=['depth x – lateral y', 'depth x – lateral z', 'top view (y – z)', 'depth profile'],
+            entries_save=['y', 'z', 'top', 'depth']
+        )
+        self.layout_energy_distribution_view = InputHBoxLayout(
+            'View',
+            self.energy_distribution_view,
+            tooltip='Map of the energy summed over the third direction or depth profile summed over both lateral directions'
+        )
+        self.energy_distribution_log = InputHBoxLayout('Logarithmic scale', None, checkbox=False, tooltip='Logarithmic color scale')
+        self.energy_distribution_layouts = [self.layout_energy_distribution_view, self.energy_distribution_log]
+        for layout in self.energy_distribution_layouts:
+            layout.setHidden(True)
+            self.addLayout(layout)
+        self.energy_distribution_view.currentIndexChanged.connect(self.emitEnergyDistribution)
+        self.energy_distribution_log.checkbox.stateChanged.connect(self.emitEnergyDistribution)
 
         self.addStretch(1)
+
+    def emitEnergyDistribution(self):
+        """Emits signal for the plot of the energy distribution in the target"""
+
+        self.emit({
+            'energy_distribution': {
+                'view': self.energy_distribution_view.getValue(save=True),
+                'log': self.energy_distribution_log.checkbox.isChecked()
+            }
+        })
+
+    def setEnergyDistributionHidden(self, hidden: bool):
+        """Shows or hides the settings of the energy distribution plot"""
+
+        for layout in self.energy_distribution_layouts:
+            layout.setHidden(hidden)
+
+    def trajectoryArguments(self, animation: bool = True) -> dict:
+        """
+        Returns the arguments of the trajectory plot
+
+        :param animation: include the time of the animation
+        """
+
+        arguments = {
+            'projectile': self.trajectory_number.value(),
+            'view': self.trajectory_view.getValue(save=True),
+            'color': self.trajectory_color.getValue(save=True),
+            'recoils': self.trajectory_recoils.checkbox.isChecked(),
+            'layers': self.trajectory_layers.checkbox.isChecked(),
+        }
+        if animation:
+            value = self.trajectory_time.value()
+            arguments['time_fraction'] = None if value >= self.trajectory_time_steps else value / self.trajectory_time_steps
+        return arguments
 
     def emitTrajectories(self):
         """Emits signal for the trajectory plot"""
 
-        self.emit({
-            'trajectories': {
-                'number': self.trajectory_number.value(),
-                'view': self.trajectory_view.getValue(save=True),
-                'recoils': self.trajectory_recoils.checkbox.isChecked(),
-                'layers': self.trajectory_layers.checkbox.isChecked()
-            }
-        })
+        self.emit({'trajectories': self.trajectoryArguments()})
+
+    def animate(self, play: bool):
+        """Starts or stops the animation of the collision cascade"""
+
+        if play:
+            if self.trajectory_time.value() >= self.trajectory_time_steps:
+                self.trajectory_time.setValue(0)
+            self.trajectory_play.setIcon(getIcon('pause'))
+            self.trajectory_timer.start()
+        else:
+            self.trajectory_play.setIcon(getIcon('play'))
+            self.trajectory_timer.stop()
+
+    def animationStep(self):
+        """Next step of the animation"""
+
+        value = self.trajectory_time.value() + 1
+        self.trajectory_time.setValue(value)
+        if value >= self.trajectory_time_steps:
+            self.trajectory_play.setChecked(False)
 
     def setTrajectoriesHidden(self, hidden: bool):
         """Shows or hides the settings of the trajectory plot"""
 
         for layout in self.trajectory_layouts:
             layout.setHidden(hidden)
+        if hidden:
+            self.trajectory_play.setChecked(False)
 
     def emit_polar_angle(self):
         """Emits signal for polar angle energy"""
@@ -2608,6 +3141,7 @@ class HlPlot(HlGeneralPlot):
             self.layout_polar_angle.setHidden(hide)
             self.layout_polar_angle_delta.setHidden(hide)
             self.setTrajectoriesHidden(hide)
+            self.setEnergyDistributionHidden(hide)
 
         # hide history buttons
         hide_history = value_dict.get('hide_history')
@@ -2617,6 +3151,7 @@ class HlPlot(HlGeneralPlot):
             self.history_spacer.setHidden(hide_history)
             if not hide_history:
                 self.setTrajectoriesHidden(True)
+                self.setEnergyDistributionHidden(True)
 
         # show trajectory settings (and hide the others)
         hide_trajectories = value_dict.get('hide_trajectories')
@@ -2625,6 +3160,16 @@ class HlPlot(HlGeneralPlot):
             if not hide_trajectories:
                 for widget in (self.layout_history_step, self.history_step_slider, self.history_spacer, self.layout_polar_angle, self.layout_polar_angle_delta):
                     widget.setHidden(True)
+                self.setEnergyDistributionHidden(True)
+
+        # show the settings of the energy distribution (and hide the others)
+        hide_energy_distribution = value_dict.get('hide_energy_distribution')
+        if isinstance(hide_energy_distribution, bool):
+            self.setEnergyDistributionHidden(hide_energy_distribution)
+            if not hide_energy_distribution:
+                for widget in (self.layout_history_step, self.history_step_slider, self.history_spacer, self.layout_polar_angle, self.layout_polar_angle_delta):
+                    widget.setHidden(True)
+                self.setTrajectoriesHidden(True)
 
         max_trajectories = value_dict.get('max_trajectories')
         if max_trajectories is not None:
@@ -2672,6 +3217,7 @@ class SimulationInput(SimulationsInput):
     Name = 'SDTrimSP'
     Versions = [
         Versions.V_601,
+        Versions.V_606,
         Versions.V_609,
         Versions.V_700,
         Versions.V_702,
@@ -2866,7 +3412,7 @@ Andreas Mutzke
                             content[0],
                             elements={content[1]: int(content[9]), content[2]: int(content[10])}
                         ))
-                    except (ValueError, IndexError) as e:
+                    except (ValueError, IndexError):
                         logging.debug(f'Could not read compound "{line}"!')
             except FileNotFoundError:
                 logging.info(f'Could not open compound table (2 elements) "{compound_table2}"!')
@@ -3203,7 +3749,11 @@ Andreas Mutzke
 
         # --- elements ---
 
-        title = arguments.settings.title
+        # SDTrimSP reads the title with format A80, in sweeps it appends the energy or angle (e.g. " e=" with f10.0),
+        # longer titles stop the simulation
+        sweep_modes = ArgumentValues.KineticEnergy.SWEEP, ArgumentValues.Angle.SWEEP
+        is_sweep = arguments.beam_args.kinetic_energy_mode in sweep_modes or arguments.beam_args.angle_mode in sweep_modes
+        title = arguments.settings.title[:65 if is_sweep else 80].rstrip()
 
         if group_elements:
             ncp = len(grouped_rows)
@@ -3430,6 +3980,19 @@ Andreas Mutzke
                 if q == 1:
                     qu[i] = abundance_list[j]
                     j += 1
+
+        # with a layer file the loaded values of qu are kept, if the species did not change
+        layer_file_qu = arguments.target_args.get('layer_file_qu')
+        if iq0 < 0 and isinstance(layer_file_qu, dict):
+            if group_elements:
+                species = [(target_row or beam_row).symbol for beam_row, target_row in grouped_rows]
+            else:
+                species = [row.symbol for row in rows]
+            target_species = {symbol for symbol, q in zip(species, qu) if q}
+            if target_species and {symbol for symbol, q in layer_file_qu.items() if q} <= target_species:
+                qu = [float(layer_file_qu.get(symbol, 0.)) if q else 0. for symbol, q in zip(species, qu)]
+                if sum(qu) <= 0:
+                    qu = [1.0 if symbol in target_species else 0. for symbol in species]
 
         qu = normalizeList(qu)
         qu = [f'{q}' for q in qu]
@@ -3766,7 +4329,9 @@ text = "--- extra ---"
                 abundance_list = [abundance * amorphous for abundance in abundance_list]
                 abundance_list += [fractions[k] * stoichiometry for k, _, stoichiometry in crystal_species]
                 layer_info += '  '.join([f'{abundance:>13.5E}' for abundance in abundance_list[1:]])
-                layer_info += '   ' + '  '.join(f'{float(m):5.2f}' for m in crystal_layers[layer_index]['miller'])
+                # SDTrimSP checks the miller index of all layers, amorphous layers get [1, 0, 0]
+                miller = crystal_layers[layer_index]['miller'] if sum(fractions) > 0 else [1, 0, 0]
+                layer_info += '   ' + '  '.join(f'{float(m):5.2f}' for m in miller)
             else:
                 layer_info += '  '.join([f'{abundance:>13.5E}' for abundance in abundance_list[1:]])
             layer_info += f'    {structure.name}'
@@ -4149,6 +4714,11 @@ text = "--- extra ---"
             additional.append(f'{add_key} = {add_val}')
         additional += particle_outputs
 
+        # with a layer file SDTrimSP uses qu only to estimate the depth of the dynamic relaxation, the loaded values are kept
+        layer_file_qu = None
+        if iq0 < 0 and isinstance(qu_text, str) and len(qu) == ncp == len(symbol):
+            layer_file_qu = {str(s): float(q) for s, q in zip(symbol, qu)}
+
         # with a layer file (iq0 < 0) qu is not needed, the target species are the ones that occur in the layers
         # (also projectiles with qu = 0 that form a layer)
         if iq0 < 0 and ncp > 0:
@@ -4346,7 +4916,8 @@ text = "--- extra ---"
             segments=nqx,
             global_density=globaldensity,
             crystal_flag=l_crystal,
-            layer_file_flag=iq0 if iq0 < 0 else -1
+            layer_file_flag=iq0 if iq0 < 0 else -1,
+            **({'layer_file_qu': layer_file_qu} if layer_file_qu is not None else {})
         )
 
         # settings data (<GeneralArguments>)
@@ -4468,6 +5039,22 @@ text = "--- extra ---"
             structure = trimmed
             target_args.thickness = sum(layer.thickness for layer in structure)
 
+        # layer files with less than nqx segments: SDTrimSP repeats all segments of the layer file (starting with the first
+        # layer) until nqx segments are reached
+        elif structure and iq0 < 0 and 0 < sum(layer.segments for layer in structure) < nqx:
+            original = list(structure)
+            remaining = nqx - sum(layer.segments for layer in structure)
+            index = 0
+            while remaining > 0:
+                layer = deepcopy(original[index % len(original)])
+                if layer.segments > remaining:
+                    layer.thickness = layer.thickness / layer.segments * remaining
+                    layer.segments = remaining
+                structure.append(layer)
+                remaining -= layer.segments
+                index += 1
+            target_args.thickness = sum(layer.thickness for layer in structure)
+
         if not structure:
             abundances = [target.abundance for target in target_rows]
             if not abundances:
@@ -4584,6 +5171,111 @@ text = "--- extra ---"
 
         return simulation, error_list
 
+    def checkWarnings(self, arguments: SimulationArguments, version: str) -> List[str]:
+        """
+        Returns warnings about parameters that SDTrimSP accepts, but that might give wrong results, fail or create very large
+        files (the user decides whether the simulation is run)
+
+        :param arguments: <SimulationArguments> container
+        :param version: version of simulation
+        """
+
+        warnings = []
+        default_values = DefaultValues(version)
+        dict_lookup = DictLookup(version)
+        beam_rows = [row for row in arguments.beam_rows if row.symbol and row.element is not None and row.abundance > 0]
+        target_rows = [row for row in arguments.target_rows if row.symbol and row.element is not None]
+        names = {
+            1: 'Lindhard-Scharff', 2: 'Oen-Robinson', 3: 'Lindhard-Scharff and Oen-Robinson'
+        }
+
+        def inelasticModel(row) -> int:
+            model = row.get('inelastic_loss_model')
+            return dict_lookup.inel0.get(model, default_values.inel0) if model is not None else default_values.inel0
+
+        def validityLimit(row) -> float:
+            """Upper energy limit (in eV) of the models of Lindhard-Scharff and Oen-Robinson: E < 25 Z^(4/3) M keV"""
+            return 25e3 * row.element.atomic_nr ** (4 / 3) * row.element.atomic_mass
+
+        # 1) Lindhard-Scharff and Oen-Robinson are only valid below 25 Z^(4/3) M keV (projectiles and the recoils they create)
+        for row in beam_rows:
+            model = inelasticModel(row)
+            if model in names and row.energy > validityLimit(row):
+                warnings.append(
+                    f'{row.symbol}: the inelastic loss model {model} ({names[model]}) is only valid for energies below '
+                    f'25 · Z^(4/3) · M = {validityLimit(row) / 1e3:.4g} keV, the energy is {row.energy / 1e3:.4g} keV. '
+                    f'The high energy models (4: H, D, T; 5: He; 6: Ziegler-Biersack{"; 7: LZ7" if Versions.atLeast(version, Versions.V_606) else ""}) suit better'
+                )
+        max_energy = max([row.energy for row in beam_rows], default=0.)
+        for row in target_rows:
+            model = inelasticModel(row)
+            if model not in names:
+                continue
+            # maximum energy transfer to the target atoms
+            transfer = max([
+                4 * beam.element.atomic_mass * row.element.atomic_mass / (beam.element.atomic_mass + row.element.atomic_mass) ** 2 * beam.energy
+                for beam in beam_rows
+            ], default=0.)
+            if transfer > validityLimit(row):
+                warnings.append(
+                    f'{row.symbol} (target): the recoils can get up to {transfer / 1e3:.4g} keV, the inelastic loss model {model} '
+                    f'({names[model]}) is only valid below {validityLimit(row) / 1e3:.4g} keV'
+                )
+
+        # mean target composition (first layer)
+        abundances = arguments.structure[0].abundances if arguments.structure else []
+        if len(abundances) != len(target_rows):
+            abundances = [row.abundance for row in target_rows]
+        total = sum(abundances)
+        thickness = arguments.target_args.thickness
+        if target_rows and total > 0:
+            fractions = [a / total for a in abundances]
+            z2 = sum(f * row.element.atomic_nr for f, row in zip(fractions, target_rows))
+            m2 = sum(f * row.element.atomic_mass for f, row in zip(fractions, target_rows))
+            densities = [row.get('atomic_density') or row.element.atomic_density for row in target_rows]
+            density = sum(f * float(d or 0) for f, d in zip(fractions, densities))
+
+            # 2) SDTrimSP 7.00 and 7.01 abort if projectiles leave the target at the bottom
+            if version == Versions.V_700:
+                for row in beam_rows:
+                    path = estimateRange(row.energy, row.element.atomic_nr, row.element.atomic_mass, z2, m2, density)
+                    if path > 0.8 * thickness:
+                        warnings.append(
+                            f'{row.symbol}: the estimated path length of the projectiles ({path:.4g} Å) is not much smaller than the '
+                            f'thickness of the target ({thickness:.4g} Å). SDTrimSP 7.00 and 7.01 abort with "invalid case for flag" '
+                            f'if projectiles are transmitted: use a thicker target or SDTrimSP 7.02 or newer'
+                        )
+
+        # 3) the energy distribution in the target crashes SDTrimSP in sweeps ("allocatable array is already allocated")
+        sweep = ArgumentValues.KineticEnergy.SWEEP, ArgumentValues.Angle.SWEEP
+        if arguments.settings.get('energy_distribution') and (
+            arguments.beam_args.kinetic_energy_mode in sweep or arguments.beam_args.angle_mode in sweep
+        ) and int(arguments.beam_args.get('sweep') or 1) > 1:
+            warnings.append('The energy distribution in the target (lenergy_distr) crashes SDTrimSP in energy and angle sweeps '
+                            '("allocatable array is already allocated"), switch it off')
+
+        # 4) large output files
+        projectiles = int(arguments.settings.get('histories', 0) or 0) * int(arguments.settings.get('projectiles', 0) or 0)
+        if arguments.settings.get('trajectories_projectiles') or arguments.settings.get('trajectories_recoils'):
+            traced = int(arguments.settings.get('trajectories_number', default_values.numb_hist) or 0)
+            # about 70 bytes per eV of the projectile for the cascade of recoils (trajec_all.dat), a few kB without recoils
+            per_projectile = 70 * max_energy if arguments.settings.get('trajectories_recoils') else 5e3
+            size = 2 * traced * per_projectile
+            if size > 200e6:
+                warnings.append(f'The trajectory files (trajec_*.dat) might become about {size / 1e9:.2g} GB large ({traced} traced trajectories)')
+        if arguments.settings.get('log_matrix'):
+            projectile_species = len(beam_rows)
+            species = len({row.symbol for row in beam_rows + target_rows})
+            size = 6e6 * (2 * projectile_species + 2 * species)
+            if size > 100e6:
+                warnings.append(f'The matrix files (meagb_*.dat, meagt_*.dat) will be about {size / 1e6:.0f} MB large')
+        if arguments.settings.get('log_sputtered') and projectiles > 2e6:
+            warnings.append(
+                f'The files of the sputtered recoils (partic_*_r.dat) might become very large ({projectiles:.3g} projectiles, '
+                f'about 150 bytes per sputtered atom)'
+            )
+        return warnings
+
     def checkArguments(self, arguments: SimulationArguments, version: str) -> List[str]:
         """
         Checks combinations of parameters that SDTrimSP does not accept and returns list of errors
@@ -4602,6 +5294,17 @@ text = "--- extra ---"
                     errors.append(f'The crystal fractions of layer "{structure.name}" are larger than 1')
             if layers and not any(fraction > 0 for layer in layers for fraction in layer['fractions']):
                 errors.append('No layer of the target structure contains a crystal')
+            if usesCrystalLayerFile(arguments, version):
+                for structure, layer in zip(arguments.structure, layers):
+                    error = layerMillerError(layer['miller'])
+                    if sum(layer['fractions']) > 0 and error is not None:
+                        miller = ' '.join(f'{float(m):g}' for m in layer['miller'])
+                        suggestion = ' '.join(f'{m:g}' for m in layerMillerSuggestion(layer['miller']))
+                        errors.append(
+                            f'The miller index ({miller}) of layer "{structure.name}" is not accepted by SDTrimSP in layer.inp: {error}. '
+                            f'Only the form [1, 0...1, 0...1] is allowed (h >= k, h >= l), e.g. ({suggestion}) '
+                            f'which is equivalent for cubic crystals'
+                        )
 
         # distributions of energies and angles from files must be defined
         group_elements = arguments.settings.get('group_elements')
@@ -4655,6 +5358,9 @@ text = "--- extra ---"
         if 'invalid case for flag' in log and 'ix_var is not properly set' in log:
             return ('a projectile passed through the target (transmission), which SDTrimSP 7.00 and 7.01 cannot handle. '
                     'Use a thicker target, a lower energy or SDTrimSP 7.02 or newer')
+        if 'allocatable array is already allocated' in log:
+            return ('SDTrimSP crashed ("allocatable array is already allocated"), this happens e.g. with the energy distribution '
+                    'in the target (lenergy_distr) in energy or angle sweeps')
         if 'code terminates' in log:
             return 'the simulation terminated because of an error, see the log'
         if exit_code != 0:
@@ -4676,6 +5382,9 @@ text = "--- extra ---"
         if not settings:
             return []
 
+        # parameters that the installation accepts (namelist TRI_INP in the source code or the documentation)
+        known = namelistParameters(getattr(self, 'simulation_folder', None))
+
         errors = []
         for i, setting in enumerate(settings.split('\n')):
             setting = setting.strip()
@@ -4690,8 +5399,11 @@ text = "--- extra ---"
                 errors.append(f'Line {i + 1}: Missing or too many "="')
                 continue
 
-            parameter_type = self.InputParameters.get(content[0].split('(')[0].strip())
-            if parameter_type is None:
+            name = content[0].split('(')[0].strip()
+            parameter_type = self.InputParameters.get(name)
+            if known is not None and name.lower() not in known:
+                errors.append(f'Line {i + 1}: Unknown variable "{name}", SDTrimSP {version} does not read it (namelist TRI_INP in src/work.F90)')
+            elif known is None and parameter_type is None:
                 errors.append(f'Line {i + 1}: Unknown variable "{content[0]}"')
 
             if content[0].count('(') != content[0].count(')'):
@@ -4714,7 +5426,7 @@ text = "--- extra ---"
             if not content[1]:
                 errors.append(f'Line {i + 1}: variable "{content[0]}" has no value')
             elif parameter_type != data_type and not (parameter_type is None or parameter_type is str):
-                if not (parameter_type == float and data_type == int):
+                if not (parameter_type is float and data_type is int):
                     errors.append(f'Line {i + 1}: variable "{content[0]}" has wrong type (should be {parameter_type})')
 
         return errors
@@ -4801,7 +5513,10 @@ class SimulationOutput(SimulationsOutput):
         super().__init__(plot, element_data, title_label)
 
         # settings of the trajectory plot, changed in HlPlot
-        self.trajectory_args = {'number': 1, 'view': 'y', 'recoils': True, 'layers': True}
+        self.trajectory_args = {'projectile': 1, 'view': 'y', 'color': 'species', 'recoils': True, 'layers': True, 'time_fraction': None}
+
+        # settings of the plot of the energy distribution in the target, changed in HlPlot
+        self.energy_distribution_args = {'kind': 'all', 'view': 'y', 'log': False}
 
     def receive(self, value_dict: dict):
         """Receives pyqtSignal -> dict"""
@@ -4811,6 +5526,15 @@ class SimulationOutput(SimulationsOutput):
             self.trajectory_args.update(trajectories)
             self.analyse('plotTrajectories', dict(self.trajectory_args), hide=False)
 
+        trajectory_gif = value_dict.get('trajectory_gif')
+        if isinstance(trajectory_gif, dict):
+            self.saveTrajectoryAnimation(trajectory_gif)
+
+        energy_distribution = value_dict.get('energy_distribution')
+        if isinstance(energy_distribution, dict):
+            self.energy_distribution_args.update(energy_distribution)
+            self.analyse('plotEnergyDistribution', dict(self.energy_distribution_args), hide=False)
+
         histories = value_dict.get('history')
         if histories is not None:
             self.analyse('plotDepthConcentration', {'history_step': int(histories)}, hide=False)
@@ -4818,6 +5542,110 @@ class SimulationOutput(SimulationsOutput):
         energy_polar = value_dict.get('energy_polar')
         if energy_polar is not None:
             self.analyse('plotParticlesEnergyPolar', energy_polar, hide=False)
+
+    def showEnergyDistribution(self, kind: str, text: str = ''):
+        """
+        Shows the energy distribution in the target of a kind (see SimulationAnalysis.EnergyDistributions)
+
+        :param kind: kind of the energy distribution
+        :param text: text of the analysis
+        """
+
+        self.energy_distribution_args['kind'] = kind
+        self.analyse('plotEnergyDistribution', dict(self.energy_distribution_args), hide=False, text=text)
+
+    def listDistributions(self, save_folder: Path, list_widget: ListWidget):
+        """
+        Adds the plots of the energy distribution in the target (lenergy_distr), the depth distributions of the matrices
+        (maximum penetration depth, depth of origin) and the energy-angle matrices (lmatrices) to the list
+
+        :param save_folder: folder for output files
+        :param list_widget: ListWidget that is written to
+        """
+
+        def nonEmpty(name: str) -> bool:
+            path = save_folder / name
+            return path.is_file() and path.stat().st_size > 0
+
+        items = []
+        for kind, (name, title) in self.analysis.EnergyDistributions.items():
+            if nonEmpty(name):
+                items.append(ListWidgetItem(title, indent=1, function=self.showEnergyDistribution, function_args={'kind': kind}))
+        for name, (title, _) in self.analysis.EnergyDepthMatrices.items():
+            # the matrices are always written, often without particles (e.g. depth of origin of sputtered target atoms in 7.07)
+            if nonEmpty(name) and any(np.sum(matrix['counts']) > 0 for matrix in readEnergyDepthMatrix(save_folder / name)):
+                items.append(ListWidgetItem(title, indent=1, function=self.analyse,
+                                            function_args={'plot': 'plotEnergyDepthMatrix', 'plot_args': {'name': name}}))
+        for name, title in self.analysis.EnergyAngleMatrices.items():
+            if not nonEmpty(name):
+                continue
+            for i, species in enumerate(matrixSpecies(save_folder / name)):
+                items.append(ListWidgetItem(f'Energy and polar angle of {title} ({species})', indent=1, function=self.analyse,
+                                            function_args={'plot': 'plotEnergyAngleMatrix', 'plot_args': {'name': name, 'species': i}}))
+
+        if items:
+            list_widget.addItem(ListWidgetItem('Plot distributions in the target and output matrices:', bold=True))
+            for item in items:
+                list_widget.addItem(item)
+        else:
+            list_widget.addItem(ListWidgetItem('Plot distributions in the target (only with energy distribution or matrix output)', bold=True, grey=True))
+        list_widget.addItemEmpty()
+
+    def saveTrajectoryAnimation(self, arguments: dict, path: Optional[Path] = None, frames: int = 60, frame_duration: int = 80) -> Optional[Path]:
+        """
+        Saves the animation of the collision cascade as GIF and returns its path
+
+        :param arguments: arguments of the trajectory plot (see SimulationAnalysis.plotTrajectories)
+        :param path: (optional) path of the GIF, otherwise a file dialog asks for it
+        :param frames: number of frames (the last frame shows the whole cascade)
+        :param frame_duration: duration of a frame in ms
+        """
+
+        from PIL import Image
+
+        save_folder = self.analysis.save_folder
+        if save_folder is None:
+            return None
+        if path is None:
+            path = selectFileDialog(
+                self.plot,
+                True,
+                'Save animation of the collision cascade as...',
+                save_folder / f'trajectories_projectile_{arguments.get("projectile", 1)}.gif',
+                'GIF files (*.gif)'
+            )
+            if path is None:
+                return None
+
+        # canvas with the size of the plot, a 3D plot keeps its current view
+        width, height = self.plot.fig.get_size_inches()
+        canvas = MplCanvas(width=max(width, 4), height=max(height, 3), dpi=self.plot.fig.dpi)
+        if arguments.get('view') == '3d':
+            canvas.fig.clf()
+            canvas.axes = canvas.fig.add_subplot(projection='3d')
+            if getattr(self.plot.axes, 'name', '') == '3d':
+                canvas.axes.view_init(self.plot.axes.elev, self.plot.axes.azim)
+
+        images = []
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            for frame in range(frames + 1):
+                result = self.analysis.plotTrajectories(**dict(arguments, time_fraction=frame / frames))
+                if result is None or result[0] is None:
+                    break
+                result[1].apply(canvas)
+                canvas.draw()
+                image = Image.fromarray(np.asarray(canvas.buffer_rgba())).convert('RGB')
+                images.append(image.convert('P', palette=Image.Palette.ADAPTIVE))
+        finally:
+            QApplication.restoreOverrideCursor()
+            canvas.deleteLater()
+
+        if not images:
+            return None
+        durations = [frame_duration] * (len(images) - 1) + [frame_duration * 25]
+        images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0)
+        return path
 
     def listParameters(self, save_folder: Path, list_widget: ListWidget):
         """
@@ -5100,6 +5928,9 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItem(ListWidgetItem('Plot particle trajectories (only with trajectory output)', bold=True, grey=True))
         list_widget.addItemEmpty()
 
+        # distributions in the target and matrices of the output
+        self.listDistributions(save_folder, list_widget)
+
         # reflected projectiles and sputtered recoils
         back_p_exists = (save_folder / 'partic_back_p.dat').is_file()
         back_r_exists = (save_folder / 'partic_back_r.dat').is_file()
@@ -5156,6 +5987,82 @@ class SimulationAnalysis(SimulationsAnalysis):
     """
     Class for calculating SDTrimSP specific parameters and plots
     """
+
+    # plots that can be compared between several simulations
+    ComparablePlots = {
+        'plotImplantationDepth': 'Implantation depth',
+        'plotEnergyLossDepth': 'Projectile energy loss',
+        'plotVacanciesDepth': 'Ion-induced damages',
+        'plotParticlesEnergyP': 'Energy of backscattered ions',
+        'plotParticlesEnergyR': 'Energy of backsputtered recoils',
+        'plotParticlesPolarP': 'Polar angles of backscattered ions',
+        'plotParticlesPolarR': 'Polar angles of backsputtered recoils',
+        'plotSputterYields': 'Sputter yields over fluence (dynamic)',
+        'plotSputterYieldsTotal': 'Total sputter yield over fluence (dynamic)',
+        'plotSurfaceLevel': 'Surface level over fluence (dynamic)',
+        'plotReflectionCoefficients': 'Reflection coefficients over fluence (dynamic)',
+        'plotAngularSputterYields': 'Sputter yields over the angle (angle sweep)',
+        'plotEnergySputterYields': 'Sputter yields over the energy (energy sweep)',
+    }
+
+    def loadFolder(self, save_folder: Path) -> bool:
+        """Reads the general information of the output in a folder (E0_31_target.dat)"""
+
+        self.reset()
+        for info_file in ('E0_31_target.dat', 'E0_31_target001.dat'):
+            if (save_folder / info_file).is_file():
+                self.updateData(save_folder, info_file)
+                return bool(self.elements)
+        self.save_folder = save_folder
+        return False
+
+    def summary(self) -> Dict[str, Dict[str, float]]:
+        """
+        Returns the main results of the simulation in the folder of loadFolder as {quantity: {species or "total": value}}.
+        Static simulations: yields, coefficients, depths and energy losses; dynamic simulations: the values at the end
+        """
+
+        result: Dict[str, Dict[str, float]] = {}
+
+        def add(quantity: str, values, total: Optional[float] = None, skip_zero: bool = True):
+            entries = {}
+            for element, value in zip(self.elements, values):
+                if not skip_zero or value:
+                    entries[str(element)] = float(value)
+            if total is not None:
+                entries['total'] = float(total)
+            if entries:
+                result[quantity] = entries
+
+        if not self.is_dynamic and self.save_folder is not None and (self.save_folder / 'output.dat').is_file():
+            data = self.getOutputFileData()
+            if data is None:
+                return result
+            (sputter_yields, total_sputter_yield, amu_sputter_yield, reflection_coefficients, implantation_depth,
+             energy_loss_nuclear, energy_loss_electron, transmission_sputter_yields, total_transmission_sputter_yield,
+             amu_transmission_sputter_yield, transmission_coefficients) = data
+            add('Sputter yield [atoms/ion]', sputter_yields, total_sputter_yield)
+            add('Mass sputter yield [amu/ion]', [], amu_sputter_yield)
+            add('Reflection coefficient', reflection_coefficients)
+            add('Mean implantation depth [Å]', implantation_depth)
+            add('Nuclear energy loss [eV]', energy_loss_nuclear)
+            add('Electronic energy loss [eV]', energy_loss_electron)
+            if np.any(transmission_coefficients) or np.any(transmission_sputter_yields):
+                add('Transmission coefficient', transmission_coefficients)
+                add('Transmission sputter yield [atoms/ion]', transmission_sputter_yields, total_transmission_sputter_yield)
+            return result
+
+        data = self.getE031TargetData()
+        if data is not None:
+            fluence_array, sputtered_yield, amu_yield, reflected_yield, reemitted_yield, surface_conc, surface, _, _ = data
+            if len(fluence_array) > 1:
+                add('Sputter yield [atoms/ion]', sputtered_yield[-1], np.sum(sputtered_yield[-1]))
+                add('Mass sputter yield [amu/ion]', [], amu_yield[-1])
+                add('Reflection coefficient', reflected_yield[-1])
+                add('Surface atomic fraction', surface_conc[-1], skip_zero=False)
+                result['Surface level [Å]'] = {'total': float(surface[-1])}
+                result['Fluence [10^20 ions/m²]'] = {'total': float(fluence_array[-1])}
+        return result
     
     def __init__(self, element_data: Elements):
         super().__init__(element_data)
@@ -5750,15 +6657,29 @@ class SimulationAnalysis(SimulationsAnalysis):
             self.trajectories_file = key
         return self.trajectories
 
-    def plotTrajectories(self, number: int = 1, view: str = 'y', recoils: bool = True, layers: bool = True) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotTrajectories(
+        self,
+        projectile: int = 1,
+        view: str = 'y',
+        color: str = 'species',
+        recoils: bool = True,
+        layers: bool = True,
+        time_fraction: Optional[float] = None,
+        **_
+    ) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """
-        Plot and return the trajectories of the first projectiles and their recoils.
-        The projectiles have one color, the recoils a color depending on their generation in the collision cascade
+        Plot and return the trajectories of one projectile and its recoils.
+        Each species has its own color, recoils of later generations of the collision cascade are darker.
+        Alternatively the trajectories are colored by the energy or the time
 
-        :param number: number of projectiles
-        :param view: lateral axis, 'y' or 'z'
+        :param projectile: number of the projectile (starting at 1)
+        :param view: 'y' (depth - lateral y), 'z' (depth - lateral z), 'both' (both side by side), 'top' (lateral y - lateral z) or '3d'
+        :param color: 'species' (species and generation), 'energy' or 'time'
         :param recoils: show the recoils
         :param layers: show the layers of the target
+        :param time_fraction: (optional) show the cascade until this time (animation) between 0 (start) and 1 (end), None shows
+                              everything. The time scale is logarithmic, as the slow recoils at the end of a cascade take much longer
+                              than the fast particles at the beginning
         """
 
         mpl_settings = MplCanvasSettings()
@@ -5772,76 +6693,400 @@ class SimulationAnalysis(SimulationsAnalysis):
             mpl_settings.axes.set_title('No trajectories found')
             return None, mpl_settings
 
-        number = max(1, min(int(number), len(projectiles)))
-        selected = set(projectiles[:number])
-        shown = [trajectory for trajectory in trajectories if trajectory['projectile'] in selected and (recoils or not trajectory['recoil'])]
-        column = 2 if view == 'z' else 1
+        projectile = max(1, min(int(projectile), len(projectiles)))
+        selected = projectiles[projectile - 1]
+        shown = [
+            trajectory for trajectory in trajectories
+            if trajectory['projectile'] == selected and len(trajectory['points']) and (recoils or not trajectory['recoil'])
+        ]
         generation_known = all(trajectory.get('generation_known', True) for trajectory in shown)
+        max_generation = max([trajectory['generation'] for trajectory in shown if trajectory['recoil']], default=0)
+        all_points = np.vstack([trajectory['points'] for trajectory in shown])
 
-        # all trajectories of a generation in one line, separated by nan
-        generations: Dict[int, List[np.ndarray]] = {}
+        # time of the animation frame (logarithmic from the first collision to the end of the cascade)
+        end_time = float(np.max(all_points[:, 4]))
+        time = None
+        if time_fraction is not None and float(time_fraction) < 1:
+            positive_times = all_points[:, 4][all_points[:, 4] > 0]
+            start_time = max(float(positive_times.min()) if positive_times.size else end_time, end_time * 1e-6, 1e-12)
+            time = 0. if float(time_fraction) <= 0 else start_time * (max(end_time, start_time) / start_time) ** float(time_fraction)
+
+        # visible part of each trajectory at this time and the current positions of the moving particles
+        parts: List[Tuple[dict, np.ndarray]] = []
+        heads: List[Tuple[dict, np.ndarray]] = []
         for trajectory in shown:
             points = trajectory['points']
-            if not len(points):
-                continue
-            segment = np.vstack([points[:, [column, 0]], [np.nan, np.nan]])
-            generations.setdefault(trajectory['generation'], []).append(segment)
-
-        # depth range of the trajectories (and the surface), the layers are only drawn in this range, so that the limits
-        # follow the trajectories and not the (much thicker) target
-        points = np.vstack([np.vstack(segments) for segments in generations.values()]) if generations else np.zeros((1, 2))
-        lateral = points[:, 0][~np.isnan(points[:, 0])]
-        depth = np.append(points[:, 1][~np.isnan(points[:, 1])], 0.)
-        margin = 0.05 * max(np.ptp(lateral) if lateral.size else 0., np.ptp(depth), 1.)
-        depth_min, depth_max = depth.min() - margin, depth.max() + margin
-
-        # layers below the trajectories
-        if layers:
-            layer_colors = ['#bcbd22', '#17becf', '#9467bd', '#8c564b', '#7f7f7f']
-            names = []
-            for top, bottom, name in readLayers(self.save_folder):
-                if bottom <= depth_min or top >= depth_max:
+            if time is not None:
+                if points[0, 4] > time:
                     continue
-                label = name if name not in names else None
-                names.append(name)
-                color = layer_colors[names.index(name) % len(layer_colors)]
-                mpl_settings.axes.axhspan(max(top, depth_min), min(bottom, depth_max), color=color, alpha=0.2, linewidth=0, zorder=0, label=label)
-        mpl_settings.axes.axhline(0, color='#7f7f7f', linewidth=1, zorder=1)
+                visible = points[points[:, 4] <= time]
+                if len(visible) < len(points):
+                    previous, following = visible[-1], points[len(visible)]
+                    duration = following[4] - previous[4]
+                    head = previous + ((time - previous[4]) / duration if duration > 0 else 1.) * (following - previous)
+                    visible = np.vstack([visible, head])
+                    heads.append((trajectory, head))
+                points = visible
+            parts.append((trajectory, points))
 
-        # the legend shows the first and the last generation of the color gradient
-        recoil_colormap = colormaps['autumn']
-        max_generation = max([generation for generation in generations if generation > 0], default=1)
-        data, labels = [], []
-        for generation in sorted(generations):
-            lines = np.vstack(generations[generation])
-            if generation == 0:
-                color = 'tab:blue'
-                label = 'Projectiles' if number > 1 else 'Projectile'
+        def speciesName(species: int) -> str:
+            return str(self.elements[species]) if 0 <= species < len(self.elements) else f'Species {species + 1}'
+
+        # colors: species (projectiles and recoils), later generations are darker
+        def shade(generation: int) -> float:
+            return 0.6 * (generation - 1) / (max_generation - 1) if max_generation > 1 else 0.
+
+        def trajectoryColor(trajectory: dict) -> np.ndarray:
+            base = np.array(to_rgb(self.colors[trajectory['species']]))
+            if not trajectory['recoil'] or not generation_known:
+                return base
+            return base * (1 - shade(trajectory['generation']))
+
+        # colors: energy or time
+        value_column = {'energy': 3, 'time': 4}.get(color)
+        norm, colormap, value_label = None, None, ''
+        if value_column == 3:
+            energies = all_points[:, 3][all_points[:, 3] > 0]
+            vmax = float(energies.max()) if energies.size else 1.
+            vmin = max(float(energies.min()) if energies.size else 1e-2, vmax * 1e-5)
+            norm = LogNorm(vmin=vmin, vmax=max(vmax, vmin * 10))
+            colormap, value_label = colormaps['plasma'], 'Energy [eV]'
+        elif value_column == 4:
+            norm = Normalize(vmin=0, vmax=max(end_time, 1e-9))
+            colormap, value_label = colormaps['viridis'], 'Time [fs]'
+
+        def segmentValues(points: np.ndarray) -> np.ndarray:
+            values = points[:-1, value_column]
+            return np.clip(values, norm.vmin, None) if value_column == 3 else values
+
+        # ranges of all trajectories (constant during the animation), the layers are only drawn in the depth range
+        margin = 0.05 * max(float(np.max(np.ptp(all_points[:, :3], axis=0))), 1.)
+        lower = np.minimum(all_points[:, :3].min(axis=0), [0., 0., 0.]) - margin
+        upper = all_points[:, :3].max(axis=0) + margin
+        layer_list = [
+            (max(top, lower[0]), min(bottom, upper[0]), name)
+            for top, bottom, name in (readLayers(self.save_folder) if layers and view != 'top' else [])
+            if bottom > lower[0] and top < upper[0]
+        ]
+        layer_colors = ['#bcbd22', '#17becf', '#9467bd', '#8c564b', '#7f7f7f']
+        layer_names = list(dict.fromkeys(name for _, _, name in layer_list))
+
+        def layerColor(name: str) -> str:
+            return layer_colors[layer_names.index(name) % len(layer_colors)]
+
+        axis_labels = ['Depth x [Å]', 'Lateral position y [Å]', 'Lateral position z [Å]']
+
+        def draw2d(axes, horizontal: int, vertical: int):
+            if vertical == 0:
+                for top, bottom, name in layer_list:
+                    axes.axhspan(top, bottom, color=layerColor(name), alpha=0.2, linewidth=0, zorder=0)
+                axes.axhline(0, color='#7f7f7f', linewidth=1, zorder=1)
+
+            if value_column is None:
+                # all trajectories of a species and generation in one line, separated by nan
+                groups: Dict[tuple, List[np.ndarray]] = {}
+                for trajectory, points in parts:
+                    key = (trajectory['generation'], trajectory['species'])
+                    groups.setdefault(key, []).append(np.vstack([points[:, [horizontal, vertical]], [np.nan, np.nan]]))
+                for (generation, species), segments in sorted(groups.items()):
+                    trajectory = next(t for t, _ in parts if t['generation'] == generation and t['species'] == species)
+                    lines = np.vstack(segments)
+                    axes.plot(lines[:, 0], lines[:, 1], color=trajectoryColor(trajectory), linewidth=1.6 if generation == 0 else 0.9,
+                              zorder=3 - generation / (max_generation + 1))
             else:
-                color = recoil_colormap(0.85 * (generation - 1) / max(1, max_generation - 1))
-                if not generation_known:
-                    label = 'Recoils'
-                elif generation == 1:
-                    label = 'Recoils, generation 1'
-                elif generation == max_generation:
-                    label = f'{"⋮ " if max_generation > 2 else ""}Recoils, generation {generation}'
-                else:
-                    label = None
-            mpl_settings.axes.plot(lines[:, 0], lines[:, 1], color=color, linewidth=1, label=label, zorder=2 + 1 / (1 + generation))
-            data += [np.full(len(lines), generation), lines[:, 0], lines[:, 1]]
-            labels += [f'Generation {generation}', f'Lateral position {view} [Å]', 'Depth x [Å]']
+                segments, values, widths = [], [], []
+                for trajectory, points in parts:
+                    if len(points) < 2:
+                        continue
+                    xy = points[:, [horizontal, vertical]]
+                    segments += list(np.stack([xy[:-1], xy[1:]], axis=1))
+                    values += list(segmentValues(points))
+                    widths += [1.6 if not trajectory['recoil'] else 0.9] * (len(points) - 1)
+                if segments:
+                    collection = LineCollection(segments, cmap=colormap, norm=norm, linewidths=widths, zorder=2)
+                    collection.set_array(np.array(values))
+                    axes.add_collection(collection)
 
-        # equal lengths for the export, missing values are nan
-        length = max(len(column_data) for column_data in data)
-        data = [np.concatenate([column_data, np.full(length - len(column_data), np.nan)]) for column_data in data]
+            if heads:
+                axes.scatter([head[horizontal] for _, head in heads], [head[vertical] for _, head in heads],
+                             color=[trajectoryColor(t) for t, _ in heads], s=14, zorder=5, edgecolors='none')
 
-        mpl_settings.axes.set_xlabel(f'Lateral position {view} [Å]')
-        mpl_settings.axes.set_ylabel('Depth x [Å]')
-        mpl_settings.axes.set_aspect('equal', adjustable='datalim')
-        mpl_settings.axes.invert_yaxis()
-        mpl_settings.axes.set_title(f'Trajectories of {number} of {len(projectiles)} projectile{"s" if len(projectiles) > 1 else ""}')
-        mpl_settings.axes.legend(fontsize='small')
+            axes.set_xlim(lower[horizontal], upper[horizontal])
+            axes.set_ylim(upper[vertical], lower[vertical]) if vertical == 0 else axes.set_ylim(lower[vertical], upper[vertical])
+            axes.set_xlabel(axis_labels[horizontal])
+            axes.set_ylabel(axis_labels[vertical])
+            axes.set_aspect('equal', adjustable='box')
+
+        def draw3d(axes):
+            for top, bottom, name in layer_list:
+                for depth in (top, bottom):
+                    corners = [(lower[1], lower[2], depth), (upper[1], lower[2], depth), (upper[1], upper[2], depth), (lower[1], upper[2], depth)]
+                    axes.add_collection3d(Poly3DCollection([corners], facecolor=layerColor(name), alpha=0.12, edgecolor='none'))
+
+            if value_column is None:
+                for trajectory, points in parts:
+                    axes.plot(points[:, 1], points[:, 2], points[:, 0], color=trajectoryColor(trajectory),
+                              linewidth=1.6 if not trajectory['recoil'] else 0.9)
+            else:
+                segments, values = [], []
+                for trajectory, points in parts:
+                    if len(points) < 2:
+                        continue
+                    xyz = points[:, [1, 2, 0]]
+                    segments += list(np.stack([xyz[:-1], xyz[1:]], axis=1))
+                    values += list(segmentValues(points))
+                if segments:
+                    collection = Line3DCollection(segments, cmap=colormap, norm=norm, linewidths=1)
+                    collection.set_array(np.array(values))
+                    axes.add_collection3d(collection)
+
+            if heads:
+                axes.scatter([head[1] for _, head in heads], [head[2] for _, head in heads], [head[0] for _, head in heads],
+                             color=[trajectoryColor(t) for t, _ in heads], s=14, depthshade=False)
+
+            axes.set_xlim(lower[1], upper[1])
+            axes.set_ylim(lower[2], upper[2])
+            axes.set_zlim(upper[0], lower[0])
+            ranges = np.maximum(upper - lower, 1e-9)
+            ranges = np.maximum(ranges, 0.15 * ranges.max())
+            axes.set_box_aspect((ranges[1], ranges[2], ranges[0]))
+            axes.set_xlabel(axis_labels[1])
+            axes.set_ylabel(axis_labels[2])
+            axes.set_zlabel(axis_labels[0])
+
+        legend_axes = mpl_settings.axes
+        if view == '3d':
+            mpl_settings.fig.add_subplot(projection='3d')
+            draw3d(mpl_settings.axes)
+        elif view == 'both':
+            mpl_settings.fig.add_subplot(1, 2, 1)
+            draw2d(mpl_settings.axes, 1, 0)
+            legend_axes = mpl_settings.addAxes(1, 2, 2)
+            draw2d(legend_axes, 2, 0)
+        elif view == 'top':
+            draw2d(mpl_settings.axes, 1, 2)
+        else:
+            draw2d(mpl_settings.axes, 2 if view == 'z' else 1, 0)
+        colorbar_axes = 1 if view == 'both' else 0
+
+        # legend: species of the projectile and the recoils, layers
+        handles = []
+        if value_column is None:
+            for recoil in (False, True):
+                for species in sorted({t['species'] for t, _ in parts if t['recoil'] == recoil}):
+                    handles.append(Line2D([], [], color=to_rgb(self.colors[species]), linewidth=1.6 if not recoil else 0.9,
+                                          label=f'{speciesName(species)} {"recoils" if recoil else "projectile"}'))
+        for name in layer_names:
+            handles.append(Patch(facecolor=layerColor(name), alpha=0.3 if view != '3d' else 0.2, label=name))
+        if handles:
+            legend_axes.legend(handles=handles, fontsize='small')
+
+        # colorbar: generation (white to black as the recoils get darker), energy or time
+        if value_column is not None:
+            mpl_settings.colorbar(ScalarMappable(norm=norm, cmap=colormap), axes_index=colorbar_axes, label=value_label, shrink=0.8)
+        elif max_generation > 0 and generation_known:
+            grays = [(1 - shade(generation),) * 3 for generation in range(1, max_generation + 1)]
+            generation_norm = BoundaryNorm(np.arange(0.5, max_generation + 1.5), max_generation)
+            mpl_settings.colorbar(
+                ScalarMappable(norm=generation_norm, cmap=ListedColormap(grays)),
+                axes_index=colorbar_axes,
+                label='Recoil generation',
+                ticks=MaxNLocator(integer=True, nbins=min(max_generation, 10)),
+                shrink=0.8
+            )
+
+        title = f'Trajectories of projectile {projectile} of {len(projectiles)}'
+        if time is not None:
+            title += f', t = {time:.4g} fs'
+        if view == 'both':
+            mpl_settings.fig.suptitle(title)
+        else:
+            mpl_settings.axes.set_title(title)
+
+        # export: all points of the shown trajectories
+        data_columns: List[list] = [[] for _ in range(9)]
+        for number, (trajectory, points) in enumerate(parts, start=1):
+            for column, value in enumerate([number, trajectory['generation'], trajectory['species'] + 1, int(trajectory['recoil'])]):
+                data_columns[column] += [value] * len(points)
+            for column, index in enumerate([0, 1, 2, 3, 4], start=4):
+                data_columns[column] += list(points[:, index])
+        labels = ['Trajectory', 'Generation', 'Species', 'Recoil', 'x [Å]', 'y [Å]', 'z [Å]', 'Energy [eV]', 'Time [fs]']
+        return ([np.array(column, dtype=float) for column in data_columns], labels), mpl_settings
+
+    # kinds of the energy distribution in the target (lenergy_distr): file name and title
+    EnergyDistributions = {
+        'all': ('E_distr_all.dat', 'Deposited energy (stopped particles, electronic and nuclear losses)'),
+        'stop': ('E_distr_stop.dat', 'Energy of the stopped particles'),
+        'inel': ('E_distr_inel.dat', 'Electronic energy loss'),
+        'nucl': ('E_distr_nucl.dat', 'Nuclear energy loss')
+    }
+
+    # matrices over energy and depth: file name and (title, label of the depth)
+    EnergyDepthMatrices = {
+        'mpe_ex_p.dat': ('Maximum penetration depth of backscattered projectiles', 'Maximum penetration depth [Å]'),
+        'morigin_ex_bs.dat': ('Depth of origin of backsputtered atoms', 'Depth of origin [Å]'),
+        'morigin_ex_ts.dat': ('Depth of origin of transmission sputtered atoms', 'Depth of origin [Å]')
+    }
+
+    # matrices over energy and angles (lmatrices): file name and title
+    EnergyAngleMatrices = {
+        'meagb_p.dat': 'backscattered projectiles',
+        'meagb_s.dat': 'backsputtered atoms',
+        'meagt_p.dat': 'transmitted projectiles',
+        'meagt_s.dat': 'transmission sputtered atoms'
+    }
+
+    def readCached(self, name: str, reader: Callable):
+        """Returns the content of a file in the save folder read with reader, cached by the modification time"""
+
+        if self.save_folder is None:
+            return None
+        path = self.save_folder / name
+        try:
+            key = (path, path.stat().st_mtime)
+        except OSError:
+            return None
+        cache = self.__dict__.setdefault('file_cache', {})
+        if cache.get(name, (None, None))[0] != key:
+            cache[name] = (key, reader(path))
+        return cache[name][1]
+
+    def plotEnergyDistribution(self, kind: str = 'all', view: str = 'y', log: bool = False, **_) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """
+        Plot and return the energy distribution in the target (lenergy_distr)
+
+        :param kind: 'all' (deposited energy), 'stop' (energy of stopped particles), 'inel' (electronic loss) or 'nucl' (nuclear loss)
+        :param view: 'y' (map over depth and lateral y, summed over z), 'z' (depth and z), 'top' (y and z, summed over the depth)
+                     or 'depth' (depth profile, summed over y and z)
+        :param log: logarithmic color scale
+        """
+
+        mpl_settings = MplCanvasSettings()
+        self.emit({'hide_energy_distribution': False})
+        name, title = self.EnergyDistributions.get(kind, self.EnergyDistributions['all'])
+        distribution = self.readCached(name, readEnergyDistribution)
+        if distribution is None:
+            mpl_settings.axes.set_title(f'No data found ({name})')
+            return None, mpl_settings
+
+        edges = {axis: distribution[axis] for axis in 'xyz'}
+        widths = {axis: np.diff(edges[axis]) for axis in 'xyz'}
+        centers = {axis: edges[axis][:-1] + widths[axis] / 2 for axis in 'xyz'}
+        values = distribution['values']  # (x, y, z) in [eV/Å³/projectile]
+        labels = {'x': 'Depth x [Å]', 'y': 'Lateral position y [Å]', 'z': 'Lateral position z [Å]'}
+
+        if view == 'depth':
+            profile = np.sum(values * widths['y'][None, :, None] * widths['z'][None, None, :], axis=(1, 2))
+            mpl_settings.axes.stairs(profile, edges['x'], color=self.first_color, linewidth=self.line_width)
+            mpl_settings.axes.set_xlabel(labels['x'])
+            mpl_settings.axes.set_ylabel('Energy [eV/Å/projectile]')
+            if log and np.any(profile > 0):
+                mpl_settings.axes.set_yscale('log')
+            mpl_settings.axes.set_title(title)
+            return ([centers['x'], profile], [labels['x'], f'{title} [eV/Å/projectile]']), mpl_settings
+
+        # 2D map: sum over the third axis
+        horizontal, vertical, summed = {'y': ('y', 'x', 2), 'z': ('z', 'x', 1), 'top': ('y', 'z', 0)}.get(view, ('y', 'x', 2))
+        summed_axis = 'xyz'[summed]
+        shape = [1, 1, 1]
+        shape[summed] = -1
+        mapped = np.sum(values * widths[summed_axis].reshape(shape), axis=summed)
+        # mapped has the remaining axes in the order x, y, z
+        if 'xyz'.index(horizontal) < 'xyz'.index(vertical):
+            mapped = mapped.T
+        # mapped: (vertical, horizontal)
+        norm = None
+        if log and np.any(mapped > 0):
+            positive = mapped[mapped > 0]
+            norm = LogNorm(vmin=max(float(positive.min()), float(positive.max()) * 1e-6), vmax=float(positive.max()))
+            mapped = np.where(mapped > 0, mapped, np.nan)
+        mpl_settings.axes.pcolormesh(edges[horizontal], edges[vertical], mapped, cmap='inferno', norm=norm, shading='flat')
+        mpl_settings.axes.pcolormesh_label('Energy [eV/Å²/projectile]')
+        if vertical == 'x':
+            mpl_settings.axes.set_ylim(edges['x'][-1], edges['x'][0])
+        mpl_settings.axes.set_aspect('equal', adjustable='box')
+        mpl_settings.axes.set_xlabel(labels[horizontal])
+        mpl_settings.axes.set_ylabel(labels[vertical])
+        mpl_settings.axes.set_title(f'{title}, summed over {"the depth" if summed_axis == "x" else summed_axis}')
+
+        horizontal_grid, vertical_grid = np.meshgrid(centers[horizontal], centers[vertical])
+        return (
+            [vertical_grid.ravel(), horizontal_grid.ravel(), np.nan_to_num(mapped).ravel()],
+            [labels[vertical], labels[horizontal], 'Energy [eV/Å²/projectile]']
+        ), mpl_settings
+
+    def plotEnergyDepthMatrix(self, name: str = 'mpe_ex_p.dat') -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """
+        Plot and return the distribution of the depth (summed over the energy) of a matrix over energy and depth
+        (mpe_ex_p.dat: maximum penetration depth of backscattered projectiles, morigin_ex_bs.dat, morigin_ex_ts.dat: depth of
+        origin of sputtered atoms)
+
+        :param name: name of the file
+        """
+
+        mpl_settings = MplCanvasSettings()
+        title, depth_label = self.EnergyDepthMatrices.get(name, ('Depth distribution', 'Depth [Å]'))
+        matrices = [matrix for matrix in (self.readCached(name, readEnergyDepthMatrix) or []) if np.sum(matrix['counts']) > 0]
+        if not matrices:
+            mpl_settings.axes.set_title(f'No particles in {name}')
+            return None, mpl_settings
+
+        data, labels = [], []
+        for i, matrix in enumerate(matrices):
+            counts = np.sum(matrix['counts'], axis=0) / max(matrix['projectiles'], 1.)
+            # edges of the depth intervals from their centers
+            depths = matrix['depths']
+            middles = (depths[1:] + depths[:-1]) / 2
+            first = depths[0] - (middles[0] - depths[0]) if len(depths) > 1 else depths[0] - 0.5
+            last = depths[-1] + (depths[-1] - middles[-1]) if len(depths) > 1 else depths[0] + 0.5
+            edges = np.concatenate([[max(first, 0.)], middles, [last]])
+            mpl_settings.axes.stairs(counts, edges, color=self.colors[i], linewidth=self.line_width, label=matrix['species'])
+            data += [matrix['depths'], counts]
+            labels += [f'{depth_label} ({matrix["species"]})', f'Particles per projectile ({matrix["species"]})']
+        mpl_settings.axes.set_xlabel(depth_label)
+        mpl_settings.axes.set_ylabel('Particles per projectile')
+        mpl_settings.axes.set_xlim(left=0)
+        mpl_settings.axes.legend()
+        mpl_settings.axes.set_title(title)
         return (data, labels), mpl_settings
+
+    def plotEnergyAngleMatrix(self, name: str = 'meagb_p.dat', species: int = 0, log: bool = True) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """
+        Plot and return the energy and the polar angle (summed over the azimuthal angle) of backscattered or transmitted
+        particles (lmatrices: meagb_p.dat, meagb_s.dat, meagt_p.dat, meagt_s.dat)
+
+        :param name: name of the file
+        :param species: index of the species in the file
+        :param log: logarithmic color scale
+        """
+
+        mpl_settings = MplCanvasSettings()
+        matrices = self.readCached(name, readEnergyAngleMatrix) or []
+        if not 0 <= species < len(matrices) or np.sum(matrices[species]['counts']) <= 0:
+            mpl_settings.axes.set_title(f'No particles in {name}')
+            return None, mpl_settings
+
+        matrix = matrices[species]
+        counts = matrix['counts'] / max(matrix['projectiles'], 1.)
+        # the values in the file are the upper edges of the intervals
+        energy_edges = np.concatenate([[0.], matrix['energies']])
+        polar_edges = np.concatenate([[0.], matrix['polar']])
+        norm = None
+        if log:
+            positive = counts[counts > 0]
+            norm = LogNorm(vmin=float(positive.min()), vmax=float(positive.max()))
+            counts = np.where(counts > 0, counts, np.nan)
+        mpl_settings.axes.pcolormesh(polar_edges, energy_edges, counts, cmap='viridis', norm=norm, shading='flat')
+        mpl_settings.axes.pcolormesh_label('Particles per projectile')
+        mpl_settings.axes.set_xlabel('Polar angle [°]')
+        mpl_settings.axes.set_ylabel('Energy [eV]')
+        mpl_settings.axes.set_title(f'Energy and polar angle of {self.EnergyAngleMatrices.get(name, name)} ({matrix["species"]})')
+
+        polar_grid, energy_grid = np.meshgrid(matrix['polar'], matrix['energies'])
+        return (
+            [energy_grid.ravel(), polar_grid.ravel(), np.nan_to_num(counts).ravel()],
+            ['Energy (upper edge) [eV]', 'Polar angle (upper edge) [°]', 'Particles per projectile']
+        ), mpl_settings
 
     def getParticleData(self, particle: Particle) -> Optional[List[np.ndarray]]:
         """

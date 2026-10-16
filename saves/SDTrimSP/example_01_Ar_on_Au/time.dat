@@ -1,15 +1,15 @@
- Example 1: 2 keV Ar on Au at 60 degree (static)                                
+ Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target
   
-time for proj     :       0.21  s       1.8  %
-time for recoil   :      11.19  s      96.9  %
+time for proj     :       0.33  s       1.7  %
+time for recoil   :      18.58  s      96.7  %
 time for gsum/hist:       0.00  s       0.0  %
-time for part/hist:       0.14  s       1.2  %
+time for part/hist:       0.26  s       1.3  %
 time for diff/hist:       0.00  s       0.0  %
+time for out/hist :       0.02  s       0.1  %
 time for out/hist :       0.00  s       0.0  %
-time for out/hist :       0.00  s       0.0  %
-  time for history:       0.00  s       0.0  %
+  time for history:       0.02  s       0.1  %
 time for gsum/SDTr:       0.00  s
-time for SDTrimSP :      11.59  s
-time for SDTrimSP :       0.19 min
-time for SDTrimSP :       0.00  h
+time for SDTrimSP :      19.34  s
+time for SDTrimSP :       0.32 min
+time for SDTrimSP :       0.01  h
 number of PEs:    1 NH=        40 NR= 100 NH*NR=           4000

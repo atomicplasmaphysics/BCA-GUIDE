@@ -1,0 +1,10 @@
+# Linting with ruff (https://docs.astral.sh/ruff/): ruff check .
+extend-exclude = ["Simulation Programs", "testcode", "setup", "resources.py"]
+
+[lint]
+# default rules (pyflakes and pycodestyle errors), the names h, k, l of miller indices are allowed
+ignore = ["E741", "E743"]
+
+[lint.per-file-ignores]
+# the Qt platform is set before PyQt6 is imported
+"tests/conftest.py" = ["E402"]

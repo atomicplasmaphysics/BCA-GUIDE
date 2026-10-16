@@ -71,8 +71,13 @@ def test_read_trajectories(tmp_path):
     assert [trajectory['recoil'] for trajectory in trajectories] == [False, True, True, False]
     assert [trajectory['generation'] for trajectory in trajectories] == [0, 1, 2, 0]
     assert [trajectory['species'] for trajectory in trajectories] == [1, 0, 0, 1]
-    assert trajectories[0]['points'].shape == (3, 4)
-    assert np.allclose(trajectories[1]['points'][1], [20.201428, 31.521306, 16.931889, 0.])
+    # points: x, y, z, energy, absolute time
+    assert trajectories[0]['points'].shape == (3, 5)
+    assert np.allclose(trajectories[1]['points'][1, :4], [20.201428, 31.521306, 16.931889, 0.])
+
+    # the time of the recoils starts at 0 since 6.09, it is shifted by the time of the nearest point of the previous generation
+    assert np.allclose(trajectories[1]['points'][:, 4], [1.7863705, 1.7863705 + 74.664916])
+    assert np.allclose(trajectories[2]['points'][:, 4], [76.4512865, 76.4512865 + 74.664916])
 
     path.write_text(TRAJECTORIES_601)
     trajectories = readTrajectoryFile(path)
@@ -105,28 +110,70 @@ def test_plot_trajectories(main_window, qapp, tmp_path, errors):
     emitted = []
     analysis.hlChange.connect(emitted.append)
 
-    data, settings = analysis.plotTrajectories(number=1)
+    data, settings = analysis.plotTrajectories(projectile=1)
     calls = [call[1] for call in settings.axes.get_calls()]
-    # the first layer (the trajectories end before the second one at 50 A), surface, projectile and two recoil generations
+    # the first layer (the trajectories end before the second one at 50 A), surface, one line per species and generation
     assert calls.count('axhspan') == 1
     assert calls.count('plot') == 3
-    labels = data[1]
-    assert 'Generation 2' in labels
+    # colorbar of the recoil generations
+    assert len(settings.colorbars) == 1 and settings.colorbars[0][1]['label'] == 'Recoil generation'
+    legend = next(call for call in settings.axes.get_calls() if call[1] == 'legend')
+    assert [handle.get_label() for handle in legend[3]['handles']] == ['Species 2 projectile', 'Species 1 recoils', 'Cu']
+    columns, labels = data
+    assert labels[:4] == ['Trajectory', 'Generation', 'Species', 'Recoil']
+    assert all(len(column) == 7 for column in columns)
     pump(qapp)
     assert {'hide_trajectories': False, 'max_trajectories': 2} in emitted
 
-    _, settings = analysis.plotTrajectories(number=5, recoils=False, layers=False, view='z')
+    # only the second projectile, without recoils and layers
+    data, settings = analysis.plotTrajectories(projectile=2, recoils=False, layers=False, view='z')
     calls = settings.axes.get_calls()
     assert [call[1] for call in calls].count('axhspan') == 0
-    plots = [call for call in calls if call[1] == 'plot']
-    # only the projectiles, both in one line separated by nan
-    assert len(plots) == 1
-    assert np.isnan(plots[0][2][0]).sum() == 2
+    assert [call[1] for call in calls].count('plot') == 1
+    assert not settings.colorbars
+    assert all(len(column) == 2 for column in data[0])
+
+    # both lateral directions, top view and 3D
+    _, settings = analysis.plotTrajectories(view='both')
+    assert len(settings.extra_axes) == 1 and settings.colorbars[0][2] == 1
+    _, settings = analysis.plotTrajectories(view='top')
+    assert [call[1] for call in settings.axes.get_calls()].count('axhspan') == 0
+    _, settings = analysis.plotTrajectories(view='3d', color='energy')
+    assert settings.fig.get_calls()[0][3] == {'projection': '3d'}
+    assert [call[1] for call in settings.axes.get_calls()].count('add_collection3d') >= 1
+    assert settings.colorbars[0][1]['label'] == 'Energy [eV]'
+
+    # animation: at the start only the beginning of the projectile is shown, at the end everything
+    data, settings = analysis.plotTrajectories(time_fraction=0.)
+    assert len(data[0][0]) == 2
+    data, settings = analysis.plotTrajectories(time_fraction=0.5)
+    assert 0 < len(data[0][0]) < 7
+    assert any(call[1] == 'scatter' for call in settings.axes.get_calls())
+
+    # all plots can be drawn
+    for view in ('y', 'z', 'both', 'top', '3d'):
+        for color in ('species', 'energy', 'time'):
+            _, settings = analysis.plotTrajectories(view=view, color=color, time_fraction=0.7)
+            settings.apply(page.output_plot_view)
 
     # the settings in the plot toolbar change the plot
     page.plot_hbox.receive({'hide_trajectories': False, 'max_trajectories': 2})
     assert page.plot_hbox.trajectory_number.maximum() == 2
     assert not page.plot_hbox.layout_trajectory_number.widgets_list[0].isHidden()
+    page.plot_hbox.trajectory_view.setCurrentIndex(4)
+    page.plot_hbox.trajectory_time.setValue(100)
+    assert page.evaluation_class.trajectory_args['view'] == '3d'
+    assert page.evaluation_class.trajectory_args['time_fraction'] == 0.5
+    page.plot_hbox.trajectory_play.setChecked(True)
+    pump(qapp, 0.5)
+    page.plot_hbox.trajectory_play.setChecked(False)
+    assert page.plot_hbox.trajectory_time.value() > 100
     page.plot_hbox.receive({'hide': True})
     assert page.plot_hbox.trajectory_number.isHidden()
+
+    # animation as GIF
+    path = page.evaluation_class.saveTrajectoryAnimation(page.plot_hbox.trajectoryArguments(animation=False), path=tmp_path / 'cascade.gif', frames=5)
+    from PIL import Image
+    with Image.open(path) as image:
+        assert image.n_frames == 6
     assert not errors, '\n'.join(errors)

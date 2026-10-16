@@ -8,7 +8,7 @@ from GlobalConf import GlobalConf
 
 from Simulations.SimulationsList import SimulationsList
 
-from Utility.Functions import pathToStr
+from Utility.Functions import pathToStr, bestVersion
 
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
@@ -148,8 +148,9 @@ class SimulationConfiguration:
         if not isinstance(version, str):
             version = 'unknown'
 
+        # empty paths (and "." of older versions) mean no folder
         base_save_folder = settings.get('base_save_folder')
-        if isinstance(base_save_folder, str):
+        if isinstance(base_save_folder, str) and base_save_folder.strip() not in ('', '.'):
             base_save_folder = Path(base_save_folder)
             if not base_save_folder.is_dir():
                 base_save_folder = None
@@ -157,7 +158,7 @@ class SimulationConfiguration:
             base_save_folder = None
 
         save_folder = settings.get('save_folder')
-        if isinstance(save_folder, str):
+        if isinstance(save_folder, str) and save_folder.strip() not in ('', '.'):
             save_folder = Path(save_folder)
             if not save_folder.is_dir():
                 save_folder = None
@@ -171,8 +172,28 @@ class SimulationConfiguration:
             if any(base_save_folder.resolve() == default_folder.resolve() for default_folder in default_folders):
                 base_save_folder = None
 
+        # version detected in the folder: old version groups (e.g. "6.01, 6.06") are replaced, a different version group is
+        # only remembered (the user decides whether it is changed)
+        program_class = SimulationsList().simulation_program_list[program_idx]
+        detected_version = None
+        versions = list(getattr(program_class, 'Versions', []) or [])
+        if versions:
+            try:
+                version_name = program_class.getVersionName(folder, binary)
+            except Exception:
+                version_name = False
+            index, exact = bestVersion(versions, version_name) if isinstance(version_name, str) and version_name else (-1, False)
+            if version not in versions:
+                if index < 0:
+                    index, exact = bestVersion(versions, version)
+                if index >= 0:
+                    version = versions[index]
+            elif index >= 0 and exact and versions[index] != version:
+                detected_version = versions[index]
+
         sc = SimulationConfiguration(title, program_idx, folder, binary, version)
         sc.base_save_folder = base_save_folder
         sc.save_folder = save_folder
+        sc.detected_version = detected_version
 
         return sc

@@ -115,3 +115,23 @@ def test_layers_longer_than_target(tmp_path):
     assert [row.symbol for row in arguments.target_rows] == ['Si', 'W']
     assert [(layer.name, layer.segments, layer.thickness) for layer in arguments.structure] == [('W', 5, 50.), ('Si', 2, 20.), ('W', 3, 30.)]
     assert arguments.target_args.thickness == 100.
+
+
+def test_layers_shorter_than_target(tmp_path):
+    """SDTrimSP repeats the segments of layer.inp (starting with the first layer) until nqx segments are reached"""
+
+    text = tri('"Si", "W"', '1.0, 0.0', '0.0, 1.0', '     iq0 = -1')
+    layer = """! layers  thickness  qu_2
+     3  10.0  1.0  W
+     2  5.0   0.0  Si
+     0  0     0    end
+"""
+    arguments, errors = load(tmp_path, text, layer)
+    assert [(layer.name, layer.segments, layer.thickness) for layer in arguments.structure] == [
+        ('W', 3, 30.), ('Si', 2, 10.), ('W', 3, 30.), ('Si', 2, 10.)
+    ]
+    assert arguments.target_args.thickness == 80.
+
+    layer = layer.replace('2  5.0', '4  5.0')
+    arguments, errors = load(tmp_path, text, layer)
+    assert [(layer.name, layer.segments) for layer in arguments.structure] == [('W', 3), ('Si', 4), ('W', 3)]

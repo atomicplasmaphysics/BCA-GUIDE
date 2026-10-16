@@ -19,7 +19,7 @@ from Styles import Styles
 
 from Utility.Layouts import TabWithToolbar, VBoxTitleLayout, InputHBoxLayout, LineEdit, FilePath, ComboBox
 from Utility.Dialogs import showMessageBox, selectFileDialog
-from Utility.Functions import pathToStr
+from Utility.Functions import pathToStr, bestVersion
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Icons import getIcon
 
@@ -36,43 +36,6 @@ if TYPE_CHECKING:
 
 # folders that are not searched for installed simulations
 SEARCH_SKIP_FOLDERS = {'__pycache__', 'node_modules', 'site-packages', '$recycle.bin', 'system volume information', 'windows', 'appdata'}
-
-
-def bestVersion(versions: List[str], version_name: str) -> Tuple[int, bool]:
-    """
-    Returns the index of the selectable version that suits the detected version best and if it matches exactly.
-    If the detected version is not listed, the highest listed version below it is used (or the lowest listed version)
-
-    :param versions: selectable versions, e.g. ['6.01, 6.06', '7.07']
-    :param version_name: detected version name, e.g. 'SDTrimSP v7.05'
-
-    :return: (index or -1 if no version number is found, exact match)
-    """
-
-    version_numbers = findall(r'\d+(?:\.\d+)?', version_name)
-    if not version_numbers:
-        return -1, False
-    detected = version_numbers[0]
-
-    candidates = []
-    for i, entry in enumerate(versions):
-        for version in entry.split(','):
-            version = version.strip()
-            if version == detected:
-                return i, True
-            try:
-                candidates.append((float(version), i))
-            except ValueError:
-                pass
-
-    if not candidates:
-        return -1, False
-
-    detected_value = float(detected)
-    lower = [candidate for candidate in candidates if candidate[0] <= detected_value]
-    if lower:
-        return max(lower)[1], False
-    return min(candidates)[1], False
 
 
 def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dict], List[str]]:
@@ -562,6 +525,28 @@ class ConfigurationPage(TabWithToolbar):
                 'Errors occurred while loading configuration. Effected configurations will not be loaded.',
                 detailed_message=error_msg
             )
+
+        # configurations whose version group differs from the version detected in their folder
+        mismatches = [sc for sc in self.main_window.simulation_configs if getattr(sc, 'detected_version', None)]
+        if mismatches:
+            _, result = showMessageBox(
+                self,
+                QMessageBox.Icon.Question,
+                'Version mismatch',
+                'The version of some configurations differs from the version found in their folder.',
+                info_message='The input files are written for the version of the configuration, so the simulation might fail or '
+                             'use different parameters.\nDo you want to use the found versions?',
+                detailed_message='\n'.join(f'"{sc.title}": version {sc.version}, found {sc.detected_version}' for sc in mismatches),
+                standard_buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                expand_details=True
+            )
+            if result == QMessageBox.StandardButton.Yes:
+                for sc in mismatches:
+                    sc.version = sc.detected_version
+                self.save(autosave=True, no_config=not GlobalConf.keep_configurations_info)
+            for sc in mismatches:
+                sc.detected_version = None
+
         self.clearConfigView()
         self.listConfigView()
         self.main_window.writeStatusBar('Loading configuration file successful')
@@ -1217,6 +1202,8 @@ class ConfigurationPage(TabWithToolbar):
             )
             return
 
+        configurations = []
         for i in range(self.simulation_configuration_list.count()):
             if self.simulation_configuration_list.item(i).checkState() == Qt.CheckState.Checked and (i - 1) in range(len(self.main_window.simulation_configs)):
-                self.main_window.simulation_configs[i - 1].tab_widget.runSimulation(detached=detached)
+                configurations.append(self.main_window.simulation_configs[i - 1])
+        self.main_window.runSimulations(configurations, detached=detached)

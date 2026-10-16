@@ -12,6 +12,7 @@ from Utility.Icons import getIcon
 from TableWidgets.CustomTable import CustomTable, CustomRow
 
 from Containers.Arguments import StructureArguments
+from Containers.CrystalTableFile import layerMillerError
 
 
 class TargetLayerEntry:
@@ -543,6 +544,17 @@ class TargetLayersTable(CustomTable):
             too_much_crystal = sum(cell.value() for cell in row.crystal_cells) > 1 + 1e-9
             for cell in row.crystal_cells:
                 setWidgetHighlight(cell, too_much_crystal)
+
+            # SDTrimSP only accepts miller indices [1, 0...1, 0...1] in layer.inp (amorphous layers are written as [1, 0, 0])
+            if row.miller_cells:
+                miller_error = layerMillerError([cell.value() for cell in row.miller_cells])
+                miller_error = miller_error if any(cell.value() > 0 for cell in row.crystal_cells) else None
+                for cell in row.miller_cells:
+                    setWidgetHighlight(cell, miller_error is not None)
+                    cell.setToolTip(
+                        f'Not accepted by SDTrimSP: {miller_error}.\nOnly the form [1, 0...1, 0...1] is allowed in layer.inp, '
+                        f'e.g. (1 0 0) instead of (0 0 1)' if miller_error is not None else self.millerTooltip
+                    )
 
         # Highlight all abundance cells of an element if its abundance is zero in all of them
         # (not with crystals, elements might only be part of the crystals)

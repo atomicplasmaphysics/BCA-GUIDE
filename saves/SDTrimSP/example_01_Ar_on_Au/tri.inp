@@ -1,4 +1,4 @@
-Example 1: 2 keV Ar on Au at 60 degree (static)
+Example 1: 2 keV Ar on Au at 60 deg (static), energy distribution in the target
 &TRI_INP
 text = "--- elements ---"
     ncp = 2
@@ -41,6 +41,11 @@ text = "--- output options ---"
     lmatrices = .false.
     tbsp_binary = .true.
     tbsp_ascii = .false.
+    lenergy_distr = .true.
+    dist_nx = 40
+    dist_ny = 40
+    dist_nz = 40
+    dist_delta = 2.5
 
 text = "--- extra ---"
     tableinp = "C:\Users\alexr\Uni\TU\Diplomarbeit\BCA-GUIDE\Simulation Programs\SDTrimSP\SDTrimSP_7.07\tables"
