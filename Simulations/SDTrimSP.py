@@ -18,7 +18,7 @@ from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QApplication, QMainWindow
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QMainWindow
 
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, InputHBoxLayouts, VBoxTitleLayout,
@@ -38,7 +38,7 @@ from TableWidgets.DistributionEditor import (
     DistributionDialog, readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile
 )
 
-from Containers.MplCanvasSettings import MplCanvasSettings
+from Containers.MplCanvasSettings import MplCanvasSettings, OffscreenCanvas, AnimationExport
 from Containers.Arguments import (
     ArgumentValues, GeneralBeamArguments, GeneralTargetArguments, GeneralCrystalArguments,
     GeneralArguments, RowArguments, CrystalRowArguments, SimulationArguments, StructureArguments
@@ -5544,6 +5544,9 @@ class SimulationOutput(SimulationsOutput):
         # settings of the plot of the energy distribution in the target, changed in HlPlot
         self.energy_distribution_args = {'kind': 'all', 'view': 'y', 'log': False}
 
+        # export of the animation of the collision cascade as GIF (in a background thread)
+        self.animation_export: Optional[AnimationExport] = None
+
     def receive(self, value_dict: dict):
         """Receives pyqtSignal -> dict"""
 
@@ -5619,7 +5622,9 @@ class SimulationOutput(SimulationsOutput):
 
     def saveTrajectoryAnimation(self, arguments: dict, path: Optional[Path] = None, frames: int = 60, frame_duration: int = 80) -> Optional[Path]:
         """
-        Saves the animation of the collision cascade as GIF and returns its path
+        Saves the animation of the collision cascade as GIF in a background thread (self.animation_export) and returns its
+        path. The frames are created first, then they are drawn and saved in the background: the GUI stays usable and the
+        status bar shows the progress
 
         :param arguments: arguments of the trajectory plot (see SimulationAnalysis.plotTrajectories)
         :param path: (optional) path of the GIF, otherwise a file dialog asks for it
@@ -5627,7 +5632,21 @@ class SimulationOutput(SimulationsOutput):
         :param frame_duration: duration of a frame in ms
         """
 
-        from PIL import Image
+        # the status bar of the main window shows the progress
+        main_window = self.plot.window()
+        status_bar = main_window.statusBar() if isinstance(main_window, QMainWindow) else None
+
+        def showStatus(message: str, timeout: int = 0):
+            try:
+                if status_bar is not None:
+                    status_bar.showMessage(message, timeout)
+            except RuntimeError:
+                # the window was closed in the meantime
+                pass
+
+        if self.animation_export is not None and self.animation_export.isRunning():
+            showStatus('An animation is already being saved, please wait until it is finished', 5000)
+            return None
 
         save_folder = self.analysis.save_folder
         if save_folder is None:
@@ -5643,53 +5662,39 @@ class SimulationOutput(SimulationsOutput):
             if path is None:
                 return None
 
+        # settings of the frames (fast, the data of the simulation is read here), they are drawn in the background
+        settings: List[MplCanvasSettings] = []
+        for frame in range(frames + 1):
+            result = self.analysis.plotTrajectories(**dict(arguments, time_fraction=frame / frames))
+            if result is None or result[0] is None:
+                break
+            settings.append(result[1])
+        if not settings:
+            showStatus('The animation could not be saved (no trajectories)', 5000)
+            return None
+
         # canvas with the size of the plot, a 3D plot keeps its current view
         width, height = self.plot.fig.get_size_inches()
-        canvas = MplCanvas(width=max(width, 4), height=max(height, 3), dpi=self.plot.fig.dpi)
-        if arguments.get('view') == '3d':
-            canvas.fig.clf()
-            axes_3d: Any = canvas.fig.add_subplot(projection='3d')
-            canvas.axes = axes_3d
-            plot_axes: Any = self.plot.axes
-            if getattr(plot_axes, 'name', '') == '3d':
-                axes_3d.view_init(plot_axes.elev, plot_axes.azim)
+        canvas = OffscreenCanvas(max(width, 4), max(height, 3), self.plot.fig.dpi, projection='3d' if arguments.get('view') == '3d' else None)
+        plot_axes: Any = self.plot.axes
+        if arguments.get('view') == '3d' and getattr(plot_axes, 'name', '') == '3d':
+            canvas.axes.view_init(plot_axes.elev, plot_axes.azim)
 
-        # the export blocks the GUI: the status bar of the main window shows the progress
-        main_window = self.plot.window()
-        status_bar = main_window.statusBar() if isinstance(main_window, QMainWindow) else None
+        durations = [frame_duration] * (len(settings) - 1) + [frame_duration * 25]
+        export = AnimationExport(settings, canvas, path, durations)
+        name = path.name
+        export.progress.connect(lambda frame, number: showStatus(f'Saving the animation as GIF in the background: frame {frame} of {number} ({name})...'))
 
-        def showStatus(message: str, timeout: int = 0):
-            if status_bar is not None:
-                status_bar.showMessage(message, timeout)
-                status_bar.repaint()
+        def finished(saved: str, error: str):
+            if saved:
+                showStatus(f'Animation saved as {saved}', 8000)
+            else:
+                showStatus(f'The animation could not be saved ({error})', 8000)
 
-        images = []
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            for frame in range(frames + 1):
-                showStatus(f'Saving the animation as GIF: frame {frame + 1} of {frames + 1} (the GUI is blocked until it is saved)...')
-                result = self.analysis.plotTrajectories(**dict(arguments, time_fraction=frame / frames))
-                if result is None or result[0] is None:
-                    break
-                result[1].apply(canvas)
-                canvas.draw()
-                image = Image.fromarray(np.asarray(canvas.buffer_rgba())).convert('RGB')
-                images.append(image.convert('P', palette=Image.Palette.ADAPTIVE))
-
-            if not images:
-                showStatus('The animation could not be saved (no trajectories)', 5000)
-                return None
-            showStatus(f'Saving the animation as GIF: writing {pathToStr(path)}...')
-            durations = [frame_duration] * (len(images) - 1) + [frame_duration * 25]
-            images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0)
-        except Exception:
-            showStatus('The animation could not be saved', 5000)
-            raise
-        finally:
-            QApplication.restoreOverrideCursor()
-            canvas.deleteLater()
-
-        showStatus(f'Animation saved as {pathToStr(path)}', 8000)
+        export.finished.connect(finished)
+        self.animation_export = export
+        showStatus(f'Saving the animation as GIF in the background ({name})...')
+        export.start()
         return path
 
     def listParameters(self, save_folder: Path, list_widget: ListWidget):

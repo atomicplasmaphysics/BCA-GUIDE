@@ -171,9 +171,31 @@ def test_plot_trajectories(main_window, qapp, tmp_path, errors):
     page.plot_hbox.receive({'hide': True})
     assert page.plot_hbox.trajectory_number.isHidden()
 
-    # animation as GIF
-    path = page.evaluation_class.saveTrajectoryAnimation(page.plot_hbox.trajectoryArguments(animation=False), path=tmp_path / 'cascade.gif', frames=5)
+    # animation as GIF, saved in the background (the GUI stays usable)
+    evaluation = page.evaluation_class
+    path = evaluation.saveTrajectoryAnimation(page.plot_hbox.trajectoryArguments(animation=False), path=tmp_path / 'cascade.gif', frames=5)
+    export = evaluation.animation_export
+    assert path is not None and export is not None
+    progress, finished = [], []
+    export.progress.connect(lambda frame, number: progress.append((frame, number)))
+    export.finished.connect(lambda saved, error: finished.append((saved, error)))
+    # a second export waits until the first one is finished
+    if export.isRunning():
+        assert evaluation.saveTrajectoryAnimation(page.plot_hbox.trajectoryArguments(animation=False), path=tmp_path / 'second.gif') is None
+    export.wait(60)
+    pump(qapp, 0.2)
+    assert finished == [(str(path), '')]
+    assert not progress or progress[-1] == (6, 6)
     from PIL import Image
     with Image.open(path) as image:
         assert image.n_frames == 6
+    assert 'Animation saved as' in main_window.statusBar().currentMessage()
+
+    # 3D view
+    path_3d = evaluation.saveTrajectoryAnimation(dict(page.plot_hbox.trajectoryArguments(animation=False), view='3d'), path=tmp_path / 'cascade_3d.gif', frames=3)
+    assert path_3d is not None and evaluation.animation_export is not None
+    evaluation.animation_export.wait(60)
+    pump(qapp, 0.2)
+    with Image.open(path_3d) as image:
+        assert image.n_frames == 4
     assert not errors, '\n'.join(errors)

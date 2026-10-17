@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Union, Optional, Tuple, List, Callable, Dict, Sequence, Any, cast
 from pathlib import Path
+import warnings
 
 from Styles import Styles
 
@@ -10,7 +11,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
     QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle, QSizePolicy, QToolTip,
-    QToolButton
+    QToolButton, QMenu
 )
 
 import numpy as np
@@ -32,6 +33,9 @@ from Utility.Functions import getUniqueColor, setDictIfNotExists
 from Utility.Typing import notNone
 
 from Containers.Element import Element
+
+# plots that are too small for their labels (e.g. while hidden or during resizing) keep their layout, without a warning
+warnings.filterwarnings('ignore', message='Tight layout not applied', category=UserWarning)
 
 
 class SplashPixmap(QPixmap):
@@ -83,6 +87,17 @@ def contentButton(icon: QIcon, text: str = '', parent: Optional[QWidget] = None)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
     button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     return button
+
+
+class StayOpenMenu(QMenu):
+    """Menu that stays open when a checkable entry is clicked (several entries can be selected at once)"""
+
+    def mouseReleaseEvent(self, event):
+        action = self.activeAction()
+        if action is not None and action.isEnabled() and action.isCheckable() and action.menu() is None:
+            action.trigger()
+            return
+        super().mouseReleaseEvent(event)
 
 
 class InputHBoxLayouts(QHBoxLayout):

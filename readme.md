@@ -28,7 +28,7 @@ Further examples for SDTrimSP (created with SDTrimSP 7.07, they can be opened wi
   the energy distribution in the target
 - `example_02_D_on_W_dynamic`: 1 keV D on W, dynamic simulation (concentrations and surface level over the fluence)
 - `example_03_Ar_on_SiO2_Si_trajectories`: 1 keV Ar on a SiO2 layer on Si, trajectories of projectiles and recoils
-  (2D, 3D and animated, also as GIF)
+  (2D, 3D and animated, also as GIF, which is saved in the background while the GUI stays usable)
 - `example_04_He_on_W_energy_distribution`: He on W with an energy distribution from `energy.inp`
 - `example_05_Ar_on_Si_angle_sweep`: 500 eV Ar on Si, angles of incidence from 0deg to 80deg
 - `example_06_Ar_on_W_crystal` and `example_07_Ar_on_W_amorphous`: 2 keV Ar on crystalline (bcc, 100) and amorphous W
@@ -123,11 +123,12 @@ Single simulations are configured manually as described below.
 - Parameter scan: the scan button (slider icon) in the toolbar of a simulation tab enables the scan. The input fields
   that can be scanned get a small mark in their upper left corner, a click on it opens a popup for several values (a
   linear or logarithmic range or entered directly), the field then shows its values. A scan is a series of simulations
-  in which up to 5 parameters are varied at once (all combinations): energy, angle and azimuthal angle of the beam
+  in which any number of parameters are varied at once (all combinations): energy, angle and azimuthal angle of the beam
   species, element parameters (surface binding, displacement, cutoff and bulk binding energy, heat of formation,
   inelastic correction, density, mass), atomic fractions of the first layer, target thickness and the numeric
   simulation settings (e.g. fluence, number of histories). The menu of the scan button adds other versions of the
-  program (other configurations). *Run* writes each simulation into a subfolder of the folder of the simulation, the
+  program (other configurations, the menu stays open to select several), lists the scanned parameters (a click
+  removes the values of one, also of fields that are currently hidden) and resets the scan. *Run* writes each simulation into a subfolder of the folder of the simulation, the
   scan is described in `scan.json`: *Open* also accepts `scan.json` and opens the scan again, each subfolder can be
   opened as single simulation. With the scan, *Files preview* shows the files of a selected simulation of the scan,
   *Run status* the state and output of each simulation, *Output files* the files of a selected simulation and

@@ -18,7 +18,7 @@ from PyQt6.QtGui import QKeySequence, QDesktopServices
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton,
     QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication, QComboBox, QStackedWidget,
-    QTableWidget, QHeaderView, QToolButton, QMenu
+    QTableWidget, QHeaderView, QToolButton
 )
 
 
@@ -26,7 +26,7 @@ from GlobalConf import GlobalConf
 from Styles import Styles
 
 from Utility.Layouts import (
-    TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview, contentButton,
+    TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview, contentButton, StayOpenMenu,
     CrystalPreview, TimeProgressBar, PlotToolbar
 )
 from Utility.Indexing import Counter
@@ -192,13 +192,14 @@ class SimulationPage(TabWithToolbar):
         self.action_scan = self.toolbar.addAction(getIcon('scan'), 'Parameter scan')
         self.action_scan.setCheckable(True)
         self.action_scan.setToolTip(
-            '<b>Parameter scan</b>: simulations in which up to 5 parameters are varied (all combinations).<br>'
+            '<b>Parameter scan</b>: simulations in which any number of parameters are varied (all combinations of their values).<br>'
             'The input fields that can be scanned get a mark in their upper left corner: click on it to enter several values '
             '(also as linear or logarithmic range). The simulations are written into subfolders of the folder of this '
-            'simulation and described in scan.json.<br>The menu of the button adds other versions of the simulation program.'
+            'simulation and described in scan.json.<br>The menu of the button adds other versions of the simulation program, '
+            'lists the scanned parameters and resets the scan.'
         )
         self.action_scan.toggled.connect(lambda checked: self.setScanEnabled(checked))
-        self.scan_menu = QMenu(self)
+        self.scan_menu = StayOpenMenu(self)
         self.scan_menu.setToolTipsVisible(True)
         self.scan_menu.aboutToShow.connect(self.updateScanMenu)
         self.action_scan.setMenu(self.scan_menu)
@@ -445,9 +446,13 @@ class SimulationPage(TabWithToolbar):
         #
         # Additional settings
         self.additional_settings_vbox = VBoxTitleLayout(self, 'Additional Settings', add_stretch=False)
-        self.check_settings_button = QPushButton(getIcon('error_check'), '', self)
-        self.check_settings_button.setMaximumWidth(50)
-        self.check_settings_button.setToolTip('Check the settings for validity')
+        self.check_settings_button = contentButton(getIcon('error_check'), 'Check', self)
+        self.check_settings_button.setToolTip(
+            '<b>Checks the validity</b> of the additional settings for this program version: each line needs the form '
+            '"name = value", the variable must be known to the program and its value must have the right type.<br>'
+            'Lines with problems are already marked while typing (the problem is the tooltip of the line), the button '
+            'lists all problems.'
+        )
         self.check_settings_button.clicked.connect(lambda: self.checkAdditionalSettings())
 
         self.additional_settings_vbox.hl.addWidget(self.check_settings_button)
@@ -504,11 +509,13 @@ class SimulationPage(TabWithToolbar):
         self.preview_selector.currentIndexChanged.connect(lambda _: self.makePreview())
         preview_selector_layout.addWidget(self.preview_selector)
         preview_selector_layout.addStretch(1)
+        # only one line high, the file previews get the remaining space
+        self.preview_selector_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.preview_selector_widget.setHidden(True)
         self.file_preview_tab_layout.addWidget(self.preview_selector_widget)
 
         self.file_preview_tab_splitter = QSplitter()
-        self.file_preview_tab_layout.addWidget(self.file_preview_tab_splitter)
+        self.file_preview_tab_layout.addWidget(self.file_preview_tab_splitter, 1)
 
         # Input File / Input Parameters
         self.parent_widget_file_input = QWidget(self)
@@ -581,12 +588,10 @@ class SimulationPage(TabWithToolbar):
         # List of output files
         self.parent_widget_output_list = QWidget(self)
         self.output_list_vbox = VBoxTitleLayout(self, 'List of files', add_stretch=False)
-        self.refresh_output_files_button = QPushButton(getIcon('refresh'), '', self)
-        self.refresh_output_files_button.setMaximumWidth(50)
+        self.refresh_output_files_button = contentButton(getIcon('refresh'), '', self)
         self.refresh_output_files_button.setToolTip('Refresh the list')
         self.output_list_vbox.hl.addWidget(self.refresh_output_files_button)
-        self.open_output_file_button = QPushButton(getIcon('open_external'), '', self)
-        self.open_output_file_button.setMaximumWidth(50)
+        self.open_output_file_button = contentButton(getIcon('open_external'), 'Open', self)
         self.open_output_file_button.setToolTip('Open the selected file with the standard text editor')
         self.open_output_file_button.setEnabled(False)
         self.output_list_vbox.hl.addWidget(self.open_output_file_button)
@@ -884,9 +889,23 @@ class SimulationPage(TabWithToolbar):
         if not versions:
             action = notNone(self.scan_menu.addAction('(no other configuration of this program)'))
             action.setEnabled(False)
+
+        # scanned parameters (also of fields that are currently hidden), a click removes the values of a parameter
+        self.scan_menu.addSection('Scanned parameters (click to remove)')
+        running = self.scan.isRunning()
+        labels = {key: parameter.label for key, parameter in self.scan.safeParameters().items()}
+        for key in self.scan.values:
+            action = notNone(self.scan_menu.addAction(getIcon('close'), f'{labels.get(key, key)}: {self.scan.valuesText(key)}'))
+            action.setToolTip('Removes the values of this parameter (its field has a single value again)')
+            action.setEnabled(not running)
+            action.triggered.connect(lambda _, key=key: self.scan.setValues(key, None))
+        if not self.scan.values:
+            action = notNone(self.scan_menu.addAction('(no parameter has several values)'))
+            action.setEnabled(False)
         self.scan_menu.addSeparator()
-        action_clear = notNone(self.scan_menu.addAction(getIcon('close'), 'Remove all values of the scan'))
-        action_clear.setEnabled(self.scan.hasParameters() and not self.scan.isRunning())
+        action_clear = notNone(self.scan_menu.addAction(getIcon('reset'), 'Reset the scan'))
+        action_clear.setToolTip('Removes the values of all parameters and the other versions, to start the scan over')
+        action_clear.setEnabled(self.scan.hasParameters() and not running)
         action_clear.triggered.connect(lambda: self.scan.clearValues())
 
     def updateScanLists(self):
@@ -1330,6 +1349,10 @@ EOF
         self.action_save.setEnabled(state)
         self.simulation_configuration.unsaved_changes = state
         self.main_window.simChanged(self.simulation_configuration)
+
+        # changed inputs: the status of the last run no longer applies
+        if state and self.run_status in (SimulationPage.RunStatus.DONE, SimulationPage.RunStatus.ABORTED, SimulationPage.RunStatus.ERROR):
+            self.setRunStatus(SimulationPage.RunStatus.READY)
 
     def resetSettings(self):
         """Reset Settings to default"""

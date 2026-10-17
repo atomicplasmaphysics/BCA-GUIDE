@@ -189,10 +189,9 @@ def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
     arguments = page.scan.arguments([(parameter, value + 3)])
     assert widget.value() == value and vars(arguments.settings) != vars(page.makeArguments().settings)
 
-    # at most 5 parameters
-    for key in ('angle_Ar', 'ed_Au', 'mass_Au'):
+    # any number of parameters
+    for key in ('angle_Ar', 'ed_Au', 'mass_Au', 'ck_Au'):
         assert page.scan.setValues(key, {'values': '1, 2'})
-    assert not page.scan.setValues('ck_Au', {'values': '1, 2'})
 
     # values of the parameters
     arguments = page.makeArguments()
@@ -203,6 +202,26 @@ def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
     assert arguments.settings.get('histories') == 7
     parameters['ecut_Ar'].apply(arguments, 2.5)
     assert arguments.beam_rows[0].get('cutoff_energy') == 2.5
+
+    # the menu of the scan button lists the scanned parameters (a click removes one), "Reset the scan" removes all values
+    page.scan.setValues('angle_Ar', {'values': '0, 30'})
+    page.updateScanMenu()
+    angle = next(action for action in page.scan_menu.actions() if action.text().startswith('Angle of incidence of Ar'))
+    assert angle.text().endswith(': 0, 30')
+    angle.trigger()
+    assert 'angle_Ar' not in page.scan.values and 'energy_Ar' in page.scan.values
+    page.updateScanMenu()
+    reset = next(action for action in page.scan_menu.actions() if action.text() == 'Reset the scan')
+    assert reset.isEnabled()
+    reset.trigger()
+    assert not page.scan.values and not page.scan.hasParameters()
+    page.scan.setValues('energy_Ar', {'values': '500, 1000'})
+
+    # the selector of the simulation in the files preview is only one line high, the previews get the remaining space
+    from PyQt6.QtWidgets import QSizePolicy
+    assert page.preview_selector_widget.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Fixed
+    layout = page.file_preview_tab_layout
+    assert layout.stretch(layout.indexOf(page.file_preview_tab_splitter)) == 1
 
     # without the scan the fields are shown as usual
     page.scan.setValues('energy_Ar', None)
@@ -346,4 +365,7 @@ def test_parameter_scan_run(main_window, qapp, tmp_path, monkeypatch, errors):
     assert page.runSimulation(check_warnings=False, ask_delete=False)
     assert pump(qapp, 300, until=lambda: page.run_status == SimulationPage.RunStatus.DONE)
     assert (sc.save_folder / 'scan.json').is_file() and all((job['folder'] / 'output.dat').is_file() for job in scan.jobs)
+    # a changed input: the status of the last run is replaced by "Ready!"
+    page.settings_group_layout_settings.histories_total.setValue(5)
+    assert page.run_status == SimulationPage.RunStatus.READY and page.run_status_text.text() == 'Ready!'
     assert not errors, '\n'.join(errors)

@@ -129,6 +129,37 @@ def test_reorder_configurations(main_window, qapp, errors):
     assert not errors, '\n'.join(errors)
 
 
+def test_stay_open_menu(qapp):
+    """A checkable entry of the menu is toggled without closing the menu, other entries close it"""
+
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtTest import QTest
+    from Utility.Layouts import StayOpenMenu
+
+    menu = StayOpenMenu()
+    checkable = menu.addAction('Version')
+    checkable.setCheckable(True)
+    other = menu.addAction('Reset')
+    triggered = []
+    other.triggered.connect(lambda: triggered.append(True))
+    menu.popup(QPoint(0, 0))
+    pump(qapp)
+    assert menu.isVisible()
+    for _ in range(2):
+        menu.setActiveAction(checkable)
+        QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(checkable).center())
+        pump(qapp)
+        assert menu.isVisible()
+    assert not checkable.isChecked()
+    menu.setActiveAction(checkable)
+    QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(checkable).center())
+    assert checkable.isChecked() and menu.isVisible()
+    menu.setActiveAction(other)
+    QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(other).center())
+    pump(qapp)
+    assert triggered and not menu.isVisible()
+
+
 def test_base_save_folder_follows_preferences(tmp_path):
     folder = SDTRIMSP / 'SDTrimSP_7.00'
     if not folder.is_dir():

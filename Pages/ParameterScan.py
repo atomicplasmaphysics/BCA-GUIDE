@@ -1,5 +1,5 @@
 """
-Parameter scan: a series of simulations in which up to 5 parameters of a simulation tab are varied (all combinations).
+Parameter scan: a series of simulations in which any number of parameters of a simulation tab are varied (all combinations).
 The scan is enabled with the scan button in the toolbar of the simulation tab. Then the input fields that can be scanned
 show a small mark in their corner: a click opens a popup in which several values are entered (directly or as linear or
 logarithmic range), the field then shows its values. Parameters: energies and angles of the beam species, the properties
@@ -47,7 +47,6 @@ if TYPE_CHECKING:
 
 
 # maximum number of parameters of a scan (without the version)
-MAX_PARAMETERS = 5
 
 # scales of the range of values
 SCALES = ['linear', 'logarithmic (dense at start)', 'logarithmic (dense at end)']
@@ -527,9 +526,7 @@ class ScanValuesEditor(QFrame):
     def apply(self):
         """Applies the values to the scan"""
 
-        if not self.scan.setValues(self.parameter.key, self.state()):
-            self.count.setText(f'<span style="color: #c62828">At most {MAX_PARAMETERS} parameters can be scanned</span>')
-            return
+        self.scan.setValues(self.parameter.key, self.state())
         number = len(parseValues(self.values.text(), self.parameter.integer))
         self.count.setText(f'{number} value{"s" if number != 1 else ""}, {self.scan.count()} simulations in the scan')
 
@@ -633,8 +630,6 @@ class ParameterScan(QObject):
                 return True
             self.values.pop(key)
         else:
-            if key not in self.values and len(self.values) >= MAX_PARAMETERS:
-                return False
             if self.values.get(key) == state:
                 return True
             self.values[key] = dict(state)
@@ -850,7 +845,7 @@ class ParameterScan(QObject):
                 continue
             # scans of older versions only store the label of the parameter
             key = row.get('key') or labels.get(str(row.get('label')))
-            if isinstance(key, str) and key and len(self.values) < MAX_PARAMETERS:
+            if isinstance(key, str) and key:
                 self.values[key] = {name: row[name] for name in ('start', 'stop', 'number', 'scale', 'values') if name in row}
         versions = state.get('versions')
         self.versions = [str(title) for title in versions] if isinstance(versions, list) else []
