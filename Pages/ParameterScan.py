@@ -66,18 +66,30 @@ ROW_FIELDS = [
     ('heat_of_formation', 'dhf'), ('inelastic_correction', 'ck'), ('start_depth', 'x0'), ('charge', 'charge')
 ]
 
+# fields of the rows of the composition tables whose value is set in the field before the arguments are created:
+# attribute of the row, key of the parameter (with the symbol), label
+ROW_WIDGET_FIELDS = [
+    ('max_concentration', 'qumax', 'Maximum atomic fraction'), ('maximum_concentration', 'qumax', 'Maximum atomic fraction')
+]
+
 # combo boxes of the rows of the composition tables: attribute of the row, key of the parameter (with the symbol), label
-ROW_CHOICES = [('inelastic_loss_model', 'inel', 'Inelastic loss model')]
+ROW_CHOICES = [
+    ('inelastic_loss_model', 'inel', 'Inelastic loss model'), ('action_switch', 'ires', 'Action at the maximum atomic fraction')
+]
 
 # fields of the simulation settings that are parameters with own keys (attribute: key)
 SETTINGS_KEYS = {'fluence': 'fluence', 'histories_total': 'histories', 'projectiles': 'projectiles'}
 
 # numeric fields of the simulation settings that are not scanned (they do not change the results)
-SETTINGS_EXCLUDED = {'histories_between'}
+SETTINGS_EXCLUDED = {'histories_between', 'threads', 'log_frequency', 'integral_frequency', 'output_frequency'}
+
+# numeric fields of the beam and target settings that are not scanned (calculated from other fields or not working)
+BEAM_TARGET_EXCLUDED = {'segment_thickness', 'sweep'}
 
 # combo boxes of the simulation settings that can be scanned (attribute: label)
 SETTINGS_CHOICES = {
-    'potential': 'Interaction potential', 'integration': 'Integration method', 'surface_binding_model': 'Surface binding model'
+    'potential': 'Interaction potential', 'integration': 'Integration method', 'surface_binding_model': 'Surface binding model',
+    'inelastic_loss_model': 'Electronic stopping mode'
 }
 
 
@@ -166,8 +178,10 @@ def defaultRange(key: str, current: float) -> dict:
     if key.startswith(('angle_', 'azimuth_')):
         angle = key.startswith('angle_')
         return {'start': 0., 'stop': 80. if angle else 90., 'number': 9 if angle else 4, 'scale': 0}
-    if key.startswith('fraction_'):
+    if key.startswith(('fraction_', 'qubeam_')):
         return {'start': 0.1, 'stop': 0.9, 'number': 5, 'scale': 0}
+    if key.startswith('qumax_'):
+        return {'start': 0.2, 'stop': 1., 'number': 5, 'scale': 0}
     if current > 0:
         logarithmic = key.startswith('energy_') or key in ('fluence', 'histories', 'projectiles')
         return {'start': current / 10 if logarithmic else current / 2, 'stop': current * 10 if logarithmic else current * 2,
@@ -220,6 +234,23 @@ def setTargetFraction(arguments, symbol: str, value: float):
             row.abundance = layers[0].abundances[i]
 
 
+def setBeamFraction(arguments, symbol: str, value: float):
+    """Sets the fraction of an element in the beam, the other elements of the beam keep their ratios"""
+
+    rows = [row for row in arguments.beam_rows if row.symbol]
+    if not any(row.symbol == symbol for row in rows):
+        return
+    value = min(max(float(value), 0.), 1.)
+    others = sum(row.abundance for row in rows if row.symbol != symbol)
+    for row in rows:
+        if row.symbol == symbol:
+            row.abundance = value
+        elif others > 0:
+            row.abundance = row.abundance / others * (1 - value)
+        else:
+            row.abundance = (1 - value) / max(len(rows) - 1, 1)
+
+
 def setSegments(arguments, value: float):
     """Sets the number of segments of the target (nqx), the layers keep their relative number of segments (at least 1)"""
 
@@ -267,10 +298,14 @@ def scanParameters(arguments, simulation_name: str, supports_azimuth: bool = Tru
     """Returns the parameters that can be scanned for the arguments of a simulation (without the simulation settings)"""
 
     parameters = []
+    beam_elements = len([row for row in arguments.beam_rows if row.symbol])
     for i, row in enumerate(arguments.beam_rows):
         if not row.symbol:
             continue
         symbol = row.symbol
+        if beam_elements > 1:
+            parameters.append(ScanParameter(f'qubeam_{symbol}', f'Fraction of {symbol} in the beam',
+                                            lambda a, i=i: a.beam_rows[i].abundance, lambda a, v, s=symbol: setBeamFraction(a, s, v)))
         parameters.append(ScanParameter(f'energy_{symbol}', f'Energy of {symbol} [eV]', lambda a, i=i: a.beam_rows[i].energy,
                                         lambda a, v, i=i: setattr(a.beam_rows[i], 'energy', float(v))))
         parameters.append(ScanParameter(f'angle_{symbol}', f'Angle of incidence of {symbol} [°]', lambda a, i=i: a.beam_rows[i].angle,
@@ -347,13 +382,16 @@ def plainLabel(text: str) -> str:
     return sub(r'<[^>]+>', '', text).strip().rstrip(':').strip()
 
 
-def settingsFields(owner) -> List[Tuple[str, str, QWidget]]:
+def settingsFields(owner, excluded: Optional[set] = None) -> List[Tuple[str, str, QWidget]]:
     """
     Returns the numeric input fields of a settings layout as (attribute name, label, widget): the spin boxes of the
     <InputHBoxLayouts> that are attributes of the layout
 
     :param owner: settings layout (e.g. VlSimulationSettings)
+    :param excluded: (optional) attribute names of fields that are not returned (default: SETTINGS_EXCLUDED)
     """
+
+    excluded = SETTINGS_EXCLUDED if excluded is None else excluded
 
     names = {id(value): name for name, value in vars(owner).items() if isinstance(value, (QSpinBox, QDoubleSpinBox))}
     fields = []
@@ -366,7 +404,7 @@ def settingsFields(owner) -> List[Tuple[str, str, QWidget]]:
             label = plainLabel(layout.checkbox.text())
         else:
             continue
-        spinboxes = [widget for widget in layout.widgets if id(widget) in names and names[id(widget)] not in SETTINGS_EXCLUDED]
+        spinboxes = [widget for widget in layout.widgets if id(widget) in names and names[id(widget)] not in excluded]
         for i, widget in enumerate(spinboxes):
             fields.append((names[id(widget)], f'{label} ({i + 1})' if len(spinboxes) > 1 else label, widget))
     return fields
@@ -384,6 +422,10 @@ def fieldWidgets(page: SimulationPage) -> Iterator[Tuple[str, QWidget]]:
                 widget = getattr(row, attribute, None)
                 if isinstance(widget, QWidget) and widget in row.row_widgets:
                     yield f'{prefix}_{symbol}', widget
+            # fraction of the element in the beam
+            abundance = getattr(row, 'abundance', None)
+            if table is page.table_beam and isinstance(abundance, QWidget) and abundance in row.row_widgets:
+                yield f'qubeam_{symbol}', abundance
 
     # atomic fractions of the first layer
     layers = page.target_layers.rows
@@ -708,15 +750,28 @@ class ParameterScan(QObject):
         for key, widget in fieldWidgets(page):
             if key in parameters:
                 parameters[key].widgets.append(widget)
-        # numeric fields of the simulation settings (the value is set in the field before the arguments are created)
-        for name, label, widget in settingsFields(page.settings_group_layout_settings):
-            key = SETTINGS_KEYS.get(name, name)
+        # numeric fields whose value is set in the field before the arguments are created: simulation settings, beam
+        # and target settings (e.g. thin film thickness, global density) and fields of the rows (e.g. maximum fraction)
+        fields: List[Tuple[str, str, QWidget]] = [
+            (SETTINGS_KEYS.get(name, name), label, widget) for name, label, widget in settingsFields(page.settings_group_layout_settings)
+        ]
+        for owner in (page.general_beam_settings, page.general_target_settings):
+            fields += settingsFields(owner, BEAM_TARGET_EXCLUDED)
+        for table in (page.table_beam, page.table_target):
+            for row in table.rows:
+                symbol = row.element.symbol
+                for attribute, prefix, label in ROW_WIDGET_FIELDS:
+                    field = getattr(row, attribute, None)
+                    if symbol and isinstance(field, (QSpinBox, QDoubleSpinBox)) and field in row.row_widgets:
+                        fields.append((f'{prefix}_{symbol}', f'{label} of {symbol}', field))
+        for key, label, widget in fields:
             if key in parameters:
-                parameters[key].widgets.append(widget)
-            else:
-                parameter = ScanParameter(key, label, lambda a, w=widget: w.value(), None, integer=isinstance(widget, QSpinBox))
-                parameter.widgets.append(widget)
-                parameters[key] = parameter
+                if widget not in parameters[key].widgets:
+                    parameters[key].widgets.append(widget)
+                continue
+            parameter = ScanParameter(key, label, lambda a, w=widget: w.value(), None, integer=isinstance(widget, QSpinBox))
+            parameter.widgets.append(widget)
+            parameters[key] = parameter
         # combo boxes of the simulation settings and of the composition tables (the choice is set in the combo box)
         choices: List[Tuple[str, str, Any]] = [
             (name, label, getattr(page.settings_group_layout_settings, name, None)) for name, label in SETTINGS_CHOICES.items()

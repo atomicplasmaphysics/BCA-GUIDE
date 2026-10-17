@@ -51,6 +51,8 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
       (thickness and composition of each layer, the first layer can already be scanned).
 - [ ] Parameter scans: undo/redo of the values, and a list of the scans of a folder (scan.json is overwritten by a new
       scan in the same folder).
+- [ ] Parameter scans: the calculation method (static/dynamic) and the distributions of energies and angles (e.g. the
+      sheath potential is only shown for Maxwellian distributions) could also be scanned.
 - [ ] Parameter scans: an entry of the scan menu could also jump to the field of the parameter (switch to the simulation
       settings, scroll to the row) and open its popup, instead of only removing the values.
 - [ ] Animation export: cancel button and a progress bar for the GIF export (now the status bar shows the frame), and

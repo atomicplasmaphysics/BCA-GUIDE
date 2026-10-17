@@ -6,7 +6,7 @@ import numpy as np
 
 import pytest
 
-from conftest import SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
+from conftest import SAVES, SIMULATION_PROGRAMS, TEST_SAVES, addSimulationPage, copySave, pump
 
 from Simulations.SDTrimSP import SimulationInput, SimulationAnalysis, Versions
 
@@ -137,10 +137,10 @@ def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
     assert notNone(page.target_layers.rows[0].element_cells[0].findChild(ScanFieldOverlay)).key == 'fraction_Au'
     parameters = page.scan.parameters()
     for key in ('sbe_Au', 'ed_Au', 'ecut_Ar', 'ebulk_Au', 'thickness', 'projectiles', 'segments', 'x0_Ar', 'charge_Ar',
-                'potential', 'integration', 'surface_binding_model', 'inel_Ar', 'inel_Au'):
+                'potential', 'integration', 'surface_binding_model', 'inel_Ar', 'inel_Au', 'qumax_Au'):
         assert parameters[key].widgets, key
-    # the number of histories between outputs does not change the results
-    assert 'histories_between' not in parameters
+    # the number of histories between outputs does not change the results, one projectile: no fraction of the beam
+    assert 'histories_between' not in parameters and 'qubeam_Ar' not in parameters
 
     # combo boxes: the popup selects the choices, the field shows their texts, the folders contain their indices
     from PyQt6.QtCore import Qt
@@ -407,4 +407,50 @@ def test_parameter_scan_run(main_window, qapp, tmp_path, monkeypatch, errors):
     # a changed input: the status of the last run is replaced by "Ready!"
     page.settings_group_layout_settings.histories_total.setValue(5)
     assert page.run_status == SimulationPage.RunStatus.READY and page.run_status_text.text() == 'Ready!'
+    assert not errors, '\n'.join(errors)
+
+
+TRIDYN_FOLDER = SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022'
+
+
+@pytest.mark.skipif(not (TEST_SAVES / 'TRIDYN' / 'H_Ar_on_Fe_W_60deg').is_dir(), reason='TRIDYN test simulation not available')
+def test_parameter_scan_tridyn(main_window, qapp, tmp_path, errors):
+    """TRIDYN: the beam and target properties and the electronic stopping mode are scanned, the values are in the input file"""
+
+    from Pages.ParameterScan import ScanFieldOverlay
+    from Simulations.TRIDYN2022 import SimulationInput as TridynInput
+
+    save = copySave(TEST_SAVES / 'TRIDYN' / 'H_Ar_on_Fe_W_60deg', tmp_path / 'H_Ar_on_Fe_W_60deg')
+    binary = TridynInput.findBinary(TRIDYN_FOLDER) or TRIDYN_FOLDER / 'TRIDYN.exe'
+    sc, page = addSimulationPage(main_window, 'H_Ar_on_Fe_W_60deg', 1, TRIDYN_FOLDER, binary, '2022', save)
+    pump(qapp)
+    page.action_scan.setChecked(True)
+    pump(qapp)
+
+    parameters = page.scan.parameters()
+    for key in ('energy_H', 'angle_Ar', 'mass_Fe', 'density_W', 'sbe_W', 'ed_Fe', 'ecut_H', 'fraction_W', 'qubeam_H', 'qumax_Fe',
+                'ires_Fe', 'thickness', 'segments', 'thin_film', 'global_density', 'fluence', 'projectiles', 'inelastic_loss_model'):
+        assert parameters[key].widgets, key
+    # fields that do not change the results
+    for key in ('threads', 'log_frequency', 'integral_frequency', 'output_frequency'):
+        assert key not in parameters
+    beam_row = page.table_beam.rows[0]
+    for widget in (beam_row.abundance, beam_row.max_concentration, beam_row.atomic_mass, page.general_target_settings.thin_film,
+                   page.settings_group_layout_settings.inelastic_loss_model):
+        assert widget.findChild(ScanFieldOverlay) is not None
+    assert parameters['inelastic_loss_model'].choices == ['1: nonlocal', '2: local', '3: eq.part. local/nonlocal']
+
+    simulation = TridynInput()
+    base = simulation.makeInputFile(page.makeArguments(), tmp_path, '2022')
+    expected = {
+        'qubeam_H': (0.25, ['irra 1 500.0 60.0 0.25', 'irra 2 500.0 60.0 0.75']),
+        'inelastic_loss_model': (1, ['elst 2']),
+        'thin_film': (123., ['geom 2000.0 200 123.0']),
+        'qumax_Fe': (0.5, ['exst 3 0.5 3 0']),
+    }
+    for key, (value, lines) in expected.items():
+        text = simulation.makeInputFile(page.scan.arguments([(parameters[key], value)]), tmp_path, '2022')
+        assert all(line in text.splitlines() for line in lines), key
+    # the fields of the tab keep their values
+    assert simulation.makeInputFile(page.makeArguments(), tmp_path, '2022') == base
     assert not errors, '\n'.join(errors)

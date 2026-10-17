@@ -124,12 +124,14 @@ Single simulations are configured manually as described below.
 - Parameter scan: the scan button (slider icon) in the toolbar of a simulation tab enables the scan. The input fields
   that can be scanned get a small mark in their upper left corner, a click on it opens a popup for several values (a
   linear or logarithmic range or entered directly), the field then shows its values. A scan is a series of simulations
-  in which any number of parameters are varied at once (all combinations): energy, angle, azimuthal angle, starting
-  depth and charge of the beam species, element parameters (surface binding, displacement, cutoff and bulk binding
-  energy, heat of formation, inelastic correction and loss model, density, mass), atomic fractions of the first layer,
-  target thickness and segments, the numeric simulation settings (e.g. fluence, number of histories) and the models of
-  the simulation settings (interaction potential, integration method, surface binding model; the popup of a combo box
-  selects its choices). The number of simulations includes the other versions. The menu of the scan button adds other
+  in which any number of parameters are varied at once (all combinations), in SDTrimSP and TRIDYN: energy, angle,
+  azimuthal angle, starting depth, charge and fraction (with several species) of the beam species, element parameters
+  (surface binding, displacement, cutoff and bulk binding energy, heat of formation, inelastic correction and loss
+  model, density, mass, maximum atomic fraction and its action), atomic fractions of the first layer, target thickness,
+  segments, thin film thickness and global density, the sheath potential, the numeric simulation settings (e.g.
+  fluence, number of histories; not the number of threads and the output frequencies) and the models of the simulation
+  settings (interaction potential, integration method, surface binding model, electronic stopping mode of TRIDYN; the
+  popup of a combo box selects its choices). The number of simulations includes the other versions. The menu of the scan button adds other
   versions of the program (other configurations, the menu stays open to select several), lists the scanned parameters
   (a click removes the values of one, also of fields that are currently hidden) and resets the scan. *Run* writes each
   simulation into a subfolder of the folder of the simulation, the scan is described in `scan.json`: *Open* also
