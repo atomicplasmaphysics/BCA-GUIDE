@@ -108,7 +108,8 @@ def no_message_boxes(monkeypatch):
     import MainWindow
     import Pages.ProgramPage
     import Pages.ConfigurationPage
-    for module in (Utility.Dialogs, MainWindow, Pages.ProgramPage, Pages.ConfigurationPage):
+    import Pages.ParameterScan
+    for module in (Utility.Dialogs, MainWindow, Pages.ProgramPage, Pages.ConfigurationPage, Pages.ParameterScan):
         monkeypatch.setattr(module, 'showMessageBox', fakeShowMessageBox)
 
 
@@ -165,8 +166,10 @@ def main_window(qapp, tmp_path):
     yield window
 
     for sc in window.simulation_configs:
-        if sc.tab_widget is not None and sc.running:
-            sc.tab_widget.process.kill()
+        if sc.tab_widget is not None:
+            sc.tab_widget.scan.stop(ask=False)
+            if sc.running:
+                sc.tab_widget.process.kill()
     window.deleteLater()
     pump(qapp, 0.05)
 

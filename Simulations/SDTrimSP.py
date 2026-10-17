@@ -1,6 +1,7 @@
 from typing import Any, List, Union, Tuple, Optional, Dict, Callable, Literal
 from itertools import zip_longest
 from copy import deepcopy
+from operator import itemgetter
 from pathlib import Path
 from re import findall, sub, split
 import logging
@@ -2399,8 +2400,8 @@ class CompRowBeamSettings(CompRow):
 
     syncHint = '<br>If the element occurs in both the beam and the target, the value is defined in the target table.'
     modifyHint = '<br>A red highlight indicates a modified value. A negative number resets it back to the default one.'
-    # beam only (first 3 and last 3 fields), target and beam (fields in between), energies are next to each other
-    rowFields = [
+    # all fields of the rows by their unique name, the order of the columns is given by rowFields
+    allRowFields = {field.unique: field for field in [
         CustomRowField(
             unique='qubeam',
             label='Abundance',
@@ -2497,14 +2498,19 @@ class CompRowBeamSettings(CompRow):
             tooltip='<i>charge</i><br>Charge of the projectiles, used with the sheath potential (shth) for Maxwellian distributions.',
             synced=False
         )
-    ]
+    ]}
+    # columns of the beam: abundance, energy and angle first, the charge next to the mass, the isotopes at the end
+    rowFields = list(itemgetter(
+        'qubeam', 'e0', 'alpha0', 'qumax', 'a_mass', 'charge', 'dns0', 'e_surfb', 'e_displ', 'e_bulkb', 'e_cutoff',
+        'deltahf', 'inel0', 'ck_elec', 'beta0', 'x0', 'isot'
+    )(allRowFields))
 
     def __init__(self, *args, version: str = '', **kwargs):
         super().__init__(*args, **kwargs)
         self.version = version
         self.default_values = DefaultValues(self.version)
         self.dict_lookup = DictLookup(self.version)
-        self.max_concentration_field = self.rowFields[3]
+        self.max_concentration_field = self.allRowFields['qumax']
 
         # abundances
         self.abundance = DoubleSpinBox(
@@ -2660,26 +2666,27 @@ class CompRowBeamSettings(CompRow):
             widget.valueChanged.connect(self.contentChanged.emit)
         self.isotopes.currentIndexChanged.connect(self.contentChanged.emit)
 
-        # same order as rowFields
-        self.row_widgets += [
-            self.abundance,
-            self.kinetic_energy,
-            self.angle,
-            self.maximum_concentration,
-            self.atomic_mass,
-            self.isotopes,
-            self.atomic_density,
-            self.surface_binding_energy,
-            self.displacement_energy,
-            self.bulk_binding_energy,
-            self.cutoff_energy,
-            self.heat_of_formation,
-            self.inelastic_loss_model,
-            self.inelastic_correction,
-            self.azimuth,
-            self.start_depth,
-            self.charge
-        ]
+        # widgets of the fields, in the order of the fields of the row (columns of the table)
+        self.field_widgets = {
+            'qubeam': self.abundance,
+            'e0': self.kinetic_energy,
+            'alpha0': self.angle,
+            'qumax': self.maximum_concentration,
+            'a_mass': self.atomic_mass,
+            'isot': self.isotopes,
+            'dns0': self.atomic_density,
+            'e_surfb': self.surface_binding_energy,
+            'e_displ': self.displacement_energy,
+            'e_bulkb': self.bulk_binding_energy,
+            'e_cutoff': self.cutoff_energy,
+            'deltahf': self.heat_of_formation,
+            'inel0': self.inelastic_loss_model,
+            'ck_elec': self.inelastic_correction,
+            'beta0': self.azimuth,
+            'x0': self.start_depth,
+            'charge': self.charge
+        }
+        self.row_widgets += [self.field_widgets[field.unique] for field in self.row_fields if field.unique in self.field_widgets]
 
         self.updateHighlightWidgetValue(self.abundance, 0)
 
@@ -2889,13 +2896,10 @@ class CompRowTargetSettings(CompRowBeamSettings):
     :param version: version of simulation
     """
 
-    # without the fields of the beam only (first 3 and last 3)
-    rowFields = CompRowBeamSettings.rowFields[3:-3]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # remove button, index and element + fields of the target
-        self.row_widgets = self.row_widgets[0:3] + self.row_widgets[6:-3]
+    # without the fields of the beam only (abundance, energy, angles, start depth and charge), the isotopes at the end
+    rowFields = list(itemgetter(
+        'qumax', 'a_mass', 'dns0', 'e_surfb', 'e_displ', 'e_bulkb', 'e_cutoff', 'deltahf', 'inel0', 'ck_elec', 'isot'
+    )(CompRowBeamSettings.allRowFields))
 
     def receive(self, value_dict: dict):
         """Receives other settingsChanged pyqtSignal -> dict"""

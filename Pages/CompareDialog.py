@@ -162,7 +162,7 @@ class CompareWidget(QWidget):
         self.quantity.setToolTip('Main results of the simulations or a plot of all simulations')
         self.quantity.currentIndexChanged.connect(lambda _: self.updatePlot())
         top.addWidget(self.quantity, stretch=1)
-        self.button_export = QPushButton(getIcon('save'), 'Export CSV...', self)
+        self.button_export = QPushButton(getIcon('save'), 'CSV', self)
         self.button_export.setToolTip('Export the data of the comparison as CSV file')
         self.button_export.clicked.connect(self.exportData)
         top.addWidget(self.button_export)

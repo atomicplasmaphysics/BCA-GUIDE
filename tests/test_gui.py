@@ -437,7 +437,11 @@ def test_composition_table_columns(main_window, qapp, errors):
 
     labels = [page.table_beam.horizontalHeaderItem(column).text() for column in range(page.table_beam.columnCount())]
     assert labels[3:6] == ['Abundance', 'Kin. energy [eV]', 'Angle [°]']
-    assert labels[-3:] == ['Azimuth [°]', 'Start depth [Å]', 'Charge']
+    # the charge is next to the mass, the isotopes are the last column
+    assert labels[7:9] == ['Mass [amu]', 'Charge']
+    assert labels[-3:] == ['Azimuth [°]', 'Start depth [Å]', 'Isotopes']
+    target_labels = [page.table_target.horizontalHeaderItem(column).text() for column in range(page.table_target.columnCount())]
+    assert target_labels[-1] == 'Isotopes' and 'Charge' not in target_labels
 
     # removing a row removes it in both tables
     rows = page.table_beam.rowCount()

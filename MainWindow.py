@@ -1,9 +1,9 @@
 from typing import List, Optional
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint, QTimer, QElapsedTimer
+from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint, QTimer, QElapsedTimer, QProcess
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication, QWidgetAction, QWidget, QHBoxLayout, QLabel, QSpinBox
+from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
 from GlobalConf import GlobalConf
 
@@ -131,29 +131,10 @@ class MainWindow(QMainWindow):
         self.action_run_all_detached.setShortcut(QKeySequence('Ctrl+Alt+Shift+R'))
         self.action_run_all_detached.triggered.connect(lambda: self.menuRun(detached=True))
 
-        # number of simultaneous simulations of "Run all"
-        self.max_parallel_runs = QSpinBox()
-        self.max_parallel_runs.setRange(1, 1024)
-        self.max_parallel_runs.setValue(GlobalConf.max_parallel_runs)
-        self.max_parallel_runs.setToolTip('Maximum number of simulations that run at the same time with "Run all tabs" (also in the preferences)')
-        self.max_parallel_runs.valueChanged.connect(self.setMaxParallelRuns)
-        max_parallel_widget = QWidget()
-        max_parallel_layout = QHBoxLayout(max_parallel_widget)
-        max_parallel_layout.setContentsMargins(28, 2, 8, 2)
-        max_parallel_layout.addWidget(QLabel('Simultaneous simulations:'))
-        max_parallel_layout.addWidget(self.max_parallel_runs)
-        self.action_max_parallel_runs = QWidgetAction(self)
-        self.action_max_parallel_runs.setDefaultWidget(max_parallel_widget)
-        self.menu_simulation.addAction(self.action_max_parallel_runs)
-        self.menu_simulation.aboutToShow.connect(lambda: self.max_parallel_runs.setValue(GlobalConf.max_parallel_runs))
-
         self.menu_simulation.addSeparator()
 
-        # parameter scan and comparison of simulations
-        self.action_parameter_scan = notNone(self.menu_simulation.addAction(getIcon('play'), 'Parameter scan of current tab...'))
-        self.action_parameter_scan.setToolTip('Runs a series of simulations in which one parameter of the current tab is varied and compares the results')
-        self.action_parameter_scan.triggered.connect(lambda: self.openParameterScan())
-        self.action_compare = notNone(self.menu_simulation.addAction(getIcon('search'), 'Compare simulations...'))
+        # comparison of simulations
+        self.action_compare = notNone(self.menu_simulation.addAction(getIcon('compare'), 'Compare simulations...'))
         self.action_compare.setToolTip('Compares the results of several simulations of the program of the current tab in one table and plot')
         self.action_compare.triggered.connect(lambda: self.openComparison())
 
@@ -499,15 +480,6 @@ class MainWindow(QMainWindow):
         page = self.tab_simulations.currentWidget()
         return page if isinstance(page, SimulationPage) else None
 
-    def openParameterScan(self):
-        """Shows the tabs of the parameter scan of the current simulation tab"""
-
-        page = self.currentSimulationPage()
-        if page is None:
-            self.writeStatusBar('Select the tab of a simulation for the parameter scan')
-            return
-        page.openParameterScan()
-
     def openComparison(self, page: Optional[SimulationPage] = None):
         """Opens the comparison of simulations (of the program of the current tab, starting with its folder)"""
 
@@ -522,7 +494,7 @@ class MainWindow(QMainWindow):
         dialog.show()
 
     def setMaxParallelRuns(self, value: int):
-        """Sets the maximum number of simultaneous simulations of "Run all" and starts waiting simulations"""
+        """Sets the maximum number of simultaneous simulations and starts waiting simulations"""
 
         GlobalConf.max_parallel_runs = int(value)
         GlobalConf.setValue(GlobalConf.max_parallel_runs_name, GlobalConf.max_parallel_runs)
@@ -596,10 +568,34 @@ class MainWindow(QMainWindow):
         self.run_status_timer.start()
         self.updateRunAllStatus()
 
-    def startQueuedSimulations(self):
-        """Starts simulations of the queue until GlobalConf.max_parallel_runs simulations run"""
+    def runningSimulations(self) -> int:
+        """Number of running simulations of all tabs (simulations of "Run all", single runs and of parameter scans)"""
 
-        while self.run_queue and len(self.run_active) < max(1, GlobalConf.max_parallel_runs):
+        pages = list(self.run_active)
+        for sc in self.simulation_configs:
+            if sc.tab_widget is not None and sc.tab_widget not in pages:
+                pages.append(sc.tab_widget)
+        count = 0
+        for page in pages:
+            scan = getattr(page, 'scan', None)
+            if scan is not None and scan.isRunning():
+                count += len(scan.running)
+            elif page in self.run_active or page.process.state() != QProcess.ProcessState.NotRunning:
+                count += 1
+        return count
+
+    def freeRunSlots(self) -> int:
+        """Number of simulations that can be started (at most GlobalConf.max_parallel_runs simulations of all tabs run)"""
+
+        return max(1, GlobalConf.max_parallel_runs) - self.runningSimulations()
+
+    def startQueuedSimulations(self):
+        """
+        Starts waiting simulations until GlobalConf.max_parallel_runs simulations of all tabs run: first the tabs of "Run
+        all", then the simulations of the parameter scans
+        """
+
+        while self.run_queue and self.freeRunSlots() > 0:
             page = self.run_queue.pop(0)
             try:
                 started = page.runSimulation(check_warnings=False, ask_delete=False)
@@ -612,6 +608,13 @@ class MainWindow(QMainWindow):
                 if page.run_status == SimulationPage.RunStatus.QUEUED:
                     page.setRunStatus(SimulationPage.RunStatus.READY)
                 self.run_batch.remove(page)
+
+        # simulations of the parameter scans
+        for sc in self.simulation_configs:
+            if self.freeRunSlots() <= 0:
+                break
+            if sc.tab_widget is not None:
+                sc.tab_widget.scan.startJobs()
 
     def simulationFinished(self, page: SimulationPage):
         """A simulation has finished: the next simulations of the queue are started"""
@@ -683,16 +686,20 @@ class MainWindow(QMainWindow):
                 pass
         self.run_queue = []
         for sc in self.simulation_configs:
-            if sc.running:
+            if sc.tab_widget is None:
+                continue
+            if sc.tab_widget.scan.isRunning():
+                sc.tab_widget.scan.abort()
+            elif sc.running:
                 sc.tab_widget.process.kill()
-            if sc.tab_widget is not None and sc.tab_widget.scan_page is not None:
-                sc.tab_widget.scan_page.abort()
 
     def openPreferences(self):
         """Opens the preferences dialog"""
 
         dialog = PreferencesDialog(self)
         dialog.finished.connect(lambda _: self.simulation_configuration_page.updateSaveFolderPlaceholder())
+        # a higher number of simultaneous simulations starts waiting simulations
+        dialog.finished.connect(lambda _: self.startQueuedSimulations())
         dialog.open()
 
     def openUserManual(self):
@@ -766,8 +773,7 @@ class MainWindow(QMainWindow):
             for sc in self.simulation_configs:
                 if sc.tab_widget is not None:
                     sc.tab_widget.process.kill()
-                    if sc.tab_widget.scan_page is not None:
-                        sc.tab_widget.scan_page.stop(ask=False)
+                    sc.tab_widget.scan.stop(ask=False)
 
             GlobalConf.updateSettings()
 

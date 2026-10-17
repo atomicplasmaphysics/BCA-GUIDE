@@ -116,19 +116,22 @@ Single simulations are configured manually as described below.
 - *Run* in the toolbar of a simulation tab runs it. Before the run, the GUI warns about parameters that the simulation
   accepts, but that might give wrong results, fail or create very large files (e.g. Lindhard-Scharff/Oen-Robinson above
   their validity, transmission in SDTrimSP 7.00/7.01, trajectory and matrix files); the user decides whether it runs.
-- *Simulation* > *Run all tabs* runs all tabs with at most *Simultaneous simulations* at the same time (input field in the
-  *Simulation* menu and in the preferences), the others wait in a queue. The status bar shows the progress of all
+- *Simulation* > *Run all tabs* runs all tabs, the others wait in a queue. At most *Simultaneous simulations* (preferences,
+  by default the number of processor cores minus 2) simulations of all tabs run at the same time, also the simulations of
+  parameter scans. The simulations run with a lower priority than the GUI. The status bar shows the progress of all
   simulations and an estimate of the remaining time.
-- Parameter scan: the checkbox with the slider icon in the toolbar of a simulation tab (or *Simulation* > *Parameter scan
-  of current tab...*) shows the tabs *Parameter scan* and *Parameter scan results*. A scan is a series of simulations in
-  which up to 5 parameters are varied at once (all combinations, values from a linear or logarithmic range or entered
-  directly): energy, angle and azimuthal angle of the beam species, element parameters (surface binding, displacement,
-  cutoff and bulk binding energy, heat of formation, inelastic correction, density, mass), atomic fractions of the target,
-  fluence, number of histories/projectiles, target thickness or the version (other configurations of the same program).
-  The simulations are written into a folder in the folder of the simulation and run with a lower priority than the GUI,
-  the table of the scan shows the state of each simulation. The scan is described in `scan.json` in its folder: *Open
-  scan...* shows the parameters and results of an existing scan without running it again, and the scan of a tab is shown
-  again after a restart of the GUI.
+- Parameter scan: the scan button (slider icon) in the toolbar of a simulation tab enables the scan. The input fields
+  that can be scanned get a small mark in their upper left corner, a click on it opens a popup for several values (a
+  linear or logarithmic range or entered directly), the field then shows its values. A scan is a series of simulations
+  in which up to 5 parameters are varied at once (all combinations): energy, angle and azimuthal angle of the beam
+  species, element parameters (surface binding, displacement, cutoff and bulk binding energy, heat of formation,
+  inelastic correction, density, mass), atomic fractions of the first layer, target thickness and the numeric
+  simulation settings (e.g. fluence, number of histories). The menu of the scan button adds other versions of the
+  program (other configurations). *Run* writes each simulation into a subfolder of the folder of the simulation, the
+  scan is described in `scan.json`: *Open* also accepts `scan.json` and opens the scan again, each subfolder can be
+  opened as single simulation. With the scan, *Files preview* shows the files of a selected simulation of the scan,
+  *Run status* the state and output of each simulation, *Output files* the files of a selected simulation and
+  *Parameter scan results* compares the results of the scan.
 - *Simulation* > *Compare simulations...* shows the results of several simulations (or of a scan) in a table and plots:
   lines over one parameter (one line for each value of the other parameters or for fixed values) or 2D maps over two
   parameters. The plotted data can be exported as CSV.

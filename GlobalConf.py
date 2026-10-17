@@ -13,7 +13,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
-    version = '1.5.08'
+    version = '1.5.09'
 
     # settings object
     settings = QSettings('TU Wien', title)
@@ -56,9 +56,10 @@ class GlobalConf:
     no_autodetect_version_name = 'no_autodetect_version'
     no_autodetect_version = settings.value(no_autodetect_version_name, defaultValue=False, type=bool)
 
-    # maximum number of simulations that run at the same time with "Run all" (default: number of processor cores)
-    max_parallel_runs_name = 'max_parallel_runs'
-    max_parallel_runs = settings.value(max_parallel_runs_name, defaultValue=max(1, os.cpu_count() or 1), type=int)
+    # maximum number of simulations of all tabs that run at the same time ("Run all" and parameter scans), by default two
+    # processor cores are left for the GUI and the system (new name of the setting, so that the new default applies)
+    max_parallel_runs_name = 'max_simultaneous_runs'
+    max_parallel_runs = settings.value(max_parallel_runs_name, defaultValue=max(1, (os.cpu_count() or 1) - 2), type=int)
 
     # window parameters
     window_width_name = 'window_width'

@@ -34,8 +34,10 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 - [ ] Comparison of simulations: overlay of the 2D maps (energy distribution, matrices) as difference plots.
 - [ ] Parameter scans: values from a file or from a list of complete parameter sets (instead of all combinations), and
       an adaptive refinement of the values where the yield changes strongly.
-- [ ] Parameter scans: rerun only the failed (or not run) simulations of a scan, several scans per simulation tab (list
-      of the scans in its folder) and one queue with "Run all" (one limit of simultaneous simulations for both).
+- [ ] Parameter scans: rerun only the failed (or not run) simulations of a scan, scans over the layers of the target
+      (thickness and composition of each layer) and over combo boxes (e.g. the inelastic loss model).
+- [ ] Parameter scans: undo/redo of the values, and a list of the scans of a folder (scan.json is overwritten by a new
+      scan in the same folder).
 - [ ] Export of GIF animations in a background thread (the GUI is blocked during the export, the status bar shows the
       progress).
 - [ ] Comparison of simulations: fits (e.g. of the energy dependence of the yield) and the comparison with

@@ -424,7 +424,7 @@ class ConfigurationPage(TabWithToolbar):
                     text = f'» {sc.title}'
                     if sc.running:
                         text += ' (running)'
-                    elif sc.tab_widget.scan_page is not None and sc.tab_widget.scan_page.isRunning():
+                    elif sc.tab_widget.scan.isRunning():
                         text += ' (parameter scan running)'
                     elif sc.unsaved_changes:
                         text += ' (unsaved changes)'
@@ -777,11 +777,11 @@ class ConfigurationPage(TabWithToolbar):
         if self.selected_configuration is not None:
             if not notNone(self.selected_configuration.tab_widget).isClosable():
                 warning_text = f'"{self.selected_configuration.title}" '
-                scan_page = notNone(self.selected_configuration.tab_widget).scan_page
-                if self.selected_configuration.running:
-                    warning_text += 'is running (⧖). Please wait until simulation finishes to edit the configuration.'
-                elif scan_page is not None and scan_page.isRunning():
+                scan = notNone(self.selected_configuration.tab_widget).scan
+                if scan.isRunning():
                     warning_text += 'runs a parameter scan. Please wait until the scan finishes to edit the configuration.'
+                elif self.selected_configuration.running:
+                    warning_text += 'is running (⧖). Please wait until simulation finishes to edit the configuration.'
                 else:
                     warning_text += 'has unsaved changes (*). Please save unsaved changes to edit the configuration.'
                 showMessageBox(

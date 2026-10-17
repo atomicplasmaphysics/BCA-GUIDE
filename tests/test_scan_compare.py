@@ -99,7 +99,7 @@ def test_compare_dialog(main_window, qapp, tmp_path, monkeypatch, errors):
 
 
 def test_range_values():
-    from Pages.ParameterScanPage import rangeValues, formatRangeValue
+    from Pages.ParameterScan import rangeValues, formatRangeValue, parseValues
 
     assert rangeValues(0, 80, 5) == pytest.approx([0, 20, 40, 60, 80])
     assert rangeValues(10, 1000, 3, 1) == pytest.approx([10, 100, 1000])
@@ -110,54 +110,91 @@ def test_range_values():
     assert dense_end[0] == 0 and dense_end[-1] == 80 and dense_end[-2] > 60
     assert dense_end == pytest.approx(80 - dense_start[::-1])
     assert formatRangeValue(632.4555) == '632.5' and formatRangeValue(20000.) == '20000' and formatRangeValue(0.5) == '0.5'
+    assert parseValues('1, 2.6; x, 2') == [1., 2.6, 2.] and parseValues('1, 2.6, 3', integer=True) == [1, 3]
 
 
-def test_parameter_scan_input_files(main_window, qapp, tmp_path, errors):
-    from Pages.ParameterScanPage import scanParameters
+def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
+    """Several values in the input fields of the tab: marks, popup, preview and the simulations of the scan"""
+
+    from Pages.ParameterScan import ScanFieldOverlay
     from Pages.CompareDialog import readScanFile
 
     sc, page = examplePage(main_window, qapp, tmp_path)
     main_window.tab_simulations.setCurrentWidget(page)
-    # the scan is shown in the tabs of the simulation (checkbox in the toolbar)
-    assert page.scan_page is None and not page.scan_checkbox.isChecked()
-    main_window.openParameterScan()
-    dialog = page.scan_page
-    assert dialog is not None and page.scan_checkbox.isChecked() and page.tab_widget.currentWidget() is dialog
-    assert page.tab_widget.isTabVisible(page.tab_widget.indexOf(dialog.results))
-    # default folder of the scan: in the folder of the simulation
-    assert dialog.folder.text() == str(sc.save_folder / 'scan_energy_Ar')
-    row = dialog.rows[0]
-    texts = [row.parameter.itemText(i) for i in range(row.parameter.count())]
-    assert texts[:2] == ['Energy of Ar [eV]', 'Angle of incidence of Ar [°]']
-    for text in ('Surface binding energy of Au [eV]', 'Displacement energy of Au [eV]', 'Cutoff energy of Ar [eV]',
-                 'Bulk binding energy of Au [eV]', 'Atomic fraction of Au in the target (first layer)', 'Target thickness [Å]',
-                 'Number of histories (nh)', 'Projectiles per history (nr_pproj)'):
-        assert text in texts
+    energy = page.table_beam.rows[0].kinetic_energy
+    assert not energy.findChildren(ScanFieldOverlay)
+    assert page.tab_widget.tabText(2) == 'Run status' and page.tab_widget.tabText(4) == 'Simulation results'
 
-    # energy: logarithmic range around the current value
-    assert row.scanValues() == pytest.approx([200, 632.456, 2000, 6324.56, 20000], rel=1e-3)
-    row.values.setText('500, 1000')
+    # the scan marks the fields that can be scanned
+    page.action_scan.setChecked(True)
+    pump(qapp)
+    assert page.tab_widget.tabText(4) == 'Parameter scan results'
+    overlay = energy.findChild(ScanFieldOverlay)
+    assert overlay is not None and overlay.key == 'energy_Ar' and not overlay.isHidden() and overlay.width() == ScanFieldOverlay.SIZE
+    settings = page.settings_group_layout_settings
+    assert notNone(settings.fluence.findChild(ScanFieldOverlay)).key == 'fluence'
+    assert notNone(settings.histories_total.findChild(ScanFieldOverlay)).key == 'histories'
+    assert notNone(page.target_layers.rows[0].element_cells[0].findChild(ScanFieldOverlay)).key == 'fraction_Au'
+    parameters = page.scan.parameters()
+    for key in ('sbe_Au', 'ed_Au', 'ecut_Ar', 'ebulk_Au', 'thickness', 'projectiles'):
+        assert parameters[key].widgets, key
+    # further numeric simulation settings are set in their field
+    generic = [parameter for parameter in parameters.values() if parameter.apply is None]
+    assert generic and all(parameter.widgets for parameter in generic)
 
-    # second parameter: surface binding energy of Au, all combinations
-    second = dialog.addParameterRow('sbe_Au')
-    second.values.setText('3, 4')
-    assert dialog.count.text() == '4 simulations'
-    dialog.folder.setText(str(tmp_path / 'scan'))
-    jobs = dialog.prepareJobs()
+    # popup below the field: logarithmic range around the current value
+    page.scan.editValues('energy_Ar', energy)
+    editor = page.scan.editor
+    assert editor is not None and editor.isVisible()
+    assert [float(value) for value in editor.values.text().split(',')] == pytest.approx([200, 632.5, 2000, 6325, 20000])
+    editor.values.setText('500, 1000')
+    editor.close()
+    pump(qapp)
+    assert page.scan.valuesText('energy_Ar') == '500, 1000' and overlay.width() == energy.width()
+    assert 'Values of the parameter scan: 500, 1000' in overlay.toolTip()
+    # the field keeps its value
+    assert energy.value() == 2000
+
+    # second parameter: surface binding energy of Au in the target table, all combinations
+    sbe = page.table_target.rows[0].surface_binding_energy
+    page.scan.editValues('sbe_Au', sbe)
+    notNone(page.scan.editor).values.setText('3, 4')
+    notNone(page.scan.editor).close()
+    assert page.scan.count() == 4 and page.run_status_text.text() == 'Ready! (4 simulations)'
+    assert sc.unsaved_changes
+
+    # preview of the files of each simulation of the scan
+    page.tab_widget.setCurrentIndex(1)
+    pump(qapp)
+    assert not page.preview_selector_widget.isHidden() and page.preview_selector.count() == 4
+    page.preview_selector.setCurrentIndex(1)
+    text = page.input_file_preview.toPlainText()
+    assert 'e0 = 500.0, 0.0' in text and '4.0' in text.split('e_surfb = ')[1].split('\n')[0]
+
+    # the simulations are written into subfolders of the folder of the simulation
+    jobs = page.scan.prepareJobs()
+    assert jobs is not None
     assert [job['folder'].name for job in jobs] == ['energy_Ar_500__sbe_Au_3', 'energy_Ar_500__sbe_Au_4',
                                                     'energy_Ar_1000__sbe_Au_3', 'energy_Ar_1000__sbe_Au_4']
+    assert all(job['folder'].parent == sc.save_folder for job in jobs)
     text = (jobs[1]['folder'] / 'tri.inp').read_text(encoding='utf-8')
-    assert 'e0 = 500.0, 0.0' in text and 'e_surfb = ' in text and '4.0' in text.split('e_surfb = ')[1].split('\n')[0]
-    scan = readScanFile(tmp_path / 'scan')
-    assert scan['energy_Ar_1000__sbe_Au_4'] == {'Energy of Ar [eV]': 1000., 'Surface binding energy of Au [eV]': 4.}
+    assert 'e0 = 500.0, 0.0' in text and '4.0' in text.split('e_surfb = ')[1].split('\n')[0]
+    scan = readScanFile(sc.save_folder)
+    assert scan is not None and scan['energy_Ar_1000__sbe_Au_4'] == {'Energy of Ar [eV]': 1000., 'Surface binding energy of Au [eV]': 4.}
+
+    # a setting that is set in its field: the field keeps its value
+    parameter = generic[0]
+    widget = parameter.widgets[0]
+    value = widget.value()
+    arguments = page.scan.arguments([(parameter, value + 3)])
+    assert widget.value() == value and vars(arguments.settings) != vars(page.makeArguments().settings)
 
     # at most 5 parameters
-    for _ in range(5):
-        dialog.addParameterRow()
-    assert len(dialog.rows) == 5 and not dialog.button_add.isEnabled()
+    for key in ('angle_Ar', 'ed_Au', 'mass_Au'):
+        assert page.scan.setValues(key, {'values': '1, 2'})
+    assert not page.scan.setValues('ck_Au', {'values': '1, 2'})
 
     # values of the parameters
-    parameters = {parameter.key: parameter for parameter in scanParameters(page.makeArguments(), 'SDTrimSP')}
     arguments = page.makeArguments()
     parameters['thickness'].apply(arguments, 500.)
     assert arguments.target_args.thickness == 500.
@@ -167,36 +204,35 @@ def test_parameter_scan_input_files(main_window, qapp, tmp_path, errors):
     parameters['ecut_Ar'].apply(arguments, 2.5)
     assert arguments.beam_rows[0].get('cutoff_energy') == 2.5
 
-    # the tabs of the scan are hidden (the scan does not run)
-    page.scan_checkbox.setChecked(False)
-    assert not page.tab_widget.isTabVisible(page.tab_widget.indexOf(dialog))
+    # without the scan the fields are shown as usual
+    page.scan.setValues('energy_Ar', None)
+    assert page.scan.valuesText('energy_Ar') == '' and overlay.width() == ScanFieldOverlay.SIZE
+    page.action_scan.setChecked(False)
+    assert overlay.isHidden() and page.preview_selector_widget.isHidden() and page.tab_widget.tabText(4) == 'Simulation results'
     assert not errors, '\n'.join(errors)
 
 
-def test_parameter_scan_state(main_window, qapp, tmp_path, errors):
-    """The scan is stored in the configuration (restart of the GUI) and can be opened from its folder"""
+def test_parameter_scan_state(main_window, qapp, tmp_path, monkeypatch, errors):
+    """The scan is stored in the configuration (restart of the GUI) and in scan.json, which opens the scan again"""
 
+    import Pages.ProgramPage as program_page
     from Containers.SimulationConfiguration import SimulationConfiguration
-    from Pages.ParameterScanPage import readScanDescription
+    from Pages.ParameterScan import readScanDescription
 
     sc, page = examplePage(main_window, qapp, tmp_path)
-    page.openParameterScan()
-    scan_page = page.scan_page
-    scan_page.rows[0].values.setText('500, 1000')
-    second = scan_page.addParameterRow('angle_Ar')
-    second.scale.setCurrentIndex(2)
-    second.values.setText('0, 60')
-    scan_page.folder.setText(str(tmp_path / 'scan'))
-    jobs = scan_page.prepareJobs()
-    assert len(jobs) == 4
-    # a finished simulation of the scan (the output of an example)
+    page.action_scan.setChecked(True)
+    page.scan.setValues('energy_Ar', {'start': 500., 'stop': 1000., 'number': 2, 'scale': 0, 'values': '500, 1000'})
+    page.scan.setValues('angle_Ar', {'start': 0., 'stop': 60., 'number': 2, 'scale': 2, 'values': '0, 60'})
+    jobs = page.scan.prepareJobs()
+    assert jobs is not None and len(jobs) == 4
+    # a finished simulation of the scan (the output of an example, the input files of the scan are kept)
     for file in (EXAMPLES / 'example_01_Ar_on_Au').iterdir():
-        if file.is_file():
+        if file.is_file() and file.name != 'input.json' and file.suffix != '.inp':
             (jobs[0]['folder'] / file.name).write_bytes(file.read_bytes())
 
-    # configuration: enabled tabs and the settings of the scan
+    # configuration: enabled scan and its settings
     saved = sc.save()
-    assert saved['scan_enabled'] is True and saved['scan']['folder'] == str(tmp_path / 'scan')
+    assert saved['scan_enabled'] is True
     assert [row['key'] for row in saved['scan']['rows']] == ['energy_Ar', 'angle_Ar']
     loaded = SimulationConfiguration.load(saved)
     assert loaded and loaded.scan_enabled and loaded.scan_state == saved['scan']
@@ -206,24 +242,43 @@ def test_parameter_scan_state(main_window, qapp, tmp_path, errors):
     main_window.simulation_configs.append(loaded)
     restored = loaded.tab_widget = main_window.addSimulationTab(SimulationPage(main_window, loaded), 'restored')
     pump(qapp)
-    assert restored.scan_checkbox.isChecked() and restored.scan_page is not None
-    assert [row.key() for row in restored.scan_page.rows] == ['energy_Ar', 'angle_Ar'] and len(restored.scan_page.jobs) == 4
+    assert restored.action_scan.isChecked() and list(restored.scan.values) == ['energy_Ar', 'angle_Ar']
+    assert [job['status'] for job in restored.scan.jobs] == ['finished', 'not run', 'not run', 'not run']
 
     # scan.json contains the settings of the scan
-    description = readScanDescription(tmp_path / 'scan')
+    description = readScanDescription(sc.save_folder)
     assert description is not None and description['rows'][1]['scale'] == 2 and description['rows'][1]['values'] == '0, 60'
 
-    # another tab opens the scan from its folder: parameters, state of the simulations and results
+    # another tab opens the scan with its scan.json: parameters, state of the simulations and results
     sc2, page2 = examplePage(main_window, qapp, tmp_path, 'example_07_Ar_on_W_amorphous')
-    page2.openParameterScan()
-    assert page2.scan_page.openScan(tmp_path / 'scan')
-    assert [row.key() for row in page2.scan_page.rows] == ['energy_Ar', 'angle_Ar']
-    assert page2.scan_page.rows[1].values.text() == '0, 60' and page2.scan_page.rows[1].scale.currentIndex() == 2
-    assert [job['status'] for job in page2.scan_page.jobs] == ['finished', 'not run', 'not run', 'not run']
-    assert page2.tab_widget.currentWidget() is page2.scan_page.results
+    monkeypatch.setattr(program_page, 'selectFileDialog', lambda *args, **kwargs: sc.save_folder / 'scan.json')
+    assert page2.loadSettings(unsaved_warning=False)
+    assert page2.action_scan.isChecked() and sc2.save_folder == sc.save_folder
+    assert list(page2.scan.values) == ['energy_Ar', 'angle_Ar'] and page2.scan.values['angle_Ar']['scale'] == 2
+    assert [job['status'] for job in page2.scan.jobs] == ['finished', 'not run', 'not run', 'not run']
+    page2.tab_widget.setCurrentIndex(4)
     pump(qapp)
-    assert len(page2.scan_page.results.entries) == 1
-    assert page2.scan_page.results.entries[0]['parameters'] == {'Energy of Ar [eV]': 500., 'Angle of incidence of Ar [°]': 0.}
+    assert page2.results_stack.currentWidget() is page2.scan.results
+    assert len(notNone(page2.scan.results).entries) == 1
+    assert notNone(page2.scan.results).entries[0]['parameters'] == {'Energy of Ar [eV]': 500., 'Angle of incidence of Ar [°]': 0.}
+
+    # run status: the simulations of the scan with their state and output
+    page2.tab_widget.setCurrentIndex(2)
+    assert page2.scan_runs.rowCount() == 4 and notNone(page2.scan_runs.item(1, 0)).text() == 'not run'
+    page2.scan_runs.selectRow(1)
+    assert 'not run' in page2.scan_log.toPlainText()
+
+    # output files of a simulation of the scan
+    page2.tab_widget.setCurrentIndex(3)
+    page2.output_folder_selector.setCurrentIndex(1)
+    pump(qapp)
+    assert page2.outputFolder() == jobs[0]['folder']
+    assert 'output.dat' in [notNone(page2.output_files_list.item(i)).text() for i in range(page2.output_files_list.count())]
+
+    # a simulation of the scan is a simulation on its own
+    assert page2.loadSettings(jobs[0]['folder'], unsaved_warning=False)
+    assert not page2.action_scan.isChecked() and not page2.scan.values and page2.tab_widget.tabText(4) == 'Simulation results'
+    assert page2.table_beam.rows[0].kinetic_energy.value() == 500.
 
     # scans of older versions only contain the labels of the parameters
     (tmp_path / 'old_scan').mkdir()
@@ -231,8 +286,8 @@ def test_parameter_scan_state(main_window, qapp, tmp_path, errors):
         '{"parameters": ["Energy of Ar [eV]"], "runs": [{"folder": "e_100", "values": [100.0]}, {"folder": "e_200", "values": [200.0]}]}',
         encoding='utf-8'
     )
-    assert page2.scan_page.openScan(tmp_path / 'old_scan')
-    assert [row.key() for row in page2.scan_page.rows] == ['energy_Ar'] and page2.scan_page.rows[0].values.text() == '100, 200'
+    page2.scan.setState(notNone(readScanDescription(tmp_path / 'old_scan')))
+    assert list(page2.scan.values) == ['energy_Ar'] and page2.scan.valuesText('energy_Ar') == '100, 200'
     assert not errors, '\n'.join(errors)
 
 
@@ -263,28 +318,32 @@ def test_compare_parameters(main_window, qapp, tmp_path, errors):
 
 
 @pytest.mark.simulation
-def test_parameter_scan_run(main_window, qapp, tmp_path, errors):
+def test_parameter_scan_run(main_window, qapp, tmp_path, monkeypatch, errors):
+    from GlobalConf import GlobalConf
+    from Pages.ProgramPage import SimulationPage
+
     sc, page = examplePage(main_window, qapp, tmp_path)
     page.settings_group_layout_settings.histories_total.setValue(4)
-    page.openParameterScan()
-    dialog = page.scan_page
-    assert dialog is not None
-    dialog.rows[0].values.setText('500, 2000')
-    dialog.run()
-    # the simulation tab can not be closed while the scan runs
-    assert dialog.isRunning() and not page.isClosable()
-    assert 'Parameter scan ⧖' in page.tab_widget.tabText(page.tab_widget.indexOf(dialog))
-    assert pump(qapp, 300, until=lambda: not dialog.running and not dialog.queue)
-    assert [job['status'] for job in dialog.jobs] == ['finished', 'finished']
-    assert all(job['folder'].parent == sc.save_folder / 'scan_energy_Ar' for job in dialog.jobs)
-    assert dialog.button_results.isEnabled() and not dialog.isRunning()
-    dialog.button_results.click()
+    page.action_scan.setChecked(True)
+    page.scan.setValues('energy_Ar', {'values': '500, 2000'})
+    # the limit of simultaneous simulations includes the simulations of the scans
+    monkeypatch.setattr(GlobalConf, 'max_parallel_runs', 1)
+    assert page.runSimulation(check_warnings=False, ask_delete=False)
+    scan = page.scan
+    assert scan.isRunning() and not page.isClosable() and len(scan.running) == 1 and main_window.freeRunSlots() == 0
+    assert page.run_status_text.text().startswith('Scan ') and page.action_abort.isEnabled()
+    assert pump(qapp, 300, until=lambda: not scan.isRunning())
+    assert [job['status'] for job in scan.jobs] == ['finished', 'finished']
+    assert all(job['folder'].parent == sc.save_folder for job in scan.jobs)
+    assert page.run_status == SimulationPage.RunStatus.DONE and page.isClosable()
+    page.tab_widget.setCurrentIndex(4)
     pump(qapp)
-    assert page.tab_widget.currentWidget() is dialog.results
-    yields = [entry['summary']['Sputter yield [atoms/ion]']['Au'] for entry in dialog.results.entries]
+    yields = [entry['summary']['Sputter yield [atoms/ion]']['Au'] for entry in notNone(scan.results).entries]
     assert yields[0] < yields[1]
-    assert dialog.runs.rowCount() == 2 and notNone(dialog.runs.item(0, 0)).text() == 'finished'
-    # running the simulation itself keeps the folder of the scan
-    page.saveSettings()
-    assert (sc.save_folder / 'scan_energy_Ar' / 'scan.json').is_file()
+    assert page.scan_runs.rowCount() == 2 and notNone(page.scan_runs.item(0, 0)).text() == 'finished'
+    # running the simulation itself keeps the simulations of the scan
+    page.action_scan.setChecked(False)
+    assert page.runSimulation(check_warnings=False, ask_delete=False)
+    assert pump(qapp, 300, until=lambda: page.run_status == SimulationPage.RunStatus.DONE)
+    assert (sc.save_folder / 'scan.json').is_file() and all((job['folder'] / 'output.dat').is_file() for job in scan.jobs)
     assert not errors, '\n'.join(errors)

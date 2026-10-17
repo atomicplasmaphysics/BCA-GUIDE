@@ -9,7 +9,8 @@ from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle, QSizePolicy, QToolTip
+    QListWidget, QListWidgetItem, QApplication, QTabBar, QStylePainter, QStyleOptionTab, QStyle, QSizePolicy, QToolTip,
+    QToolButton
 )
 
 import numpy as np
@@ -64,6 +65,24 @@ class SplashPixmap(QPixmap):
         self.painter.setPen(color)
         self.painter.drawText(box, align, text)
         self.painter.end()
+
+
+def contentButton(icon: QIcon, text: str = '', parent: Optional[QWidget] = None) -> QToolButton:
+    """
+    Returns a button that is only as wide as its content (icon and text beside the icon)
+
+    :param icon: icon of the button
+    :param text: (optional) text of the button
+    :param parent: (optional) parent widget
+    """
+
+    button = QToolButton(parent)
+    button.setIcon(icon)
+    if text:
+        button.setText(text)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+    button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+    return button
 
 
 class InputHBoxLayouts(QHBoxLayout):

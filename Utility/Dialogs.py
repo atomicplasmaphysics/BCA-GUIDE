@@ -363,15 +363,16 @@ class PreferencesDialog(QDialog):
         self.no_autodetect_version.setChecked(GlobalConf.no_autodetect_version)
         self.main_layout.addWidget(self.no_autodetect_version)
 
-        # Simultaneous simulations of "Run all"
+        # Simultaneous simulations ("Run all" and parameter scans)
         self.max_parallel_runs = QSpinBox(self)
         self.max_parallel_runs.setRange(1, 1024)
         self.max_parallel_runs.setValue(GlobalConf.max_parallel_runs)
         self.layout_max_parallel_runs = InputHBoxLayout(
-            'Simultaneous simulations ("Run all"):',
+            'Simultaneous simulations:',
             self.max_parallel_runs,
-            tooltip='Maximum number of simulations that run at the same time when all tabs are run. The other simulations wait '
-                    'in a queue.<br>Each simulation uses one processor core (except MPI builds)',
+            tooltip='Maximum number of simulations of all tabs that run at the same time ("Run all" and parameter scans). The '
+                    'other simulations wait in a queue.<br>Each simulation uses one processor core (except MPI builds), by '
+                    'default two cores are left for the GUI and the system',
             split=0
         )
         self.main_layout.addLayout(self.layout_max_parallel_runs)

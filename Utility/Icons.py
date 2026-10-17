@@ -41,6 +41,7 @@ ICONS: Dict[str, Tuple[Optional[str], str]] = {
     'help': ('blue', '<circle cx="12" cy="12" r="10" /> <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /> <path d="M12 17h.01" />'),  # lucide: circle-help
     'play': ('green', '<circle cx="12" cy="12" r="10" /> <polygon points="10 8 16 12 10 16 10 8" />'),  # lucide: circle-play
     'scan': (None, '<line x1="21" x2="14" y1="4" y2="4" /> <line x1="10" x2="3" y1="4" y2="4" /> <line x1="21" x2="12" y1="12" y2="12" /> <line x1="8" x2="3" y1="12" y2="12" /> <line x1="21" x2="16" y1="20" y2="20" /> <line x1="12" x2="3" y1="20" y2="20" /> <line x1="14" x2="14" y1="2" y2="6" /> <line x1="8" x2="8" y1="10" y2="14" /> <line x1="16" x2="16" y1="18" y2="22" />'),  # lucide: sliders-horizontal
+    'compare': (None, '<path d="m16 3 4 4-4 4" /> <path d="M20 7H4" /> <path d="m8 21-4-4 4-4" /> <path d="M4 17h16" />'),  # lucide: arrow-right-left
     'chart': (None, '<path d="M3 3v16a2 2 0 0 0 2 2h16" /> <path d="m19 9-5 5-4-4-3 3" />'),  # lucide: chart-line
     'clock': (None, '<circle cx="12" cy="12" r="10" /> <polyline points="12 6 12 12 16 14" />'),  # lucide: clock
     'pause': (None, '<circle cx="12" cy="12" r="10" /> <line x1="10" x2="10" y1="15" y2="9" /> <line x1="14" x2="14" y1="15" y2="9" />'),  # lucide: circle-pause
