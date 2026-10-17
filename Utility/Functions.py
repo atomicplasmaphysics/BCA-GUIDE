@@ -5,11 +5,10 @@ from pathlib import Path
 from re import sub, findall
 import logging
 
-
 import numpy as np
 
+from Utility.Colors import paletteQColor
 
-from PyQt6.QtGui import QColor
 
 
 def limitSum(objects: list, maximum: float):
@@ -25,7 +24,8 @@ def limitSum(objects: list, maximum: float):
     if not len_objects:
         return
 
-    total = 0
+    # int for integer spin boxes
+    total: float = 0
     for obj in objects[:-1]:
         obj.setEnabled(True)
         new_total = total + obj.value()
@@ -366,7 +366,7 @@ def getUniqueColor(index: int, length: int):
     :return: unique <QColor> per index
     """
 
-    return QColor.fromHsv(int(index * 359 / length), 255, 255, 127)
+    return paletteQColor(index, 127)
 
 
 def getPeriodicCoords(coord: np.ndarray, bounds: Tuple[float, float] = (0, 1), tol: float = 1e-8):
@@ -551,3 +551,29 @@ def bestVersion(versions: List[str], version_name: str) -> Tuple[int, bool]:
     if lower:
         return max(lower)[1], False
     return min(candidates)[1], False
+
+
+def lowerProcessPriority(pid: int):
+    """
+    Lowers the priority of a process (below normal), so that the GUI stays responsive while many simulations run
+
+    :param pid: id of the process
+    """
+
+    if pid <= 0:
+        return
+    try:
+        if system() == 'Windows':
+            import ctypes
+            kernel32 = getattr(ctypes, 'windll').kernel32
+            # PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION
+            handle = kernel32.OpenProcess(0x0200 | 0x0400, False, pid)
+            if handle:
+                # BELOW_NORMAL_PRIORITY_CLASS
+                kernel32.SetPriorityClass(handle, 0x4000)
+                kernel32.CloseHandle(handle)
+        else:
+            import os
+            getattr(os, 'setpriority')(getattr(os, 'PRIO_PROCESS'), pid, 10)
+    except (OSError, AttributeError) as error:
+        logging.debug(f'Could not lower the priority of process {pid}: {error}')

@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 
 from Utility.Icons import getIcon
 from Utility.Layouts import MplCanvas, PlotToolbar
+from Utility.Typing import notNone
 
 
 def readDistributionFile(path: Path) -> List[List[float]]:
@@ -143,7 +144,7 @@ class DistributionTable(QWidget):
 
         self.table = QTableWidget(0, 2, self)
         self.table.setHorizontalHeaderLabels([f'Upper bound [{unit}]', 'Particles per interval width'])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        notNone(self.table.horizontalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setToolTip(
             f'Each row is an interval from the upper bound of the previous row (or 0) to the upper bound of this row.<br>'
             f'The value is the number (or probability) of particles per {unit} in this interval, it is normalized by SDTrimSP'
@@ -207,9 +208,13 @@ class DistributionTable(QWidget):
 
         rows = []
         for row in range(self.table.rowCount()):
+            # the items do not exist yet while a row is added
+            bound_item, value_item = self.table.item(row, 0), self.table.item(row, 1)
+            if bound_item is None or value_item is None:
+                continue
             try:
-                rows.append([float(self.table.item(row, 0).text().replace(',', '.')), float(self.table.item(row, 1).text().replace(',', '.'))])
-            except (AttributeError, ValueError):
+                rows.append([float(bound_item.text().replace(',', '.')), float(value_item.text().replace(',', '.'))])
+            except ValueError:
                 continue
         return rows
 
@@ -441,7 +446,7 @@ class DistributionDialog(QDialog):
                     box.setValue(value)
             widget.updateMatrix(data['matrix'])
 
-    def result(self) -> dict:
+    def distributionData(self) -> dict:
         """Returns the distributions"""
 
         result = dict(self.distributions)

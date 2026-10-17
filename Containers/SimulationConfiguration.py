@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union, TYPE_CHECKING
+from typing import Any, Dict, Literal, Optional, Union, TYPE_CHECKING
 from pathlib import Path
 
 from PyQt6.QtCore import QDir
@@ -61,6 +61,11 @@ class SimulationConfiguration:
         self.unsaved_changes = False
         self.base_save_folder = base_save_folder
         self.save_folder = save_folder
+        # version found in the folder, if it differs from the version (see load)
+        self.detected_version: Optional[str] = None
+        # parameter scan of the tab: shown, its settings and its folder (see ParameterScanPage.state)
+        self.scan_enabled = False
+        self.scan_state: dict = {}
 
     def edit(self, title: str, folder: Path, binary: Path, version: str, base_save_folder: Path | None):
         """
@@ -94,7 +99,7 @@ class SimulationConfiguration:
         :param no_config: if no_config is True, base_save_folder and save_folder will not be stored
         """
 
-        save_dict = {
+        save_dict: Dict[str, Any] = {
             'title': str(self.title),
             'program': str(self.program_name),
             'folder': pathToStr(self.folder),
@@ -102,16 +107,22 @@ class SimulationConfiguration:
             'version': str(self.version)
         }
 
+        # current settings of the parameter scan of the tab
+        if self.tab_widget is not None:
+            self.scan_enabled, self.scan_state = self.tab_widget.scanState()
+        save_dict['scan_enabled'] = bool(self.scan_enabled)
+
         if not no_config:
             save_dict.update({
                 'base_save_folder': pathToStr(self.base_save_folder),
-                'save_folder': pathToStr(self.save_folder)
+                'save_folder': pathToStr(self.save_folder),
+                'scan': self.scan_state
             })
 
         return save_dict
 
     @staticmethod
-    def load(settings: dict) -> Union[SimulationConfiguration, bool]:
+    def load(settings: dict) -> Union[SimulationConfiguration, Literal[False]]:
         """
         Returns a SimulationConfiguration from the settings-dictionary that is created by save() or False if not possible
 
@@ -195,5 +206,8 @@ class SimulationConfiguration:
         sc.base_save_folder = base_save_folder
         sc.save_folder = save_folder
         sc.detected_version = detected_version
+        sc.scan_enabled = settings.get('scan_enabled') is True
+        scan_state = settings.get('scan')
+        sc.scan_state = scan_state if isinstance(scan_state, dict) else {}
 
         return sc

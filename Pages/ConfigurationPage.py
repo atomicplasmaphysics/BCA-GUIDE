@@ -22,6 +22,7 @@ from Utility.Dialogs import showMessageBox, selectFileDialog
 from Utility.Functions import pathToStr, bestVersion
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 from Pages.ProgramPage import SimulationPage
 
@@ -160,13 +161,13 @@ class ConfigurationPage(TabWithToolbar):
         # Run
         self.action_run = self.toolbar.addAction(getIcon('play'), 'Run')
         self.action_run.setToolTip('Run the selected simulation(s)')
-        self.action_run.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_R))
+        self.action_run.setShortcut(QKeySequence('Ctrl+R'))
         self.action_run.triggered.connect(lambda: self.runSelected())
 
         # Run detached
         self.action_run_detached = self.toolbar.addAction(getIcon('play_detached'), 'Run detached')
         self.action_run_detached.setToolTip('Run the selected simulation(s) in detached mode.\nThe simulation(s) is(are) run in a separate window, and the GUI can be closed')
-        self.action_run_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_R))
+        self.action_run_detached.setShortcut(QKeySequence('Ctrl+Shift+R'))
         self.action_run_detached.triggered.connect(lambda: self.runSelected(detached=True))
 
         #
@@ -363,7 +364,7 @@ class ConfigurationPage(TabWithToolbar):
         self.simulation_configuration_list.currentItemChanged.connect(lambda list_item: self.loadConfigView(list_item))
         self.simulation_configuration_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.simulation_configuration_list.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.simulation_configuration_list.model().rowsMoved.connect(lambda *_: QTimer.singleShot(0, self.configListReordered))
+        notNone(self.simulation_configuration_list.model()).rowsMoved.connect(lambda *_: QTimer.singleShot(0, self.configListReordered))
 
         # List configurations
         self.simulation_configuration_list.addItem(self.new_configuration_text)
@@ -423,6 +424,8 @@ class ConfigurationPage(TabWithToolbar):
                     text = f'» {sc.title}'
                     if sc.running:
                         text += ' (running)'
+                    elif sc.tab_widget.scan_page is not None and sc.tab_widget.scan_page.isRunning():
+                        text += ' (parameter scan running)'
                     elif sc.unsaved_changes:
                         text += ' (unsaved changes)'
                     non_closeable.append(text)
@@ -481,6 +484,7 @@ class ConfigurationPage(TabWithToolbar):
         :param default: if True, then load autosave
         """
 
+        save_file: Optional[Path]
         if default:
             save_file = GlobalConf.save_path / 'config' / 'autosave.json'
 
@@ -542,7 +546,8 @@ class ConfigurationPage(TabWithToolbar):
             )
             if result == QMessageBox.StandardButton.Yes:
                 for sc in mismatches:
-                    sc.version = sc.detected_version
+                    if sc.detected_version is not None:
+                        sc.version = sc.detected_version
                 self.save(autosave=True, no_config=not GlobalConf.keep_configurations_info)
             for sc in mismatches:
                 sc.detected_version = None
@@ -626,6 +631,7 @@ class ConfigurationPage(TabWithToolbar):
         config_path = GlobalConf.save_path / 'config'
         config_path.mkdir(parents=True, exist_ok=True)
 
+        save_file: Optional[Path]
         if autosave:
             save_file = config_path / 'autosave.json'
 
@@ -769,10 +775,13 @@ class ConfigurationPage(TabWithToolbar):
         """
 
         if self.selected_configuration is not None:
-            if not self.selected_configuration.tab_widget.isClosable():
+            if not notNone(self.selected_configuration.tab_widget).isClosable():
                 warning_text = f'"{self.selected_configuration.title}" '
+                scan_page = notNone(self.selected_configuration.tab_widget).scan_page
                 if self.selected_configuration.running:
                     warning_text += 'is running (⧖). Please wait until simulation finishes to edit the configuration.'
+                elif scan_page is not None and scan_page.isRunning():
+                    warning_text += 'runs a parameter scan. Please wait until the scan finishes to edit the configuration.'
                 else:
                     warning_text += 'has unsaved changes (*). Please save unsaved changes to edit the configuration.'
                 showMessageBox(
@@ -864,7 +873,7 @@ class ConfigurationPage(TabWithToolbar):
             # highlight saved item in configuration list
             j = 0
             for i in range(self.simulation_configuration_list.count()):
-                if self.simulation_configuration_list.item(i).text() == title:
+                if notNone(self.simulation_configuration_list.item(i)).text() == title:
                     j = i
                     break
             self.simulation_configuration_list.setCurrentRow(j)

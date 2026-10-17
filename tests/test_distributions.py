@@ -90,7 +90,7 @@ def test_dialog(qapp):
     dialog = DistributionDialog(None, ['He', 'Ar'], {'energy': {'Ar': [[10., 1.], [20., 2.]]}}, True, True, True, angle_per_projectile=False)
     assert dialog.tabs.count() == 4  # energy He, energy Ar, angle (all), energy and angle
     dialog.energy_tables['He'].addRow(500., 3.)
-    result = dialog.result()
+    result = dialog.distributionData()
     assert result['energy']['Ar'] == [[10., 1.], [20., 2.]]
     assert result['energy']['He'][-1] == [500., 3.]
     assert 'all' in result['angle']

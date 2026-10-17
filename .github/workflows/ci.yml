@@ -1,6 +1,5 @@
-# Continuous integration: linting (ruff), type checking (mypy, information only until the existing errors are fixed)
-# and the tests on Windows and Linux. The simulation programs are not part of the repository, the tests that need them
-# are skipped.
+# Continuous integration: linting (ruff), type checking (mypy) and the tests on Windows and Linux. The simulation
+# programs are not part of the repository, the tests that need them are skipped.
 name: CI
 
 on:
@@ -20,8 +19,6 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
-    # about 900 errors (mostly Optional values of PyQt6 and missing annotations) are known, see TODO.md
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

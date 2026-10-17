@@ -191,3 +191,34 @@ def test_matrix_readers(tmp_path):
     # summed over the azimuthal angle
     assert matrices[0]['counts'].tolist() == [[5, 7, 9], [0, 1, 1]]
     assert matrices[0]['projectiles'] == 100
+
+
+def test_depth_intervals_and_colors():
+    from Simulations.SDTrimSP import SimulationAnalysis
+    from Utility.Colors import PALETTE, paletteHex, paletteRgb, Palette
+
+    # one depth interval (nqx = 1) starts at the surface
+    assert list(SimulationAnalysis.depthIntervals(np.array([[0.5], [5.]]))) == [1., 10.]
+    assert list(SimulationAnalysis.depthIntervals(np.array([[5., 15., 25.]]))) == [10.]
+
+    # the 12 colors of the palette, then lightened versions
+    assert sorted(paletteHex(i).upper() for i in range(12)) == sorted(PALETTE)
+    assert all(c >= d for c, d in zip(paletteRgb(12), paletteRgb(0)))
+    assert Palette()[100] == paletteRgb(100)
+
+
+def test_failing_plot_does_not_crash(main_window, qapp, tmp_path, errors):
+    """An exception in a plot shows the error in the plot and is logged (PyQt6 would terminate the application)"""
+
+    folder = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
+    save = copySave(EXAMPLES / 'example_01_Ar_on_Au', tmp_path / 'example')
+    (save / 'depth_proj.dat').write_text('broken\n')
+    sc, page = addSimulationPage(main_window, 'broken', 0, folder, SDTrimSPInput.findBinary(folder) or folder / 'SDTrimSP.exe', Versions.V_707, save)
+    pump(qapp)
+    analysis = page.evaluation_class.analysis
+    analysis.save_folder = save
+    analysis.plotImplantationDepth = lambda: 1 / 0
+    page.evaluation_class.analyse('plotImplantationDepth')
+    waitForPlot(qapp, page)
+    assert any('ZeroDivisionError' in error for error in errors)
+    errors.clear()

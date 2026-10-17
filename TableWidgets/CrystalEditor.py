@@ -24,6 +24,7 @@ from Utility.Layouts import (
 from Utility.Functions import getPeriodicCoords
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 from Containers.SimulationConfiguration import SimulationConfiguration
 from Containers.Element import Element, Elements
@@ -40,11 +41,12 @@ def setLayoutVisible(layout: QLayout, visible: bool):
     """Shows or hides all widgets in a layout (recursively)"""
 
     for i in range(layout.count()):
-        item = layout.itemAt(i)
-        if item.widget() is not None:
-            item.widget().setVisible(visible)
-        elif item.layout() is not None:
-            setLayoutVisible(item.layout(), visible)
+        item = notNone(layout.itemAt(i))
+        widget, child_layout = item.widget(), item.layout()
+        if widget is not None:
+            widget.setVisible(visible)
+        elif child_layout is not None:
+            setLayoutVisible(child_layout, visible)
 
 
 class CrystalEditorDialog(QDialog):
@@ -157,9 +159,9 @@ class CrystalEditorDialog(QDialog):
         for layout_basis_vec in self.layout_basis_vecs:
             self.basis_vectors_group_box_vbox.addLayout(layout_basis_vec)
 
-        for i, basis_vec in enumerate(self.basis_vecs):
-            for j, widget in enumerate(basis_vec):
-                widget.valueChanged.connect(lambda: self.basisVecsChanged())
+        for basis_vec in self.basis_vecs:
+            for box in basis_vec:
+                box.valueChanged.connect(lambda: self.basisVecsChanged())
 
         # Beam-Settings
         self.beam_settings_vbox = VBoxTitleLayout(self, 'Beam-Settings', spacing=2, add_stretch=False)
@@ -224,7 +226,7 @@ class CrystalEditorDialog(QDialog):
 
         for i, layout_matrix in enumerate(self.layout_matrices):
             self.beam_hbox_3.addLayout(layout_matrix)
-            layout_matrix.checkbox.clicked.connect(lambda _, lm=layout_matrix: self.matrixClicked(lm))
+            layout_matrix.check.clicked.connect(lambda _, lm=layout_matrix: self.matrixClicked(lm))
 
         # Additional settings layout
         self.additional_settings_vbox = VBoxTitleLayout(self, 'Crystal orientation preview settings', spacing=2, add_stretch=False)
@@ -243,7 +245,7 @@ class CrystalEditorDialog(QDialog):
             tooltip='Toggles if coordinate system is shown in Crystal orientation preview'
         )
         self.additional_vbox.addLayout(self.show_coordinate_system)
-        self.show_coordinate_system.checkbox.clicked.connect(lambda: self.showCoordinateSystem())
+        self.show_coordinate_system.check.clicked.connect(lambda: self.showCoordinateSystem())
 
         # Crystal orientation preview
         self.orientation_preview_vbox = VBoxTitleLayout(self, 'Crystal Orientation Preview', spacing=2, add_stretch=False)
@@ -724,12 +726,12 @@ class CrystalEditorDialog(QDialog):
         if not self.table_mode:
             return self.table_crystal.getArguments()
 
-        rows = []
+        rows: List[CrystalRowArguments] = []
         crystals = self.tableCrystalsList()
         crystal = self.table_file.crystal(crystals[0]['name']) if crystals and self.table_file is not None else None
         if crystal is None:
             return rows
-        structure = self.table_file.structure(crystal.structure)
+        structure = notNone(self.table_file).structure(crystal.structure)
         if structure is None:
             return rows
         for element, position in zip(crystal.elements, structure.positions):
@@ -774,12 +776,12 @@ class CrystalEditorDialog(QDialog):
         matrix_check_flag = False
         for layout_matrix, id_matrix in zip(self.layout_matrices, self.id_matrices):
             if selected_matrix != id_matrix:
-                layout_matrix.checkbox.setChecked(False)
+                layout_matrix.check.setChecked(False)
             else:
-                layout_matrix.checkbox.setChecked(True)
+                layout_matrix.check.setChecked(True)
                 matrix_check_flag = True
         if not matrix_check_flag:
-            self.layout_matrices[0].checkbox.setChecked(True)
+            self.layout_matrices[0].check.setChecked(True)
 
         return matrix_check_flag
 
@@ -917,7 +919,7 @@ class CrystalEditorDialog(QDialog):
         """Get id of selected matrix"""
 
         for i, layout_matrix in enumerate(self.layout_matrices):
-            if layout_matrix.checkbox.isChecked():
+            if layout_matrix.check.isChecked():
                 return self.id_matrices[i]
         return DefaultValues.matrix_id
 
@@ -972,7 +974,7 @@ class CrystalEditorDialog(QDialog):
         assumed = arguments.optional.get('assumed')
         if not isinstance(assumed, list):
             assumed = []
-        not_loadable = []
+        not_loadable: List[str] = []
 
         if self.table_mode:
             return self.loadTableArguments(crystal_args, assumed)
@@ -1029,7 +1031,7 @@ class CrystalEditorDialog(QDialog):
             not_loadable.append('miller_indices_list')
 
         for widget, val in zip(self.miller_ind, miller_ind):
-            widget.setValue(val)
+            widget.setValue(int(val))
 
         # beam parameters
         beam_dy = crystal_args.optional.get('beam_dy', DefaultValues.beam_dy)
@@ -1084,7 +1086,7 @@ class CrystalEditorDialog(QDialog):
 
         from Simulations.SDTrimSP import tableCrystals
 
-        not_loadable = []
+        not_loadable: List[str] = []
 
         # crystals from table.crystal
         self.loadCrystalTable()

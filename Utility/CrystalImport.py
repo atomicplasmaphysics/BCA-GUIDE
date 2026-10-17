@@ -9,7 +9,7 @@ so only structures with an orthogonal unit cell can be used.
 """
 
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from dataclasses import dataclass, field
 from pathlib import Path
 from re import sub, findall, match
@@ -51,6 +51,12 @@ class ImportedCrystal:
         """Returns True if all lattice angles are 90 degree"""
 
         return all(abs(angle - 90) < ANGLE_TOLERANCE for angle in self.angles)
+
+
+def _triple(values) -> Tuple[float, float, float]:
+    """Returns three values as tuple"""
+
+    return float(values[0]), float(values[1]), float(values[2])
 
 
 def importCrystal(path: Path) -> ImportedCrystal:
@@ -148,8 +154,8 @@ def importCif(path: Path) -> ImportedCrystal:
     """
 
     tokens = _cifTokens(path)
-    values = {}
-    loops = []
+    values: Dict[str, str] = {}
+    loops: List[Tuple[List[str], List[List[str]]]] = []
     name = path.stem
     i = 0
     while i < len(tokens):
@@ -183,8 +189,8 @@ def importCif(path: Path) -> ImportedCrystal:
             i += 1
 
     try:
-        lengths = tuple(_number(values[f'_cell_length_{axis}']) for axis in 'abc')
-        angles = tuple(_number(values.get(f'_cell_angle_{angle}', '90')) for angle in ('alpha', 'beta', 'gamma'))
+        lengths = _triple([_number(values[f'_cell_length_{axis}']) for axis in 'abc'])
+        angles = _triple([_number(values.get(f'_cell_angle_{angle}', '90')) for angle in ('alpha', 'beta', 'gamma')])
     except (KeyError, ValueError) as error:
         raise CrystalImportError(f'Could not read the unit cell of "{path.name}": {error}')
 
@@ -231,7 +237,7 @@ def importCif(path: Path) -> ImportedCrystal:
 
     # apply symmetry and remove duplicates
     elements = []
-    positions = []
+    positions: List[np.ndarray] = []
     for element, position in asymmetric_atoms:
         for operation in symmetry_operations:
             new_position = _wrap(operation(position))
@@ -249,7 +255,7 @@ def importCif(path: Path) -> ImportedCrystal:
         name=name,
         lengths=lengths,
         angles=angles,
-        positions=[tuple(float(round(value, 6)) for value in position) for position in positions],
+        positions=[_triple([float(round(value, 6)) for value in position]) for position in positions],
         elements=elements,
         warnings=warnings
     )
@@ -298,7 +304,7 @@ def importPoscar(path: Path) -> ImportedCrystal:
         raise CrystalImportError(f'Could not read "{path.name}": {error}')
 
     a, b, c = lattice
-    lengths = tuple(float(np.linalg.norm(vector)) for vector in (a, b, c))
+    lengths = _triple([float(np.linalg.norm(vector)) for vector in (a, b, c)])
 
     def angle(u, v):
         return float(np.degrees(np.arccos(np.clip(u @ v / np.linalg.norm(u) / np.linalg.norm(v), -1, 1))))
@@ -307,6 +313,6 @@ def importPoscar(path: Path) -> ImportedCrystal:
         name=name.split()[0] if name.split() else path.stem,
         lengths=lengths,
         angles=(angle(b, c), angle(a, c), angle(a, b)),
-        positions=[tuple(float(round(value, 6)) for value in position) for position in positions],
+        positions=[_triple([float(round(value, 6)) for value in position]) for position in positions],
         elements=elements
     )

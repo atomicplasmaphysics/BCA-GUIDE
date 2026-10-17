@@ -5,6 +5,7 @@ from PyQt6.QtCore import pyqtSignal
 from Utility.Functions import limitSum
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Layouts import ComboBox, DoubleSpinBox, SpinBoxRange
+from Utility.Typing import notNone
 
 from TableWidgets.CustomTable import CustomRowField, CustomRow, CustomTable
 
@@ -73,7 +74,7 @@ class CrystalRow(CustomRow):
         )
 
         self.element_combobox.currentIndexChanged.connect(self.coordinateChanged.emit)
-        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetHighlight(self.element_combobox, False)
+        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetHighlight(self.element_combobox, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
 
         self.coords = [DoubleSpinBox(
             default=0,
@@ -184,7 +185,7 @@ class CrystalRow(CustomRow):
         pass
 
 
-class CrystalTable(CustomTable):
+class CrystalTable(CustomTable[CrystalRow]):
     """
     Table for component rows
 
@@ -204,7 +205,7 @@ class CrystalTable(CustomTable):
         self,
         parent,
         target_elements: List[Element],
-        row_fields: List[CustomRowField] = None,
+        row_fields: Optional[List[CustomRowField]] = None,
         custom_comp_row=CrystalRow,
         version: str = ''
     ):
@@ -218,13 +219,13 @@ class CrystalTable(CustomTable):
         self.version = version
 
         super().__init__(0, self.labels, parent)
-        self.rows: List[CrystalRow] = []
+        self.rows = []
 
         self.add_button.setToolTip('Add a new element to the composition')
 
         for i, tooltip in enumerate(self.tooltips, 1):
             if tooltip:
-                self.horizontalHeaderItem(i).setToolTip(tooltip)
+                notNone(self.horizontalHeaderItem(i)).setToolTip(tooltip)
 
     def createRow(self, row_idx) -> CrystalRow:
         """
@@ -243,7 +244,7 @@ class CrystalTable(CustomTable):
         :param connect: if row should be connected
         """
 
-        row: CrystalRow = super().addRow(update=update, connect=connect)
+        row = notNone(super().addRow(update=update, connect=connect))
         row.coordinateChanged.connect(self.coordinateChanged.emit)
 
         row.elementChanged.connect(lambda element: self.elementChanged.emit(row, element))
@@ -255,19 +256,6 @@ class CrystalTable(CustomTable):
         })
 
         return row
-
-    def addRows(self, comp_entries: list):
-        """
-        Add multiple rows
-
-        :param comp_entries: list of component entries
-        """
-
-        for comp_entry in comp_entries:
-            row = self.addRow(connect=False)
-            row.setRowData(comp_entry)
-        self.connectRows()
-        # self.limitColumns()
 
     def connectRows(self):
         """Connect all rows"""
@@ -320,7 +308,7 @@ class CrystalTable(CustomTable):
         :param connect: if it should be connected
         """
 
-        not_loadable = []
+        not_loadable: List[str] = []
         rows = []
         for _ in arguments:
             rows.append(self.addRow(connect=False))

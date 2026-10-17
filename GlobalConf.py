@@ -13,7 +13,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
-    version = '1.5.07'
+    version = '1.5.08'
 
     # settings object
     settings = QSettings('TU Wien', title)
@@ -65,6 +65,7 @@ class GlobalConf:
     window_height_name = 'window_height'
     window_center_x_name = 'window_center_x'
     window_center_y_name = 'window_center_y'
+    window_geometry_name = 'window_geometry'
 
     def __init__(self):
         self.setLanguage()
@@ -127,6 +128,17 @@ class GlobalConf:
         GlobalConf.settings.setValue(GlobalConf.window_center_y_name, y)
 
         GlobalConf.settings.sync()
+
+    @staticmethod
+    def updateWindowGeometry(geometry):
+        """Saves the geometry of the window (QByteArray of QWidget.saveGeometry(): position, size, display, maximized)"""
+        GlobalConf.settings.setValue(GlobalConf.window_geometry_name, geometry)
+        GlobalConf.settings.sync()
+
+    @staticmethod
+    def getWindowGeometry():
+        """Returns the saved geometry of the window (QByteArray) or None"""
+        return GlobalConf.settings.value(GlobalConf.window_geometry_name, defaultValue=None)
 
     @staticmethod
     def getWindowSize():

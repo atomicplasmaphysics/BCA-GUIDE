@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional, cast
 
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -9,6 +9,8 @@ from Containers.Compound import Compound
 from Containers.Element import Element
 
 from TableWidgets.CompTable import CompTable
+
+from Utility.Typing import notNone
 
 
 class ListItemWidget(QWidget):
@@ -25,9 +27,9 @@ class ListItemWidget(QWidget):
         self.compound = compound
 
         # layout for checkbox and label
-        self.layout = QHBoxLayout()
-        self.layout.setContentsMargins(7, 3, 7, 3)
-        self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.main_layout = QHBoxLayout()
+        self.main_layout.setContentsMargins(7, 3, 7, 3)
+        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.checkbox = QCheckBox()
         self.checkbox.setChecked(False)
@@ -36,9 +38,9 @@ class ListItemWidget(QWidget):
         # transparent background color needs to be added for proper display
         self.label.setStyleSheet('background-color: transparent;')
 
-        self.layout.addWidget(self.checkbox)
-        self.layout.addWidget(self.label)
-        self.setLayout(self.layout)
+        self.main_layout.addWidget(self.checkbox)
+        self.main_layout.addWidget(self.label)
+        self.setLayout(self.main_layout)
 
 
 class CompoundList(QListWidget):
@@ -74,11 +76,9 @@ class CompoundList(QListWidget):
             self.addItem(item)
             self.setItemWidget(item, item_widget)
 
-    def itemWidget(self, item: QListWidgetItem) -> ListItemWidget:
+    def itemWidget(self, item: Optional[QListWidgetItem]) -> ListItemWidget:  # type: ignore[override]  # the widgets are always ListItemWidget
         """Call is passed to original itemWidget() function, but the return type should be ListItemWidget"""
-        item_widget = super().itemWidget(item)
-        if isinstance(item_widget, ListItemWidget):
-            return item_widget
+        return cast(ListItemWidget, super().itemWidget(item))
 
     def disableItem(self, compound: Compound, disable: bool):
         """
@@ -89,7 +89,7 @@ class CompoundList(QListWidget):
         """
 
         for index in range(self.count()):
-            item_widget = self.itemWidget(self.item(index))
+            item_widget = self.itemWidget(notNone(self.item(index)))
             if item_widget.compound == compound:
                 item_widget.setDisabled(disable)
                 return
@@ -105,7 +105,7 @@ class CompoundList(QListWidget):
         self.selectedToTop()
         self.compoundChanged.emit(compound, state)
 
-    def updateElements(self, elements: List[Element] = None):
+    def updateElements(self, elements: Optional[List[Element]] = None):
         """
         Updates selectable items and deselects not valid options
 
@@ -122,7 +122,7 @@ class CompoundList(QListWidget):
 
         # enable and disable compounds
         for index in range(self.count()):
-            item = self.item(index)
+            item = notNone(self.item(index))
             item_widget = self.itemWidget(item)
             state = item_widget.compound.matches(elements)
             item_widget.setDisabled(not state)
@@ -183,7 +183,7 @@ class CompoundList(QListWidget):
         selected_compounds = []
 
         for index in range(self.count()):
-            item_widget = self.itemWidget(self.item(index))
+            item_widget = self.itemWidget(notNone(self.item(index)))
             if item_widget.checkbox.isChecked():
                 selected_compounds.append(item_widget.compound)
 
@@ -197,7 +197,7 @@ class CompoundList(QListWidget):
         """
 
         for index in range(self.count()):
-            item_widget = self.itemWidget(self.item(index))
+            item_widget = self.itemWidget(notNone(self.item(index)))
             state = item_widget.compound.name_save in compounds
             item_widget.checkbox.setChecked(state)
 

@@ -119,9 +119,20 @@ Single simulations are configured manually as described below.
 - *Simulation* > *Run all tabs* runs all tabs with at most *Simultaneous simulations* at the same time (input field in the
   *Simulation* menu and in the preferences), the others wait in a queue. The status bar shows the progress of all
   simulations and an estimate of the remaining time.
-- *Simulation* > *Parameter scan of current tab...* runs a series of simulations in which one parameter is varied
-  (energy or angle of a beam species, fluence, number of histories, target thickness or the version, i.e. other
-  configurations of the same program) and compares the results in a table and plots.
+- Parameter scan: the checkbox with the slider icon in the toolbar of a simulation tab (or *Simulation* > *Parameter scan
+  of current tab...*) shows the tabs *Parameter scan* and *Parameter scan results*. A scan is a series of simulations in
+  which up to 5 parameters are varied at once (all combinations, values from a linear or logarithmic range or entered
+  directly): energy, angle and azimuthal angle of the beam species, element parameters (surface binding, displacement,
+  cutoff and bulk binding energy, heat of formation, inelastic correction, density, mass), atomic fractions of the target,
+  fluence, number of histories/projectiles, target thickness or the version (other configurations of the same program).
+  The simulations are written into a folder in the folder of the simulation and run with a lower priority than the GUI,
+  the table of the scan shows the state of each simulation. The scan is described in `scan.json` in its folder: *Open
+  scan...* shows the parameters and results of an existing scan without running it again, and the scan of a tab is shown
+  again after a restart of the GUI.
+- *Simulation* > *Compare simulations...* shows the results of several simulations (or of a scan) in a table and plots:
+  lines over one parameter (one line for each value of the other parameters or for fixed values) or 2D maps over two
+  parameters. The plotted data can be exported as CSV.
+- The colors of the plots follow the palette in `Utility/Colors.py` (12 colors, then lighter and darker versions).
 - The additional settings of SDTrimSP are checked against the parameters that the installed version reads (namelist
   `TRI_INP` in `src/work.F90` if the source code is installed, otherwise `doc/tri.inp.txt`, otherwise a built-in list);
   unknown parameters are underlined.

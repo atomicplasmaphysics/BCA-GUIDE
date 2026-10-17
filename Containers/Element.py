@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Union
+from typing import List, Union, Optional
 
 
 class Element:
@@ -33,31 +33,31 @@ class Element:
 
     def __init__(
         self,
-        symbol: str = None,
-        name: dict = None,
-        atomic_nr: int = None,
-        period: int = None,
-        group: int = None,
-        atomic_mass: float = None,
-        atomic_density: float = None,
+        symbol: Optional[str] = None,
+        name: Optional[dict] = None,
+        atomic_nr: Optional[int] = None,
+        period: Optional[int] = None,
+        group: Optional[int] = None,
+        atomic_mass: Optional[float] = None,
+        atomic_density: Optional[float] = None,
 
         periodic_table_symbol: str = '',
-        mass_density: float = None,
-        surface_binding_energy: float = None,
-        displacement_energy: float = None,
-        cutoff_energy: float = None,
-        dissociation_heat: float = None,
-        melt_enthalpy: float = None,
-        vaporization_energy: float = None,
-        formation_enthalpy: float = None,
+        mass_density: Optional[float] = None,
+        surface_binding_energy: Optional[float] = None,
+        displacement_energy: Optional[float] = None,
+        cutoff_energy: Optional[float] = None,
+        dissociation_heat: Optional[float] = None,
+        melt_enthalpy: Optional[float] = None,
+        vaporization_energy: Optional[float] = None,
+        formation_enthalpy: Optional[float] = None,
 
         modified: bool = False,
         copy_original: bool = True,
 
         **kwargs
     ):
-        # Check required arguments
-        if None in [symbol, name, atomic_nr, period, group, atomic_mass, atomic_density]:
+        # Required arguments (an empty element if one of them is missing)
+        if symbol is None or name is None or atomic_nr is None or period is None or group is None or atomic_mass is None or atomic_density is None:
             symbol = ''
             name = {'en': ''}
             atomic_nr = 0
@@ -66,13 +66,9 @@ class Element:
             atomic_mass = 0
             atomic_density = 0
 
-        # Required arguments
         self.symbol = str(symbol)
-        self.name = name  # should be dict
-        if isinstance(self.name, str):
-            self.name = {
-                'en': str(self.name)
-            }
+        # names in different languages, e.g. {'en': 'Gold', 'de': 'Gold'}
+        self.name: dict = {'en': name} if isinstance(name, str) else name
         self.atomic_nr = int(atomic_nr)
         self.period = int(period)
         self.group = int(group)
@@ -154,23 +150,20 @@ class Element:
         :param spec: can be one language(e.g. 'en', 'de') or multiple languages separated by '|' (e.g. 'en|de')
         """
 
-        name = self.name.get('en')
+        name = str(self.name.get('en', ''))
         if '|' in spec:
-            spec = spec.split('|')
-
-        if isinstance(spec, str):
-            name_spec = self.name.get(spec)
-            if name_spec:
-                name = name_spec
-
-        elif isinstance(spec, list):
             names_spec = []
-            for sp in spec:
-                name_spec = self.name.get(str(sp))
+            for sp in spec.split('|'):
+                name_spec = self.name.get(sp)
                 if name_spec:
                     names_spec.append(name_spec)
             if len(names_spec):
                 name = '/'.join(names_spec)
+
+        else:
+            name_spec = self.name.get(spec)
+            if name_spec:
+                name = name_spec
 
         return name
 
@@ -192,7 +185,7 @@ class Elements:
         :param elements: list of <Containers.Element:Element> objects
         """
 
-        if not elements:
+        if not isinstance(elements, list) or not elements:
             self.elements = []
             return False
         self.elements = elements

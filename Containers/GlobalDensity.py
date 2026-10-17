@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from Utility.Functions import normalizeList
 
@@ -18,7 +18,7 @@ class GlobalDensity:
     # [amu * cm^3 / g * A^3]
     G_TO_AMU = 1 / 1.66
 
-    def __init__(self, elements: List[Element] = None, abundances: List[float] = None, density: float = None, density_in_amu: bool = False):
+    def __init__(self, elements: Optional[List[Element]] = None, abundances: Optional[List[float]] = None, density: Optional[float] = None, density_in_amu: bool = False):
         if elements is None:
             elements = []
         self.elements = elements
@@ -78,7 +78,7 @@ class GlobalDensity:
 
         return sum([element.atomic_mass * abundance for (element, abundance) in zip(self.elements, self.abundances)])
 
-    def atomicDensity(self, density: float = None, density_in_amu: bool = None) -> float:
+    def atomicDensity(self, density: Optional[float] = None, density_in_amu: Optional[bool] = None) -> float:
         """
         Calculates the atomic density according to its composition and the density.
 
@@ -101,7 +101,7 @@ class GlobalDensity:
             return global_density
         return global_density * self.G_TO_AMU
 
-    def atomicDensityElements(self, density: float = None, density_in_amu: bool = None) -> List[Element]:
+    def atomicDensityElements(self, density: Optional[float] = None, density_in_amu: Optional[bool] = None) -> List[Element]:
         """
         Calculates the atomic density according to its composition and the density.
 

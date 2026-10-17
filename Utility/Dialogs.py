@@ -45,7 +45,7 @@ def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: Path
 
 
 def showMessageBox(parent, icon, window_title: str, text: str, info_message: str = '', detailed_message: str = '',
-                   standard_buttons: int = QMessageBox.StandardButton.Ok, check_box_text: str = '', expand_details: bool = False):
+                   standard_buttons: QMessageBox.StandardButton = QMessageBox.StandardButton.Ok, check_box_text: str = '', expand_details: bool = False):
     """
     Displays message box
 
@@ -100,10 +100,10 @@ class DownloadDialog(QDialog):
         self.setWindowTitle('Missing documentation PDF')
 
         # Layout
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
 
-        self.layout.addWidget(QLabel(f'The documentation PDF "{self.name}" could not be found.\nYou can download it automatically'))
+        self.main_layout.addWidget(QLabel(f'The documentation PDF "{self.name}" could not be found.\nYou can download it automatically'))
 
         self.hlDownload = QHBoxLayout()
         self.downloadFile = QPushButton('Download PDF', self)
@@ -116,11 +116,11 @@ class DownloadDialog(QDialog):
         self.downloadStatus = QLabel('', self)
         self.downloadStatus.setToolTip('The status of the download progress')
         self.hlDownload.addWidget(self.downloadStatus)
-        self.layout.addLayout(self.hlDownload)
+        self.main_layout.addLayout(self.hlDownload)
 
         self.labelMan = QLabel(f'Alternatively, you can manually download it from <a href="{self.url}">{urlparse(url).netloc}</a>,<br> place it in the default documentation folder, and rename it to "{self.name}".')
         self.labelMan.setOpenExternalLinks(True)
-        self.layout.addWidget(self.labelMan)
+        self.main_layout.addWidget(self.labelMan)
 
         self.hlFolder = QHBoxLayout()
         self.openFolder = QPushButton('Open folder', self)
@@ -128,7 +128,7 @@ class DownloadDialog(QDialog):
         self.openFolder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.path))))
         self.hlFolder.addWidget(self.openFolder)
         self.hlFolder.addStretch(1)
-        self.layout.addLayout(self.hlFolder)
+        self.main_layout.addLayout(self.hlFolder)
 
         self.hlClose = QHBoxLayout()
         self.hlClose.addStretch(1)
@@ -136,7 +136,7 @@ class DownloadDialog(QDialog):
         self.closeDialog.setToolTip('Close this dialog window')
         self.closeDialog.clicked.connect(self.accept)
         self.hlClose.addWidget(self.closeDialog)
-        self.layout.addLayout(self.hlClose)
+        self.main_layout.addLayout(self.hlClose)
 
     def updateProgress(self, block_num, block_size, total_size):
         """Updates the progressbar"""
@@ -214,35 +214,35 @@ class ManualDialog(QDialog):
         def __init__(self, parent):
             super().__init__(parent)
             icon_size = 30
-            self.layout = QVBoxLayout()
-            self.layout.addWidget(QLabel(
+            self.main_layout = QVBoxLayout()
+            self.main_layout.addWidget(QLabel(
                 'Example: Convert input file for simulation X into input file for simulation Y:<br><br>' +
                 '1) Create configurations with the simulation programs X and Y<br>' +
                 '2) Open the input file in simulation X'
             ))
             label_open = QLabel('', self)
             label_open.setPixmap(getPixmap('open', icon_size))
-            self.layout.addWidget(label_open)
-            self.layout.addWidget(QLabel(
+            self.main_layout.addWidget(label_open)
+            self.main_layout.addWidget(QLabel(
                 '3) Save the simulation X'
             ))
             label_save = QLabel('', self)
             label_save.setPixmap(getPixmap('save', icon_size))
-            self.layout.addWidget(label_save)
-            self.layout.addWidget(QLabel(
+            self.main_layout.addWidget(label_save)
+            self.main_layout.addWidget(QLabel(
                 '4) Change to simulation Y and click the convert button'
             ))
             label_import = QLabel('', self)
             label_import.setPixmap(getPixmap('convert', icon_size))
-            self.layout.addWidget(label_import)
-            self.layout.addWidget(QLabel(
+            self.main_layout.addWidget(label_import)
+            self.main_layout.addWidget(QLabel(
                 '5) Navigate to the folder, where simulation X was saved and select the <b>input.json</b> file<br>' +
                 '6) Select a folder where simulation Y will be saved<br>' +
                 '7) Not convertable input parameter are highlighted red in simulation Y<br>' +
                 '8) Adjust highlighted parameters and save the simulation Y'
             ))
 
-            self.setLayout(self.layout)
+            self.setLayout(self.main_layout)
 
     manualWidgetList = [ManualImportSimulation, ManualAddSimulation, ManualEditSimulation]
 
@@ -253,8 +253,8 @@ class ManualDialog(QDialog):
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self.setWindowTitle('Manual')
 
-        self.layout = QVBoxLayout()
-        self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # manual selector
         self.layout_manual_selector = QHBoxLayout()
@@ -263,14 +263,14 @@ class ManualDialog(QDialog):
         self.manual_selector = QComboBox()
         self.layout_manual_selector.addWidget(self.manual_selector)
         self.manual_selector.currentIndexChanged.connect(lambda i: self.stack.setCurrentIndex(i))
-        self.layout.addLayout(self.layout_manual_selector)
+        self.main_layout.addLayout(self.layout_manual_selector)
 
         # stack of widgets
         self.stack = QStackedWidget()
-        self.layout.addWidget(self.stack)
+        self.main_layout.addWidget(self.stack)
 
-        self.layout.addStretch()
-        self.setLayout(self.layout)
+        self.main_layout.addStretch()
+        self.setLayout(self.main_layout)
 
         for manual in self.manualWidgetList:
             manual_name = 'NAME MISSING'
@@ -299,8 +299,8 @@ class PreferencesDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowTitleHint)
         self.setWindowTitle('Preferences')
 
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
 
         # Path (relative)
         self.save_path = FilePath(
@@ -316,7 +316,7 @@ class PreferencesDialog(QDialog):
             split=0
         )
         self.save_path.setPath(GlobalConf.save_path)
-        self.layout.addLayout(self.layout_save_path)
+        self.main_layout.addLayout(self.layout_save_path)
 
         # Theme
         self.theme = QComboBox(self)
@@ -329,39 +329,39 @@ class PreferencesDialog(QDialog):
             tooltip='Color theme of the GUI. "System" follows the theme of the operating system',
             split=0
         )
-        self.layout.addLayout(self.layout_theme)
+        self.main_layout.addLayout(self.layout_theme)
 
         # Default element table warning
         self.skip_element_info = QCheckBox('Skip the element table warning when the used simulation does not provide used element data', self)
         self.skip_element_info.setChecked(GlobalConf.skip_element_info)
-        self.layout.addWidget(self.skip_element_info)
+        self.main_layout.addWidget(self.skip_element_info)
 
         # File deletion warning
         self.skip_delete_info = QCheckBox('Skip the file deletion warning when running a simulation', self)
         self.skip_delete_info.setChecked(GlobalConf.skip_delete_info)
-        self.layout.addWidget(self.skip_delete_info)
+        self.main_layout.addWidget(self.skip_delete_info)
 
         # Load closed configurations
         self.keep_configurations_info = QCheckBox('Keep configurations in all simulation tabs when open GUI again', self)
         self.keep_configurations_info.setChecked(GlobalConf.keep_configurations_info)
-        self.layout.addWidget(self.keep_configurations_info)
+        self.main_layout.addWidget(self.keep_configurations_info)
 
         # Open in multiple tabs warning (not needed)
         """
         self.skip_open_multiple_info = QCheckBox('Skip the information, that opening a configuration in all tabs will create multiple copies', self)
         self.skip_open_multiple_info.setChecked(GlobalConf.skip_open_multiple_info)
-        self.layout.addWidget(self.skip_open_multiple_info)
+        self.main_layout.addWidget(self.skip_open_multiple_info)
         """
 
         # Open in multiple tabs warning
         self.use_default_language = QCheckBox('Use system language for elements (if supported by simulation)', self)
         self.use_default_language.setChecked(GlobalConf.use_default_language)
-        self.layout.addWidget(self.use_default_language)
+        self.main_layout.addWidget(self.use_default_language)
 
         # Open in multiple tabs warning
         self.no_autodetect_version = QCheckBox('Do not warn if other simulation was detected than selected', self)
         self.no_autodetect_version.setChecked(GlobalConf.no_autodetect_version)
-        self.layout.addWidget(self.no_autodetect_version)
+        self.main_layout.addWidget(self.no_autodetect_version)
 
         # Simultaneous simulations of "Run all"
         self.max_parallel_runs = QSpinBox(self)
@@ -374,12 +374,12 @@ class PreferencesDialog(QDialog):
                     'in a queue.<br>Each simulation uses one processor core (except MPI builds)',
             split=0
         )
-        self.layout.addLayout(self.layout_max_parallel_runs)
+        self.main_layout.addLayout(self.layout_max_parallel_runs)
 
         # Ok button
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         self.button_box.accepted.connect(self.updatePreferences)
-        self.layout.addWidget(self.button_box)
+        self.main_layout.addWidget(self.button_box)
 
         self.resize(parent.width() // 2, self.height())
 
@@ -431,18 +431,18 @@ class AboutDialog(QDialog):
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self.setWindowTitle(f'About {GlobalConf.title}')
 
-        self.layout = QGridLayout()
-        self.setLayout(self.layout)
+        self.main_layout = QGridLayout()
+        self.setLayout(self.main_layout)
 
         # GUI about
         self.title_label_gui = QLabel(GlobalConf.title, self)
         self.title_label_gui.setStyleSheet('font-size: 16px; font-weight: bold;')
         self.title_label_gui.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.title_label_gui, 0, 0, 1, 2)
+        self.main_layout.addWidget(self.title_label_gui, 0, 0, 1, 2)
 
         self.iap_logo = QLabel('', self)
         self.iap_logo.setPixmap(QPixmap(':icons/aboutlogo_iap.png').scaled(280, 113, transformMode=Qt.TransformationMode.SmoothTransformation))
-        self.layout.addWidget(self.iap_logo, 1, 0)
+        self.main_layout.addWidget(self.iap_logo, 1, 0)
 
         self.iap_label = QLabel(
             'Alexander Redl <a href="mailto:redl@iap.tuwien.ac.at">redl@iap.tuwien.ac.at</a><br>' +
@@ -458,11 +458,11 @@ class AboutDialog(QDialog):
             self
         )
         self.iap_label.setOpenExternalLinks(True)
-        self.layout.addWidget(self.iap_label, 1, 1)
+        self.main_layout.addWidget(self.iap_label, 1, 1)
 
         self.empty = QWidget(self)
         self.empty.setFixedHeight(75)
-        self.layout.addWidget(self.empty, 2, 0, 2, 2)
+        self.main_layout.addWidget(self.empty, 2, 0, 2, 2)
 
         # load simulation abouts
         simulation_list = SimulationsList()
@@ -477,17 +477,17 @@ class AboutDialog(QDialog):
             title_label.setStyleSheet('font-size: 16px; font-weight: bold;')
             title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self.layout.addWidget(title_label, layout_index, 0, 1, 2)
+            self.main_layout.addWidget(title_label, layout_index, 0, 1, 2)
             layout_index += 1
 
             if logo:
                 logo_label = QLabel('', self)
                 logo_label.setPixmap(QPixmap(logo).scaled(280, 100, transformMode=Qt.TransformationMode.SmoothTransformation))
-                self.layout.addWidget(logo_label, layout_index, 0)
+                self.main_layout.addWidget(logo_label, layout_index, 0)
 
             information_label = QLabel(about.strip().replace('\n', '<br>'), self)
             information_label.setOpenExternalLinks(True)
-            self.layout.addWidget(information_label, layout_index, 1)
+            self.main_layout.addWidget(information_label, layout_index, 1)
             layout_index += 1
 
         self.resize(parent.width() // 2, self.height())

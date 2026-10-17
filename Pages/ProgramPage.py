@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Union, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Literal, Union, Optional, Tuple, TYPE_CHECKING
 from enum import Enum, auto
 from platform import system
 from os import chdir
@@ -17,7 +17,7 @@ from PyQt6.QtCore import Qt, QUrl, QProcess, QTimer
 from PyQt6.QtGui import QKeySequence, QDesktopServices
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QTabWidget, QSplitter, QVBoxLayout, QGroupBox, QSizePolicy, QPushButton,
-    QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication
+    QListWidget, QAbstractItemView, QMessageBox, QFileDialog, QScrollArea, QApplication, QCheckBox
 )
 
 
@@ -30,9 +30,10 @@ from Utility.Layouts import (
 )
 from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
-from Utility.Functions import alphanumeric, inFileList, inFileDict, pathToStr
+from Utility.Functions import alphanumeric, inFileList, inFileDict, pathToStr, lowerProcessPriority
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 from TableWidgets.CompTable import CompRow, CompTable, CompTableTarget
 from TableWidgets.TargetTable import TargetLayersTable
@@ -49,6 +50,7 @@ from Containers.GlobalDensity import GlobalDensity
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
     from MainWindow import MainWindow
+    from Pages.ParameterScanPage import ParameterScanPage
 
 
 class SimulationPage(TabWithToolbar):
@@ -126,7 +128,7 @@ class SimulationPage(TabWithToolbar):
         # Dialog for periodic table
         self.periodic_table_dialog = PeriodicTableDialog(self.main_window)
         self.periodic_table_dialog.setElementData(self.simulation_class.element_data, self.simulation_class.element_data_default)
-        self.dialog_source_row = None
+        self.dialog_source_row: Optional[CompRow] = None
         self.global_density = GlobalDensity()
         self.global_density_needed = False
         self.group_elements = self.simulation_class.GroupElements
@@ -137,7 +139,7 @@ class SimulationPage(TabWithToolbar):
         # Output files and parameters
         self.previous_scroll_position = 0
         self.last_selected_output_file = ''
-        self.selected_output_parameter = None
+        self.selected_output_parameter: Optional[str] = None
 
         # process for running simulation
         self.process = QProcess(self)
@@ -151,34 +153,45 @@ class SimulationPage(TabWithToolbar):
         # New
         self.action_new = self.toolbar.addAction(getIcon('new'), 'New')
         self.action_new.setToolTip('<b>Reset</b> this simulation-tab and the input fields to their default states')
-        self.action_new.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_N))
+        self.action_new.setShortcut(QKeySequence('Ctrl+N'))
         self.action_new.triggered.connect(lambda: self.resetSettings())
 
         # Open
         self.action_open = self.toolbar.addAction(getIcon('open'), 'Open')
         self.action_open.setToolTip('<b>Open</b> an existing simulation input setting')
-        self.action_open.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_O))
+        self.action_open.setShortcut(QKeySequence('Ctrl+O'))
         self.action_open.triggered.connect(lambda: self.loadSettings())  # self.loadSettings(from_json=False)
 
         # Import
         self.action_import = self.toolbar.addAction(getIcon('convert'), 'Convert')
         self.action_import.setToolTip('<b>Convert</b> simulation input setting')
-        self.action_import.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_I))
+        self.action_import.setShortcut(QKeySequence('Ctrl+I'))
         self.action_import.triggered.connect(lambda: self.importSettings())
 
         # Save
         self.action_save = self.toolbar.addAction(getIcon('save'), 'Save')
         self.action_save.setToolTip('<b>Save</b> the current settings of this simulation-tab to a simulation-tab input file')
-        self.action_save.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_S))
+        self.action_save.setShortcut(QKeySequence('Ctrl+S'))
         self.action_save.setEnabled(False)
         self.action_save.triggered.connect(lambda: self.saveSettings())
 
         # Save as
         self.action_save_as = self.toolbar.addAction(getIcon('save_as'), 'Save as')
         self.action_save_as.setToolTip('<b>Save</b> the current settings of this simulation-tab under a different name and/or in a different location')
-        self.action_save_as.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_S))
+        self.action_save_as.setShortcut(QKeySequence('Ctrl+Shift+S'))
         self.action_save_as.setEnabled(False)
         self.action_save_as.triggered.connect(lambda: self.saveSettings(new_folder=True))
+
+        # Parameter scan: shows the tabs of the parameter scan
+        self.scan_checkbox = QCheckBox(self)
+        self.scan_checkbox.setIcon(getIcon('scan'))
+        self.scan_checkbox.setToolTip(
+            '<b>Parameter scan</b>: shows the tabs "Parameter scan" (simulations in which up to 5 parameters of this tab are '
+            'varied) and "Parameter scan results"'
+        )
+        self.scan_checkbox.toggled.connect(lambda checked: self.setScanEnabled(checked))
+        self.toolbar.addWidget(self.scan_checkbox)
+        self.scan_page: Optional[ParameterScanPage] = None
 
         # Separator
         self.toolbar.addSeparator()
@@ -207,7 +220,7 @@ class SimulationPage(TabWithToolbar):
         # Run
         self.action_run = self.toolbar.addAction(getIcon('play'), 'Run')
         self.action_run.setToolTip('Save the current settings and <b>run the simulation</b> on the input file')
-        self.action_run.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_R))
+        self.action_run.setShortcut(QKeySequence('Ctrl+R'))
         self.action_run.triggered.connect(lambda: self.runSimulation())
 
         # Run progress bar
@@ -220,7 +233,7 @@ class SimulationPage(TabWithToolbar):
         # Run abort
         self.action_abort = self.toolbar.addAction(getIcon('abort'), 'Abort')
         self.action_abort.setToolTip('<b>Abort</b> the currently active simulation')
-        self.action_abort.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_P))
+        self.action_abort.setShortcut(QKeySequence('Ctrl+P'))
         self.action_abort.setEnabled(False)
         self.action_abort.triggered.connect(lambda: self.process.kill())
         self.toolbar.addSeparator()
@@ -228,7 +241,7 @@ class SimulationPage(TabWithToolbar):
         # Run detached
         self.action_run_detached = self.toolbar.addAction(getIcon('play_detached'), 'Run detached')
         self.action_run_detached.setToolTip('Save the current settings and <b>run the simulation</b> on the input file in detached mode.\nThe simulation is run in a separate window, and the GUI can be closed')
-        self.action_run_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.SHIFT | Qt.Key.Key_R))
+        self.action_run_detached.setShortcut(QKeySequence('Ctrl+Shift+R'))
         self.action_run_detached.triggered.connect(lambda: self.runSimulation(detached=True))
 
         # Separator
@@ -291,7 +304,7 @@ class SimulationPage(TabWithToolbar):
         self.beam_composition_vbox = VBoxTitleLayout(self, 'Beam composition', add_stretch=True)
         self.settings_group_layout_beam.addLayout(self.beam_composition_vbox)
 
-        self.table_beam = CompTable(
+        self.table_beam: CompTable = CompTable(
             self,
             comp_count=self.component_count,
             row_fields=self.simulation_class.CompRowBeamSettings.rowFields,
@@ -447,12 +460,12 @@ class SimulationPage(TabWithToolbar):
         self.settings_scroll_area.setWidgetResizable(True)
         self.settings_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.settings_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.settings_scroll_area.setMinimumWidth(self.settings_group_settings.sizeHint().width() + self.settings_scroll_area.verticalScrollBar().sizeHint().width())
+        self.settings_scroll_area.setMinimumWidth(self.settings_group_settings.sizeHint().width() + notNone(self.settings_scroll_area.verticalScrollBar()).sizeHint().width())
         self.settings_scroll_area.setStyleSheet('QScrollArea { border: none; }')
         self.settings_scroll_area.setWidget(self.settings_group_settings)
 
         # transparent background of scroll area; do not set a palette here, since it would not follow theme changes
-        self.settings_scroll_area.viewport().setAutoFillBackground(False)
+        notNone(self.settings_scroll_area.viewport()).setAutoFillBackground(False)
         self.settings_group_settings.setAutoFillBackground(False)
         self.simulation_settings_vbox.addWidget(self.settings_scroll_area)
         self.settings_parent_settings.setLayout(self.simulation_settings_vbox)
@@ -538,8 +551,8 @@ class SimulationPage(TabWithToolbar):
             checkbox=True,
             tooltip='Positive sign will show first lines, negative sign will show last lines. Disable if all lines should be visible'
         )
-        self.layout_output_preview_line_count.checkbox.setMaximumWidth(120)
-        self.layout_output_preview_line_count.checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.layout_output_preview_line_count.check.setMaximumWidth(120)
+        self.layout_output_preview_line_count.check.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.output_preview_line_count.setMaximumWidth(50)
         self.output_preview_line_count.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.output_preview_vbox.hl.addLayout(self.layout_output_preview_line_count)
@@ -637,7 +650,7 @@ class SimulationPage(TabWithToolbar):
         self.general_target_settings.emit()
 
         # redirect emits between all input layouts
-        connections = [
+        connections: List[Any] = [
             self.general_beam_settings,
             self.table_beam,
             self.general_target_settings,
@@ -655,10 +668,10 @@ class SimulationPage(TabWithToolbar):
 
         # compounds
         if self.compound_list is not None:
-            self.table_beam.elementChanged.connect(lambda: self.compound_list.elementChanged())
-            self.table_beam.rowRemoved.connect(lambda: self.compound_list.elementChanged())
-            self.table_target.elementChanged.connect(lambda: self.compound_list.elementChanged())
-            self.table_target.rowRemoved.connect(lambda: self.compound_list.elementChanged())
+            self.table_beam.elementChanged.connect(lambda: notNone(self.compound_list).elementChanged())
+            self.table_beam.rowRemoved.connect(lambda: notNone(self.compound_list).elementChanged())
+            self.table_target.elementChanged.connect(lambda: notNone(self.compound_list).elementChanged())
+            self.table_target.rowRemoved.connect(lambda: notNone(self.compound_list).elementChanged())
 
         # global density
         self.general_target_settings.settingsChanged.connect(lambda dictionary: self.updateGlobalDensity(dictionary))
@@ -685,7 +698,7 @@ class SimulationPage(TabWithToolbar):
         # output file preview
         self.output_files_list.itemSelectionChanged.connect(self.previewSelectedFile)
         self.output_preview_line_count.editingFinished.connect(self.updateOutputFilesList)
-        self.layout_output_preview_line_count.checkbox.clicked.connect(self.updateOutputFilesList)
+        self.layout_output_preview_line_count.check.clicked.connect(self.updateOutputFilesList)
         self.refresh_output_files_button.clicked.connect(self.updateOutputFilesList)
         self.refresh_output_parameters_button.clicked.connect(self.updateOutputParametersList)
         self.open_output_file_button.clicked.connect(self.openSelectedOutputFile)
@@ -724,10 +737,58 @@ class SimulationPage(TabWithToolbar):
         if starting_save_folder:
             self.loadSettings(starting_save_folder)
 
+        # parameter scan of the last session
+        if self.simulation_configuration.scan_enabled:
+            self.scan_checkbox.setChecked(True)
+
+    def setScanEnabled(self, enabled: bool):
+        """
+        Shows or hides the tabs of the parameter scan (they are created when they are shown the first time)
+
+        :param enabled: show the tabs
+        """
+
+        if not enabled and self.scan_page is not None and self.scan_page.isRunning():
+            # a running scan stays visible (it can be aborted in its tab)
+            self.scan_checkbox.blockSignals(True)
+            self.scan_checkbox.setChecked(True)
+            self.scan_checkbox.blockSignals(False)
+            self.main_window.writeStatusBar('The parameter scan is running, abort it before its tabs are hidden')
+            return
+
+        if enabled and self.scan_page is None:
+            from Pages.ParameterScanPage import ParameterScanPage
+
+            self.scan_page = ParameterScanPage(self)
+            self.tab_widget.addTab(self.scan_page, getIcon('scan'), 'Parameter scan')
+            self.tab_widget.addTab(self.scan_page.results, getIcon('chart'), 'Parameter scan results')
+            self.scan_page.setState(self.simulation_configuration.scan_state)
+
+        if self.scan_page is not None:
+            for widget in (self.scan_page, self.scan_page.results):
+                self.tab_widget.setTabVisible(self.tab_widget.indexOf(widget), enabled)
+        self.simulation_configuration.scan_enabled = enabled
+
+    def scanState(self) -> Tuple[bool, dict]:
+        """Returns if the tabs of the parameter scan are shown and the settings of the scan"""
+
+        if self.scan_page is None:
+            return self.simulation_configuration.scan_enabled, self.simulation_configuration.scan_state
+        return self.scan_checkbox.isChecked(), self.scan_page.state()
+
+    def openParameterScan(self):
+        """Shows the tab of the parameter scan"""
+
+        self.scan_checkbox.setChecked(True)
+        if self.scan_page is not None:
+            self.tab_widget.setCurrentWidget(self.scan_page)
+
     def tabChange(self, tab: int):
         """Executed when tabs ara changed"""
 
-        if tab == 1:
+        if self.scan_page is not None and self.tab_widget.widget(tab) is self.scan_page.results:
+            self.scan_page.refreshResults()
+        elif tab == 1:
             self.makePreview()
         elif tab == 3:
             self.updateOutputFilesList()
@@ -765,7 +826,7 @@ class SimulationPage(TabWithToolbar):
         if isinstance(popup_hide, str):
             popup_check_box_text = 'Do not show again'
 
-        if GlobalConf.getValue(popup_hide, default_value=True, type=bool) is False:
+        if isinstance(popup_hide, str) and GlobalConf.getValue(popup_hide, default_value=True, type=bool) is False:
             return
 
         msg_box, _ = showMessageBox(
@@ -784,6 +845,8 @@ class SimulationPage(TabWithToolbar):
         """Connects all process signals"""
 
         self.process.started.connect(self.processStarted)
+        # lower priority, so that the GUI stays responsive while many simulations run
+        self.process.started.connect(lambda: lowerProcessPriority(self.process.processId()))
         self.process.readyRead.connect(self.processReadyRead)
         self.process.errorOccurred.connect(self.processError)
         self.process.finished.connect(self.processFinished)
@@ -800,16 +863,16 @@ class SimulationPage(TabWithToolbar):
 
         existing_elements = []
         if self.group_elements:
-            rows = []
+            rows: List[CompRow] = []
             if typ == 'beam':
                 rows = self.table_beam.rows
             elif typ == 'target':
                 rows = self.table_target.rows
 
-            for row in rows:
-                existing_elements.append(row.element)
+            for other_row in rows:
+                existing_elements.append(other_row.element)
 
-        self.periodic_table_dialog.openDialog(self.dialog_source_row.element, existing_elements)
+        self.periodic_table_dialog.openDialog(row.element, existing_elements)
 
     def periodicTableDialogClosed(self, return_element):
         """
@@ -943,9 +1006,6 @@ class SimulationPage(TabWithToolbar):
         :param ask_delete: (optional) ask before the files of a previous run are deleted
         """
 
-        if not self.simulation_configuration.save_folder:
-            return False
-
         # warnings: the simulation might fail, give wrong results or create large files, the user decides
         if check_warnings:
             warnings = self.runWarnings()
@@ -963,9 +1023,9 @@ class SimulationPage(TabWithToolbar):
                 if result == QMessageBox.StandardButton.Cancel:
                     return False
 
-        # save files
+        # save files (asks for the save folder if the simulation has not been saved yet)
         input_files = self.saveSettings()
-        if not input_files:
+        if not input_files or not self.simulation_configuration.save_folder:
             return False
         input_file = input_files[1]
 
@@ -1217,7 +1277,7 @@ EOF
         self.updateOutputParametersList()
 
         # try to get input files
-        arguments: Union[bool, str, SimulationArguments] = False
+        arguments: Union[Literal[False], str, SimulationArguments] = False
         json_loaded = False
         if from_json:
             arguments = loadSimulationArguments(self.simulation_configuration.save_folder / 'input.json')
@@ -1341,7 +1401,7 @@ EOF
         path.mkdir(parents=True, exist_ok=True)
 
         result = None
-        folder = None
+        folder = path
         while result != QMessageBox.StandardButton.Yes:
             folder_str = QFileDialog.getExistingDirectory(
                 self,
@@ -1434,20 +1494,20 @@ EOF
             path.mkdir(parents=True, exist_ok=True)
 
             result = None
-            folder = ''
+            folder = path
 
             while result != QMessageBox.StandardButton.Yes:
-                folder = QFileDialog.getExistingDirectory(
+                folder_str = QFileDialog.getExistingDirectory(
                     self,
                     'Select the folder where the files will be saved',
                     pathToStr(path)
                 )
 
-                if len(folder) == 0:
+                if len(folder_str) == 0:
                     self.main_window.writeStatusBar('Saving aborted')
                     return None
 
-                folder = Path(folder)
+                folder = Path(folder_str)
 
                 # check if folder contains no files
                 if not folder.exists() or not any(file.is_file() for file in folder.iterdir()):
@@ -1571,7 +1631,7 @@ EOF
         setWidgetHighlight(self.additional_settings, bool(errors))
 
         # mark the lines with problems (the message is shown as tooltip of the line)
-        marked_lines = {}
+        marked_lines: Dict[int, str] = {}
         for error in errors:
             match = findall(r'^Line (\d+): (.*)$', error)
             if match:
@@ -1603,7 +1663,8 @@ EOF
     def isClosable(self) -> bool:
         """Returns if this simulation page can be closed: no unsaved changes and no simulation running"""
 
-        return not (self.simulation_configuration.running or self.simulation_configuration.unsaved_changes)
+        scan_running = self.scan_page is not None and self.scan_page.isRunning()
+        return not (self.simulation_configuration.running or self.simulation_configuration.unsaved_changes or scan_running)
 
     def setRunStatus(self, status: SimulationPage.RunStatus):
         """
@@ -1925,7 +1986,7 @@ EOF
 
         # reselect item
         for i in range(self.output_parameters_list.count()):
-            if self.output_parameters_list.item(i).text() == self.selected_output_parameter:
+            if notNone(self.output_parameters_list.item(i)).text() == self.selected_output_parameter:
                 self.output_parameters_list.setCurrentRow(i)
                 break
 

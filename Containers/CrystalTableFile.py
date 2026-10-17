@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Protocol, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import copy2
@@ -8,7 +8,7 @@ import logging
 import numpy as np
 
 
-class CrystalTableLimitsType:
+class CrystalTableLimitsType(Protocol):
     """Interface of the limits of the crystal table, see <Simulations.SDTrimSP.CrystalTableLimits>"""
 
     max_structures: int
@@ -322,7 +322,7 @@ class CrystalTableFile:
         else:
             number = structure.number
             crystals_end_line = self.crystals_end_line
-            elements = [crystal.elements[i] for i in order]
+            elements = [crystal.elements[i] for i in (order or [])]
 
         new_crystal = TableCrystal(
             name=crystal.name,
@@ -363,9 +363,9 @@ class CrystalTableFile:
 
         basis = np.diag([crystal.dx, crystal.dx, crystal.dz])
         structure = self.structure(crystal.structure)
-        coordinates = {}
+        coordinates: Dict[str, list] = {}
         if structure is None:
-            return basis, coordinates
+            return basis, {}
         for element, position in zip(crystal.elements, structure.positions):
             coordinates.setdefault(element, []).append(position)
         return basis, {element: np.array(positions) for element, positions in coordinates.items()}
@@ -384,6 +384,9 @@ def layerMillerError(miller: list) -> Optional[str]:
         h, k, l = [float(m) for m in miller]
     except (TypeError, ValueError):
         return 'it must consist of three numbers'
+    if h == k == l == 0:
+        return ('(0 0 0) means a polycrystal (average over the orientations), which SDTrimSP only supports for a target '
+                'with one layer (without layer.inp) and one crystal')
     if h <= 0:
         return 'h must be larger than 0'
     if k > h or l > h:

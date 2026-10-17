@@ -30,10 +30,10 @@ class Counter(QObject):
 
     maxReached = pyqtSignal(bool)
 
-    def __init__(self, maximum: int = 1e8):
+    def __init__(self, maximum: int = 100_000_000):
         super().__init__()
         self.maximum = maximum
-        self.entries = []
+        self.entries: list = []
 
     def getNext(self):
         """Get next element of counter"""
@@ -117,7 +117,7 @@ class RepeatingList(list):
     List that acts as repeating list if indices outside the list length are accessed
     """
 
-    def __getitem__(self, item: int):
+    def __getitem__(self, item):  # type: ignore[override]
         item = item % self.__len__()
         return super().__getitem__(item)
 

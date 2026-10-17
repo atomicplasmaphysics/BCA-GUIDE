@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import Any, Dict, List, Literal, Union, Optional
 from pathlib import Path
 from enum import Enum, auto
 from json import dump as json_dump, JSONEncoder, load as json_load
@@ -181,7 +181,7 @@ class GeneralArguments(Arguments):
         mode: ArgumentValues.Mode = ArgumentValues.Mode.STATIC,
         fluence: float = 1,
         threads: int = 0,
-        compounds: List[Compound] = None,
+        compounds: Optional[List[Compound]] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -390,8 +390,8 @@ class SimulationArguments(Arguments):
         structure: List[StructureArguments],
         settings: GeneralArguments,
         additional: list,
-        crystal_args: GeneralCrystalArguments = None,
-        crystal_rows: List[CrystalRowArguments] = None,
+        crystal_args: Optional[GeneralCrystalArguments] = None,
+        crystal_rows: Optional[List[CrystalRowArguments]] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -483,7 +483,7 @@ def saveSimulationArguments(arguments: SimulationArguments, file: Path):
         json_dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
 
 
-def loadSimulationArguments(file: Path) -> Union[bool, SimulationArguments]:
+def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArguments]:
     """
     Load all simulation arguments from file
 
@@ -508,22 +508,22 @@ def loadSimulationArguments(file: Path) -> Union[bool, SimulationArguments]:
             return []
         return possible_list
 
-    def getValue(value, value_type: type, default_value, item=None, assumed_cls: DefaultAssumed = None):
+    def getValue(value, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
         """Returns value if value has type value_type, otherwise return default_value"""
 
         if assumed_cls is None:
-            assumed_cls = []
+            assumed_cls = DefaultAssumed()
         if not isinstance(value, value_type):
             if item is not None:
                 assumed_cls.assumed(item)
             return default_value
         return value
 
-    def getValueCls(value, cls, default_value, item=None, assumed_cls: DefaultAssumed = None):
+    def getValueCls(value, cls, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
         """Returns class member with name value if is class member, otherwise return default_value"""
 
         if assumed_cls is None:
-            assumed_cls = []
+            assumed_cls = DefaultAssumed()
         if not isinstance(value, str):
             if item is not None:
                 assumed_cls.assumed(item)
@@ -581,14 +581,14 @@ def loadSimulationArguments(file: Path) -> Union[bool, SimulationArguments]:
     crystal_args_parameters.update(getDict(data_crystal_args.get('optional')))
     crystal_args = GeneralCrystalArguments(**crystal_args_parameters)
 
-    def rowList(rows_list: dict, typ: str) -> List[RowArguments]:
+    def rowList(rows_data, typ: str) -> List[RowArguments]:
         """Converts the rows_list into a list of <RowArguments>"""
 
-        rows_list = getList(rows_list)
+        rows_list = getList(rows_data)
         rows = []
         for row_dict in [getDict(i) for i in rows_list]:
             # only accept rows with set symbols
-            if not isinstance(row_dict.get('symbol'), str) or not isinstance(row_dict.get('element'), dict) or row_dict.get('element').get('symbol') is None:
+            if not isinstance(row_dict.get('symbol'), str) or not isinstance(row_dict.get('element'), dict) or getDict(row_dict.get('element')).get('symbol') is None:
                 assumed.assumed(f'{typ} row not convertible')
                 continue
             assumed_row = DefaultAssumed()
@@ -617,21 +617,21 @@ def loadSimulationArguments(file: Path) -> Union[bool, SimulationArguments]:
             rows.append(RowArguments(**row_parameters))
         return rows
 
-    def crystalRowList(rows_list: dict, typ: str) -> List[CrystalRowArguments]:
+    def crystalRowList(rows_data, typ: str) -> List[CrystalRowArguments]:
         """Converts the rows_list into a list of <RowArguments>"""
 
-        rows_list = getList(rows_list)
+        rows_list = getList(rows_data)
         rows = []
         for row_dict in [getDict(i) for i in rows_list]:
             # only accept rows with set symbols
-            if not isinstance(row_dict.get('symbol'), str): # or not isinstance(row_dict.get('element'), dict) or row_dict.get('element').get('symbol') is None:
+            if not isinstance(row_dict.get('symbol'), str): # or not isinstance(row_dict.get('element'), dict) or getDict(row_dict.get('element')).get('symbol') is None:
                 assumed.assumed(f'{typ} row not convertible')
                 continue
             assumed_row = DefaultAssumed()
             row_index = row_dict.get('index')
             if row_index is None:
                 row_index = 999
-            row_parameters = {
+            row_parameters: Dict[str, Any] = {
                 'index': row_index,
                 'symbol': row_dict.get('symbol'),
                 'coord': Coordinate(getValue(row_dict.get('coord'), dict, {}, 'coord', assumed_cls=assumed).get('vec'))

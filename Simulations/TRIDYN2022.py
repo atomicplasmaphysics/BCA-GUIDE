@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Dict, Optional
+from typing import Any, List, Union, Tuple, Dict, Optional, Literal
 from pathlib import Path
 from re import findall
 import logging
@@ -9,6 +9,7 @@ import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
 
+from Utility.Colors import paletteColormap
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, DoubleSpinBox, SpinBox, VBoxTitleLayout,
     SpinBoxRange, LineEdit, ComboBox, ListWidget, ListWidgetItem, setWidgetBackground
@@ -18,6 +19,7 @@ from Utility.Functions import (
     fileToNpArray, roundToStr, normalizeList, pathToStr
 )
 from Utility.Indexing import DefaultAssumed, RunningIndex, ElementList
+from Utility.Typing import notNone
 
 from TableWidgets.CompTable import CompRow
 from TableWidgets.CustomTable import CustomRowField
@@ -248,9 +250,9 @@ class HlTargetSettings(HlGeneralTargetSettings):
             checkbox=False,
             disabled=True
         )
-        self.layout_global_density.checkbox.stateChanged.connect(lambda _: self.changedGlobDens())
+        self.layout_global_density.check.stateChanged.connect(lambda _: self.changedGlobDens())
         self.global_density.valueChanged.connect(lambda _: self.changedGlobDens())
-        self.layout_global_density.checkbox.stateChanged.connect(lambda _: self.edited())
+        self.layout_global_density.check.stateChanged.connect(lambda _: self.edited())
         self.global_density.valueChanged.connect(lambda _: self.edited())
         self.addLayout(self.layout_global_density)
         self.addStretch(1)
@@ -293,8 +295,8 @@ class HlTargetSettings(HlGeneralTargetSettings):
     def getArguments(self, *args, **kwargs) -> GeneralTargetArguments:
         """Returns <GeneralTargetArguments> container of parameters for target settings"""
 
-        global_density = False
-        if self.layout_global_density.checkbox.isChecked():
+        global_density: Union[bool, float] = False
+        if self.layout_global_density.check.isChecked():
             global_density = self.global_density.value()
 
         return GeneralTargetArguments(
@@ -343,13 +345,13 @@ class HlTargetSettings(HlGeneralTargetSettings):
         global_density = target_args.get('global_density')
         if global_density is False:
             self.global_density.reset()
-            self.layout_global_density.checkbox.setChecked(False)
+            self.layout_global_density.check.setChecked(False)
         elif isinstance(global_density, float):
             self.global_density.setValue(global_density)
-            self.layout_global_density.checkbox.setChecked(True)
+            self.layout_global_density.check.setChecked(True)
         else:
             self.global_density.reset()
-            self.layout_global_density.checkbox.setChecked(False)
+            self.layout_global_density.check.setChecked(False)
             self.layout_global_density.mark()
             not_loadable.append('Global density')
 
@@ -367,7 +369,7 @@ class HlTargetSettings(HlGeneralTargetSettings):
                 global_density = True
 
             self.layout_global_density.setEnabled(global_density)
-            if global_density and not self.layout_global_density.checkbox.isChecked():
+            if global_density and not self.layout_global_density.check.isChecked():
                 self.global_density.setEnabled(False)
 
 
@@ -444,7 +446,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=DefaultValues.iproj,
             tooltip='<i>coll iproj</i><br>If checked, only the treatment of incident projectiles (no recoil) is calculated. Otherwise all atoms are treated.'
         )
-        self.layout_recoils.checkbox.toggled.connect(lambda _: self.edited())
+        self.layout_recoils.check.toggled.connect(lambda _: self.edited())
         self.addLayout(self.layout_recoils)
 
         # inelastic loss model
@@ -502,8 +504,8 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>pspr nh</i><br>How many pseudo-particles will be simulated in the run. Either <i>pspr nh</i> or <i>prec prcs</i> can be defined'
         )
         self.projectiles.valueChanged.connect(lambda _: self.edited())
-        self.layout_projectiles.checkbox.toggled.connect(lambda _: self.edited())
-        self.layout_projectiles.checkbox.toggled.connect(lambda _: self.updatePrecisionOrProjectiles(precision=False))
+        self.layout_projectiles.check.toggled.connect(lambda _: self.edited())
+        self.layout_projectiles.check.toggled.connect(lambda _: self.updatePrecisionOrProjectiles(precision=False))
         self.addLayout(self.layout_projectiles)
 
         # precision
@@ -520,8 +522,8 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>prec prcs</i><br>Represents the relative change of the average areal density in a depth interval per added or removed pseudoatom. Either <i>pspr nh</i> or <i>prec prcs</i> can be defined'
         )
         self.precision.valueChanged.connect(lambda _: self.edited())
-        self.layout_precision.checkbox.toggled.connect(lambda _: self.edited())
-        self.layout_precision.checkbox.toggled.connect(lambda _: self.updatePrecisionOrProjectiles(precision=True))
+        self.layout_precision.check.toggled.connect(lambda _: self.edited())
+        self.layout_precision.check.toggled.connect(lambda _: self.updatePrecisionOrProjectiles(precision=True))
         self.addLayout(self.layout_precision)
 
         # fluence
@@ -626,7 +628,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=False,
             tooltip='<i>outl incd scat</i><br>Compute the angle and energy distributions of reflected projectiles and write them to output files'
         )
-        self.layout_reflected_projectiles.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_reflected_projectiles.check.clicked.connect(lambda _: self.edited())
         self.additionalGrid.addLayout(self.layout_reflected_projectiles, 2, 0)
 
         # sputtered recoils
@@ -636,7 +638,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=False,
             tooltip='<i>outl incd sput</i><br>Compute the angle and energy distributions of sputtered recoil atoms and write them to output files'
         )
-        self.layout_sputtered_recoils.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_sputtered_recoils.check.clicked.connect(lambda _: self.edited())
         self.additionalGrid.addLayout(self.layout_sputtered_recoils, 3, 0)
 
         """
@@ -830,15 +832,15 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         """Either precision or projectiles can be set"""
 
         if precision is True:
-            precision = self.layout_precision.checkbox.isChecked()
+            precision = self.layout_precision.check.isChecked()
         else:
-            precision = not self.layout_projectiles.checkbox.isChecked()
+            precision = not self.layout_projectiles.check.isChecked()
 
         self.projectiles.setEnabled(not precision)
-        self.layout_projectiles.checkbox.setChecked(not precision)
+        self.layout_projectiles.check.setChecked(not precision)
 
         self.precision.setEnabled(precision)
-        self.layout_precision.checkbox.setChecked(precision)
+        self.layout_precision.check.setChecked(precision)
 
     def updateIntegralFrequency(self):
         """Updates the value of the integralFrequency input field"""
@@ -910,7 +912,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         outp = True
 
         mode = self.calculation_method.getValue(save=True)
-        no_recoils = self.layout_recoils.checkbox.isChecked()
+        no_recoils = self.layout_recoils.check.isChecked()
         if mode == ArgumentValues.Mode.STATIC:
 
             outl.append('rang')
@@ -924,17 +926,17 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             outl.extend(['incd', 'rang', 'scat', 'rrlv'])
 
         vacancy_level = DefaultValues.dmg0
-        if self.layout_vacancy_level.checkbox.isChecked():
+        if self.layout_vacancy_level.check.isChecked():
             vacancy_level = self.vacancy_level.value()
 
-        precision = self.layout_precision.checkbox.isChecked()
+        precision: Union[bool, float] = self.layout_precision.check.isChecked()
         if precision:
             precision = self.precision.value()
 
-        if self.layout_reflected_projectiles.checkbox.isChecked():
+        if self.layout_reflected_projectiles.check.isChecked():
             outl.extend(['incd', 'scat'])
 
-        if self.layout_sputtered_recoils.checkbox.isChecked():
+        if self.layout_sputtered_recoils.check.isChecked():
             outl.extend(['incd', 'sput'])
 
         # outputs of a loaded input file
@@ -1046,7 +1048,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             iproj = DefaultValues.iproj
             self.layout_recoils.mark()
             not_loadable.append('Recoil suppression')
-        self.layout_recoils.checkbox.setChecked(iproj)
+        self.layout_recoils.check.setChecked(iproj)
 
         # inelastic loss model
         inel = settings.get('inelastic_loss_model')
@@ -1078,7 +1080,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
                 not_loadable.append('Pseudo-particles')
         if isinstance(hist, int):
             nh = nh * hist
-        self.layout_projectiles.checkbox.setChecked(True)
+        self.layout_projectiles.check.setChecked(True)
         self.projectiles.setValue(nh)
 
         # precision
@@ -1092,7 +1094,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
                 not_loadable.append('Precision')
         else:
             self.precision.setValue(prcs)
-            self.layout_precision.checkbox.setChecked(True)
+            self.layout_precision.check.setChecked(True)
 
         # fluence
         flct = settings.fluence
@@ -1117,7 +1119,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             self.layout_vacancy_level.mark()
             not_loadable.append('Vacancy level')
         self.vacancy_level.setValue(dmg0)
-        self.layout_vacancy_level.checkbox.setChecked(dmg0 != 0)
+        self.layout_vacancy_level.check.setChecked(dmg0 != 0)
 
         # frequency log output
         idfout = settings.get('log_frequency')
@@ -1152,17 +1154,17 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         }
 
         # reflected projectiles and sputtered recoils
-        self.layout_reflected_projectiles.checkbox.setChecked(all(item in outl for item in ['incd', 'scat']))
-        self.layout_sputtered_recoils.checkbox.setChecked(all(item in outl for item in ['incd', 'sput']))
+        self.layout_reflected_projectiles.check.setChecked(all(item in outl for item in ['incd', 'scat']))
+        self.layout_sputtered_recoils.check.setChecked(all(item in outl for item in ['incd', 'sput']))
 
         if settings.get('log_reflected'):
-            self.layout_reflected_projectiles.checkbox.setChecked(True)
+            self.layout_reflected_projectiles.check.setChecked(True)
 
         if settings.get('log_sputtered'):
-            self.layout_sputtered_recoils.checkbox.setChecked(True)
+            self.layout_sputtered_recoils.check.setChecked(True)
 
         if idrel == ArgumentValues.Mode.DYNAMIC:
-            self.layout_reflected_projectiles.checkbox.setChecked(True)
+            self.layout_reflected_projectiles.check.setChecked(True)
 
         """
         # profile outputs
@@ -1463,7 +1465,7 @@ class CompRowBeamSettings(CompRow):
 
         self.action_switch.setDisabled(True)
         self.action_switch.currentIndexChanged.connect(self.contentChanged.emit)
-        self.action_switch.mouseReleaseEvent = lambda _: setWidgetBackground(self.action_switch, False)
+        self.action_switch.mouseReleaseEvent = lambda _: setWidgetBackground(self.action_switch, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
 
         # kinetic energy mode
         """
@@ -1492,7 +1494,7 @@ class CompRowBeamSettings(CompRow):
         for i in range(self.modeKineticEnergy.count()):
             self.modeKineticEnergy.setItemData(i, self.modeKineticEnergyTooltips[i], Qt.ToolTipRole)
         self.modeKineticEnergy.setCurrentIndex(DefaultValues.ie0 + 1)
-        self.modeKineticEnergy.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeKineticEnergy, False)
+        self.modeKineticEnergy.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeKineticEnergy, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
         """
 
         # kinetic energy ramp end
@@ -1533,7 +1535,7 @@ class CompRowBeamSettings(CompRow):
         for i in range(self.modeAngle.count()):
             self.modeAngle.setItemData(i, self.modeAngleTooltips[i], Qt.ToolTipRole)
         self.modeAngle.setCurrentIndex(DefaultValues.alpha)
-        self.modeAngle.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeAngle, False)
+        self.modeAngle.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeAngle, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
         """
 
         # incident angle parameter 1
@@ -1701,7 +1703,7 @@ class CompRowBeamSettings(CompRow):
             # angle_param2=self.angleParam2.value()  # angd adpar2
         )
 
-    def setArguments(self, arguments: RowArguments, general_arguments: SimulationArguments):
+    def setArguments(self, arguments: RowArguments, general_arguments: Union[SimulationArguments, GeneralArguments]):
         """Sets <RowArguments> container of parameters for row"""
 
         assumed = arguments.get('assumed')
@@ -3480,7 +3482,7 @@ Wolfhard Möller
         self.element_data_default = False
 
     @staticmethod
-    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, bool]:
+    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, Literal[False]]:
         """
         Returns version of simulation depending on selected folder and binary or False if no version can be determined
 
@@ -3795,11 +3797,7 @@ Wolfhard Möller
 
             additions += f'\n{addition}'
 
-        if cmpd:
-            cmpd_line = '\ncmpd '
-            cmpd = cmpd_line + cmpd_line.join(cmpd)
-        else:
-            cmpd = ''
+        cmpd_text = ''.join(f'\ncmpd {compound}' for compound in cmpd)
 
         if outi:
             output += f'\nouti{outi}'
@@ -3814,7 +3812,7 @@ cdat {iq0} {flct} {idrel}
 geom {xmax} {nqx} {dthf}
 atda {atda}{comp}
 {irra.strip()}
-# optional control parameters{cmpd}
+# optional control parameters{cmpd_text}
 thrd {nrthr}{pspr}{prec}
 coll {iwc} {iproj}
 damg {dmg0}{modifications}
@@ -3874,7 +3872,7 @@ fout {idfout} {iddout} {idqout}{output}
 
         return f'{layer_info_total.strip()}\n'
 
-    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
+    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, Literal[False]]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
         Returns string of error if input file can not be opened
@@ -3922,11 +3920,11 @@ fout {idfout} {iddout} {idqout}{output}
             except IndexError:
                 return None
 
-        def getValue(value: str, value_type: type, default_value, item=None, assumed_cls: DefaultAssumed = None):
+        def getValue(value: str, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
             """Returns value if value has type value_type, otherwise return default_value"""
 
             if assumed_cls is None:
-                assumed_cls = []
+                assumed_cls = DefaultAssumed()
             try:
                 value = value_type(value)
                 return value
@@ -3935,11 +3933,11 @@ fout {idfout} {iddout} {idqout}{output}
                     assumed_cls.assumed(item)
                 return default_value
 
-        def getValueDict(value: str, lookup_dict: dict, default_value, item=None, assumed_cls: DefaultAssumed = None):
+        def getValueDict(value: str, lookup_dict: dict, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
             """Returns class member with name value if is class member, otherwise return default_value"""
 
             if assumed_cls is None:
-                assumed_cls = []
+                assumed_cls = DefaultAssumed()
             try:
                 return [k for k, v in lookup_dict.items() if v == int(value)][0]
             except (ValueError, IndexError):
@@ -3947,11 +3945,11 @@ fout {idfout} {iddout} {idqout}{output}
                     assumed_cls.assumed(item)
                 return [k for k, v in lookup_dict.items() if v == default_value][0]
 
-        def getValueList(values: list, value_type, default_value, item=None, lookup_dict=None, assumed_cls: DefaultAssumed = None) -> list:
+        def getValueList(values: list, value_type, default_value, item=None, lookup_dict=None, assumed_cls: Optional[DefaultAssumed] = None) -> list:
             """Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value"""
 
             if assumed_cls is None:
-                assumed_cls = []
+                assumed_cls = DefaultAssumed()
             values_out = []
             if lookup_dict is None:
                 lookup_dict = {}
@@ -3975,7 +3973,8 @@ fout {idfout} {iddout} {idqout}{output}
         title = getValue(contents[0], str, f'TRIDYN{dateStr("%d%m")}', 'title', assumed_cls=assumed)
         iq0 = DefaultValues.iq0
         flct = DefaultValues.flct
-        idrel = DefaultValues.idrel
+        # mode of the default value of idrel
+        idrel = next((mode for mode, value in DictLookup.idrel.items() if value == DefaultValues.idrel), ArgumentValues.Mode.DYNAMIC)
         xmax = DefaultValues.xmax
         nqx = DefaultValues.nqx
         dthf = DefaultValues.dthf
@@ -3986,7 +3985,7 @@ fout {idfout} {iddout} {idqout}{output}
         qubeam = {}
         # TRIDYN uses all processors if "thrd" is not given (nrthr = 0)
         nrthr = 0
-        nh = -1
+        nh: Union[int, float] = -1
         iwc = DefaultValues.iwc
         iproj = 0 - int(DefaultValues.iproj)
         dmg0 = DefaultValues.dmg0
@@ -4000,7 +3999,7 @@ fout {idfout} {iddout} {idqout}{output}
         inel = DefaultValues.inel
         qumax = {}
         ires = {}
-        prcs = -1
+        prcs: Union[float, bool] = -1
         # defaults of TRIDYN if "fout" is not given
         idfout, iddout, idqout = 100, 50, 10
         outp = False
@@ -4219,8 +4218,8 @@ fout {idfout} {iddout} {idqout}{output}
                     raise FileNotFoundError(self.LayerFilename)
 
                 with open(folder / layer_file, 'r', encoding='utf-8', errors='replace') as file:
-                    last_content = []
-                    last_abundances = False
+                    last_content: List[str] = []
+                    last_abundances: Optional[List[float]] = None
                     segment_count = 0
                     extended_lines = file.readlines()
                     extended_lines.append('end')
@@ -4230,24 +4229,22 @@ fout {idfout} {iddout} {idqout}{output}
                             continue
 
                         if line != 'end':
-                            content = [sp.strip() for sp in line.split(' ') if sp.strip()]
-                            if len(content) < ncp:
+                            layer_content = [sp.strip() for sp in line.split(' ') if sp.strip()]
+                            if len(layer_content) < ncp:
                                 if error_layer not in error_list:
                                     error_list.append(error_layer)
                                 continue
 
-                            abundances = content[:ncp]
-
                             try:
-                                abundances = [float(a) for a in abundances]
+                                abundances = [float(a) for a in layer_content[:ncp]]
                             except ValueError:
                                 if error_layer not in error_list:
                                     error_list.append(error_layer)
                                 continue
 
-                            if last_abundances is False:
+                            if last_abundances is None:
                                 last_abundances = abundances
-                                last_content = content
+                                last_content = layer_content
 
                             if abundances == last_abundances:
                                 segment_count += 1
@@ -4260,6 +4257,10 @@ fout {idfout} {iddout} {idqout}{output}
                         if not segment_count:
                             segment_count = 1
 
+                        if last_abundances is None:
+                            # empty layer file
+                            break
+
                         structure.append(StructureArguments(
                             name=name,
                             segments=segment_count,
@@ -4268,7 +4269,7 @@ fout {idfout} {iddout} {idqout}{output}
                         ))
 
                         last_abundances = abundances
-                        last_content = content
+                        last_content = layer_content
                         segment_count = 1
 
             except FileNotFoundError:
@@ -4429,8 +4430,7 @@ fout {idfout} {iddout} {idqout}{output}
         else:
             target_indices = [i for i, c in enumerate(comp) if c]
             for struct in structure:
-                abundances = [sa for i, sa in enumerate(struct.abundances) if i in target_indices]
-                struct.abundances = abundances
+                struct.abundances = [sa for i, sa in enumerate(struct.abundances) if i in target_indices]
 
         simulation = SimulationArguments(
             simulation=self.Name,
@@ -4456,7 +4456,7 @@ fout {idfout} {iddout} {idqout}{output}
         :return: list of errors
         """
 
-        errors = []
+        errors: List[str] = []
 
         if not settings:
             return errors
@@ -4515,7 +4515,7 @@ fout {idfout} {iddout} {idqout}{output}
                         errors.append(f'Line {i + 1}: variable "{content[0]}" has wrong arguments (should be "{content[0]} {arguments}")')
                 continue
 
-            data_type = str
+            data_type: type = str
             try:
                 float(content[1])
                 data_type = float
@@ -4595,6 +4595,8 @@ class SimulationOutput(SimulationsOutput):
 
     # References to classes
     HlPlot = HlPlot
+
+    analysis: 'SimulationAnalysis'
     
     def __init__(self, plot: MplCanvas, element_data: Elements, title_label: VBoxTitleLayout):
         self.analysis = SimulationAnalysis(element_data)
@@ -4922,16 +4924,16 @@ class SimulationAnalysis(SimulationsAnalysis):
         super().__init__(element_data)
 
         self.is_dynamic = False
-        self.initial_protocol = {}
+        self.initial_protocol: Dict[str, Any] = {}
 
-        self.scattered_data: List[Tuple[np.ndarray]] = []
-        self.sputtered_data: List[Tuple[np.ndarray]] = []
+        self.scattered_data: List[Optional[tuple]] = []
+        self.sputtered_data: List[Optional[tuple]] = []
 
-        self.depth_profile_data = ()
+        self.depth_profile_data: tuple = ()
 
-        self.fluence_array = None
-        self.depth_array = None
-        self.conc_array = None
+        self.fluence_array: Optional[np.ndarray] = None
+        self.depth_array: Optional[np.ndarray] = None
+        self.conc_array: Optional[np.ndarray] = None
         
     def reset(self):
         """Reset class"""
@@ -4978,8 +4980,8 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         for c in cp:
             element = self.element_data.elementFromNr(c['zz'])
-            elements.append(element.symbol)
-            masses.append(element.atomic_mass)
+            elements.append(notNone(element).symbol)
+            masses.append(notNone(element).atomic_mass)
 
         self.elements = elements
         self.masses = np.array(masses)
@@ -5017,7 +5019,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         if not protocol:
             return None
 
-        result = {}
+        result: Dict[str, Any] = {}
 
         try:
             with open(self.save_folder / protocol, 'r', encoding='utf-8', errors='replace') as file:
@@ -5069,7 +5071,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
                 cp = []
                 for _ in range(result['ncp']):
-                    cp_result = {}
+                    cp_result: Dict[str, Any] = {}
 
                     # 'zz', 'm', 'be', 'ef', 'ed', 'qu0', 'dns0', 'ck', 'ircsp'
                     contents = file.readline().strip().split()
@@ -5096,7 +5098,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
                 ir = []
                 for _ in range(result['nirr']):
-                    ir_result = {}
+                    ir_result: Dict[str, Any] = {}
 
                     # 'ircp', 'ie0', 'e0', 'ef0', 'alpha0', 'qubeam', 'iadis', 'adpar'
                     contents = file.readline().strip().split()
@@ -5152,7 +5154,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         implantation = np.zeros(len(self.elements))
         energy_loss = np.zeros((len(self.elements), 3))
         particles = np.zeros(len(self.elements))
-        launched_total = 0
+        launched_total = 0.
 
         try:
             with open(self.save_folder / protocol, 'r', encoding='utf-8', errors='replace') as file:
@@ -5242,7 +5244,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         return data[:, 0], data[:, 1:]
 
-    def getDepthProfile(self) -> Optional[Tuple[np.ndarray, ...]]:
+    def getDepthProfile(self) -> Optional[tuple]:
         """
         Returns all depth profile outputs (*_prXXX.dat files data)
 
@@ -5296,8 +5298,8 @@ class SimulationAnalysis(SimulationsAnalysis):
         layer_depth = np.zeros((new_profiles, layers))
         atomic_density = np.zeros((new_profiles, layers))
 
-        interstitial = None
-        vacancies = None
+        interstitial: Optional[np.ndarray] = None
+        vacancies: Optional[np.ndarray] = None
         damg = columns - 2 - len(self.elements)
         if damg:
             interstitial = np.zeros((new_profiles, layers))
@@ -5306,10 +5308,10 @@ class SimulationAnalysis(SimulationsAnalysis):
         atomic_fractions = np.zeros((len(self.elements), new_profiles, layers))
 
         for i, profile in enumerate(profiles):
-            profile = self.save_folder / profile
+            profile_path = self.save_folder / profile
 
             try:
-                with open(profile, 'r', encoding='utf-8', errors='replace') as file:
+                with open(profile_path, 'r', encoding='utf-8', errors='replace') as file:
                     swelling_shrinking[i] = float(file.readline().strip().split()[0].replace('D', 'E'))
 
                     partial_fluence = [float(flcp.replace('D', 'E')) for flcp in file.readline().strip().split()]
@@ -5321,17 +5323,17 @@ class SimulationAnalysis(SimulationsAnalysis):
                     reemitted[i] = np.array([float(reem.replace('D', 'E')) for reem in file.readline().strip().split()])
 
                     # numpy genfromtxt is very slow
-                    # data = np.genfromtxt(profile, skip_header=5)
-                data = fileToNpArray(profile, skip_header=5)
+                    # data = np.genfromtxt(profile_path, skip_header=5)
+                data = fileToNpArray(profile_path, skip_header=5)
 
             except FileNotFoundError:
-                logging.info(f'Could not open file "{profile}"!')
+                logging.info(f'Could not open file "{profile_path}"!')
                 continue
 
             layer_depth[i] = data[:, 0]
             atomic_density[i] = data[:, 1]
 
-            if damg:
+            if interstitial is not None and vacancies is not None:
                 interstitial[i] = data[:, 2]
                 vacancies[i] = data[:, 3]
 
@@ -5529,7 +5531,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         if len(self.scattered_data) != len(self.elements):
-            self.scattered_data: List[Optional[Tuple]] = [None] * len(self.elements)
+            self.scattered_data = [None] * len(self.elements)
 
         old_length = 0
         for sd in self.scattered_data:
@@ -5549,7 +5551,8 @@ class SimulationAnalysis(SimulationsAnalysis):
             if i not in range(len(self.elements)):
                 continue
             mask = np.where(data[:, 0] == e)
-            if self.scattered_data[i] is None:
+            old = self.scattered_data[i]
+            if old is None:
                 self.scattered_data[i] = (
                     data[mask][:, 1],
                     data[mask][:, 2],
@@ -5559,11 +5562,11 @@ class SimulationAnalysis(SimulationsAnalysis):
                 )
             else:
                 self.scattered_data[i] = (
-                    np.append(self.scattered_data[i][0], data[mask][:, 1], axis=0),
-                    np.append(self.scattered_data[i][1], data[mask][:, 2], axis=0),
-                    np.append(self.scattered_data[i][2], data[mask][:, 3], axis=0),
-                    np.append(self.scattered_data[i][3], data[mask][:, 4:7], axis=0),
-                    np.append(self.scattered_data[i][4], data[mask][:, 7:10], axis=0)
+                    np.append(old[0], data[mask][:, 1], axis=0),
+                    np.append(old[1], data[mask][:, 2], axis=0),
+                    np.append(old[2], data[mask][:, 3], axis=0),
+                    np.append(old[3], data[mask][:, 4:7], axis=0),
+                    np.append(old[4], data[mask][:, 7:10], axis=0)
                 )
 
         return self.scattered_data
@@ -5591,7 +5594,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
 
         if len(self.sputtered_data) != len(self.elements):
-            self.sputtered_data: List[Optional[Tuple]] = [None] * len(self.elements)
+            self.sputtered_data = [None] * len(self.elements)
 
         old_length = 0
         for sd in self.sputtered_data:
@@ -5611,7 +5614,8 @@ class SimulationAnalysis(SimulationsAnalysis):
             if i not in range(len(self.elements)):
                 continue
             mask = np.where(data[:, 0] == e)
-            if self.sputtered_data[i] is None:
+            old = self.sputtered_data[i]
+            if old is None:
                 self.sputtered_data[i] = (
                     data[mask][:, 1],
                     data[mask][:, 2],
@@ -5624,14 +5628,14 @@ class SimulationAnalysis(SimulationsAnalysis):
                 )
             else:
                 self.sputtered_data[i] = (
-                    np.append(self.sputtered_data[i][0], data[mask][:, 1], axis=0),
-                    np.append(self.sputtered_data[i][1], data[mask][:, 2], axis=0),
-                    np.append(self.sputtered_data[i][2], data[mask][:, 3], axis=0),
-                    np.append(self.sputtered_data[i][3], data[mask][:, 4:7], axis=0),
-                    np.append(self.sputtered_data[i][4], data[mask][:, 7:10], axis=0),
-                    np.append(self.sputtered_data[i][5], data[mask][:, 10], axis=0),
-                    np.append(self.sputtered_data[i][6], data[mask][:, 11:14], axis=0),
-                    np.append(self.sputtered_data[i][7], data[mask][:, 14:17], axis=0)
+                    np.append(old[0], data[mask][:, 1], axis=0),
+                    np.append(old[1], data[mask][:, 2], axis=0),
+                    np.append(old[2], data[mask][:, 3], axis=0),
+                    np.append(old[3], data[mask][:, 4:7], axis=0),
+                    np.append(old[4], data[mask][:, 7:10], axis=0),
+                    np.append(old[5], data[mask][:, 10], axis=0),
+                    np.append(old[6], data[mask][:, 11:14], axis=0),
+                    np.append(old[7], data[mask][:, 14:17], axis=0)
                 )
 
         return self.sputtered_data
@@ -5884,7 +5888,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         deposited_data = self.getDepositedData()
         initial_data = self.initial_protocol
 
-        if None in [yield_data, deposited_data, initial_data]:
+        if yield_data is None or deposited_data is None:
             mpl_settings = MplCanvasSettings()
             mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
@@ -5946,7 +5950,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         incident_data = self.getIncidentData()
         initial_data = self.initial_protocol
 
-        if None in [incident_data, initial_data]:
+        if incident_data is None:
             mpl_settings = MplCanvasSettings()
             mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
@@ -5975,7 +5979,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         if scattered_data is not None:
             for i, (element, scatter, incident) in enumerate(zip(self.elements, scattered_data, incident_data)):
-                if None in [scatter, incident]:
+                if scatter is None or incident is None:
                     continue
 
                 (proj_number_scatter,
@@ -6018,7 +6022,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         reemitted_data = self.getReemittedData()
         initial_data = self.initial_protocol
 
-        if None in [reemitted_data, initial_data]:
+        if reemitted_data is None:
             mpl_settings = MplCanvasSettings()
             mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
@@ -6184,7 +6188,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     @staticmethod
-    def plotPolar(cosines: np.array, mpl_settings: MplCanvasSettings, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotPolar(cosines: np.ndarray, mpl_settings: MplCanvasSettings, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return backscattered/backsputtered particles of element"""
 
         data = []
@@ -6213,7 +6217,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         mpl_settings.axes.set_theta_direction(-1)
         mpl_settings.axes.set_theta_zero_location('E')
         mpl_settings.axes.set_yticklabels([])
-        mpl_settings.axes.pcolormesh(a, r, hist.T, cmap='viridis', zorder=-1, vmin=0.)
+        mpl_settings.axes.pcolormesh(a, r, hist.T, cmap=paletteColormap(), zorder=-1, vmin=0.)
         mpl_settings.axes.pcolormesh_label('Distribution of Particles [1/sr]', rotation=90)
 
         plot_labels.append('Rows: polar angles [°], columns: azimuthal angles [°], distribution of particles in [1/sr], first row/column gives the respective angle (center of the bin of the histogram), polar bins are chosen so that all bins have the same solid angle')
@@ -6433,7 +6437,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         return (data, plot_labels), mpl_settings
 
-    def plotParticlesPolar(self, cosines_array: List[np.ndarray], mpl_settings: MplCanvasSettings) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotParticlesPolar(self, cosines_array: List[Optional[np.ndarray]], mpl_settings: MplCanvasSettings) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return data of backscattered/backsputtered particles"""
 
         data = []
@@ -6503,7 +6507,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        cosines_array = []
+        cosines_array: List[Optional[np.ndarray]] = []
         for data in scattered_data:
             if data is None:
                 cosines_array.append(None)
@@ -6539,7 +6543,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             mpl_settings.axes.set_title('No data found')
             return None, mpl_settings
 
-        cosines_array = []
+        cosines_array: List[Optional[np.ndarray]] = []
         for data in sputtered_data:
             if data is None:
                 cosines_array.append(None)

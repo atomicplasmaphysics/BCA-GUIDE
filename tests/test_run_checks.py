@@ -229,3 +229,10 @@ def test_run_all_queue(main_window, qapp, monkeypatch):
         main_window.simulationFinished(page)
     assert started == ['a', 'b', 'c', 'd']
     assert 'finished' in main_window.statusBar().currentMessage()
+
+
+def test_polycrystal_only_without_layers():
+    """(0 0 0) means a polycrystal, SDTrimSP supports it only without layer.inp (iq0 = 0)"""
+
+    error = layerMillerError([0, 0, 0])
+    assert error is not None and 'polycrystal' in error and 'one layer' in error

@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -13,6 +13,7 @@ from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalT
 
 from Utility.CrystalImport import importCrystal, CrystalImportError, ImportedCrystal
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 
 class NewCrystalDialog(QDialog):
@@ -126,7 +127,7 @@ class NewCrystalDialog(QDialog):
 
         self.atoms = QTableWidget(0, 4)
         self.atoms.setHorizontalHeaderLabels(['Element', 'a₁', 'a₂', 'a₃'])
-        self.atoms.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        notNone(self.atoms.horizontalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.atoms.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.atoms.setMinimumHeight(220)
         layout.addWidget(self.atoms)
@@ -138,7 +139,7 @@ class NewCrystalDialog(QDialog):
         layout.addWidget(self.validation)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        self.buttons.button(QDialogButtonBox.StandardButton.Save).setText('Save to table.crystal')
+        notNone(self.buttons.button(QDialogButtonBox.StandardButton.Save)).setText('Save to table.crystal')
         self.buttons.accepted.connect(self.save)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
@@ -189,10 +190,11 @@ class NewCrystalDialog(QDialog):
         """Returns elements and positions of the atoms"""
 
         elements = []
-        positions = []
+        positions: List[Tuple[float, float, float]] = []
         for row in range(self.atoms.rowCount()):
-            elements.append(self.atoms.cellWidget(row, 0).currentText())
-            positions.append(tuple(self.atoms.cellWidget(row, column).value() for column in (1, 2, 3)))
+            elements.append(cast(QComboBox, self.atoms.cellWidget(row, 0)).currentText())
+            x, y, z = (cast(QDoubleSpinBox, self.atoms.cellWidget(row, column)).value() for column in (1, 2, 3))
+            positions.append((x, y, z))
         return elements, positions
 
     def structureChanged(self, elements: Optional[List[str]] = None):
@@ -210,14 +212,14 @@ class NewCrystalDialog(QDialog):
             else:
                 for row in range(self.atoms.rowCount()):
                     for column in (1, 2, 3):
-                        self.atoms.cellWidget(row, column).setEnabled(True)
+                        notNone(self.atoms.cellWidget(row, column)).setEnabled(True)
             self.validate()
             return
 
         old_elements, _ = self.atomsList()
         structure = self.table_file.structure(number)
         self.atoms.setRowCount(0)
-        for i, position in enumerate(structure.positions):
+        for i, position in enumerate(notNone(structure).positions):
             element = ''
             if elements is not None and i < len(elements):
                 element = elements[i]
@@ -256,7 +258,7 @@ class NewCrystalDialog(QDialog):
         errors = self.table_file.validateCrystal(crystal, positions)
         if len(positions) > self.table_file.limits.max_atoms:
             errors.append(f'At most {self.table_file.limits.max_atoms} atoms are possible')
-        seen = []
+        seen: List[Tuple[float, float, float]] = []
         for position in positions:
             if any(all(abs(a - b) < 1e-4 for a, b in zip(position, other)) for other in seen):
                 errors.append('Two atoms have the same position')
@@ -264,7 +266,7 @@ class NewCrystalDialog(QDialog):
             seen.append(position)
 
         self.validation.setText('<br>'.join(errors))
-        self.buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(not errors)
+        notNone(self.buttons.button(QDialogButtonBox.StandardButton.Save)).setEnabled(not errors)
         return not errors
 
     def importFile(self):
@@ -310,7 +312,7 @@ class NewCrystalDialog(QDialog):
         self.dz.setValue(c)
 
         structure, order = self.table_file.findStructure(imported.positions)
-        if structure is not None:
+        if structure is not None and order is not None:
             elements = [imported.elements[i] for i in order]
             self.structure.blockSignals(True)
             self.structure.setCurrentIndex(self.structure.findData(structure.number))

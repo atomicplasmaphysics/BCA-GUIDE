@@ -21,9 +21,9 @@ from platform import system
 import logging
 
 
-from PyQt6.QtCore import Qt, QSize, QRect
+from PyQt6.QtCore import Qt, QSize, QRect, QPoint
 from PyQt6.QtWidgets import QApplication, QSplashScreen
-from PyQt6.QtGui import QIcon, QColor
+from PyQt6.QtGui import QIcon, QColor, QGuiApplication
 
 import resources  # noqa: F401 (registers the resources of Qt)
 
@@ -56,8 +56,12 @@ def main():
     app = QApplication(argv)
     app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
 
-    # get splash size
-    screen = app.primaryScreen().availableVirtualGeometry()
+    # the splash screen is shown on the display of the main window (saved center of the window), otherwise on the primary one
+    x, y = GlobalConf.getWindowCenter()
+    display = QGuiApplication.screenAt(QPoint(x, y)) if (x, y) != (0, 0) else None
+    if display is None:
+        display = app.primaryScreen()
+    screen = display.availableGeometry()
     splash_size = QSize(min(620, int(screen.width() * 0.5)), min(300, int(screen.height() * 0.5)))
 
     # show splashscreen on startup
@@ -70,7 +74,10 @@ def main():
         font_size=22
     )
     pixmap = pixmap.scaled(splash_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-    splash = QSplashScreen(pixmap)
+    splash = QSplashScreen(display, pixmap)
+    splash_geometry = splash.frameGeometry()
+    splash_geometry.moveCenter(screen.center())
+    splash.move(splash_geometry.topLeft())
     splash.show()
     app.processEvents()
     main_window = MainWindow(app)

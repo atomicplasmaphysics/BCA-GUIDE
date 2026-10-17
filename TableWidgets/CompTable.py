@@ -5,11 +5,22 @@ from PyQt6.QtWidgets import QComboBox, QPushButton, QDoubleSpinBox, QSpinBox
 
 from Utility.ModifyWidget import setWidgetHighlight, widgetGetValue, widgetSetValue
 from Utility.Functions import limitSum
+from Utility.Typing import notNone
 
 from TableWidgets.CustomTable import CustomRowField, CustomRow, CustomTable
 
 from Containers.Arguments import RowArguments, GeneralArguments, SimulationArguments
 from Containers.Element import Element, Elements
+
+
+def setSpinboxValue(spinbox: Union[QSpinBox, QDoubleSpinBox], value: float):
+    """Sets the value of a spinbox (integer spinboxes need an int)"""
+
+    if isinstance(spinbox, QSpinBox):
+        spinbox.setValue(int(round(value)))
+    else:
+        spinbox.setValue(value)
+
 
 
 class CompRow(CustomRow):
@@ -23,6 +34,8 @@ class CompRow(CustomRow):
     elementChanged = pyqtSignal(Element)
     limitedObjectChanged = pyqtSignal(bool)
     selectElementText = '...'
+    # fields of the row (defined by the rows of the simulations)
+    rowFields: List[CustomRowField] = []
 
     def __init__(self, row_fields: List[CustomRowField], element=Element(), **kwargs):
         super().__init__()
@@ -142,7 +155,7 @@ class CompRow(CustomRow):
             return
 
         if spinbox.isEnabled() and spinbox.value() < 0:
-            spinbox.setValue(default_value)
+            setSpinboxValue(spinbox, default_value)
 
     def updateHighlightAndResetSpinbox(self, spinbox: Union[QSpinBox, QDoubleSpinBox], default_value: float, digits: int = 10):
         """
@@ -162,7 +175,7 @@ class CompRow(CustomRow):
         if spinbox.isEnabled():
             highlight = abs(spinbox.value() - default_value) > float(f'1e-{digits}')
             if spinbox.value() < 0:
-                spinbox.setValue(default_value)
+                setSpinboxValue(spinbox, default_value)
                 highlight = False
 
         setWidgetHighlight(spinbox, highlight)
@@ -207,7 +220,7 @@ class CompRow(CustomRow):
         pass
 
 
-class CompTable(CustomTable):
+class CompTable(CustomTable[CompRow]):
     """
     Table for component rows
 
@@ -256,7 +269,7 @@ class CompTable(CustomTable):
 
         # remove button, index and element stay visible when scrolling horizontally
         super().__init__(0, self.labels, parent, frozen_columns=3)
-        self.rows: List[CompRow] = []
+        self.rows = []
 
         self.add_button.setToolTip('Add a new element to the composition')
 
@@ -315,7 +328,7 @@ class CompTable(CustomTable):
 
         for comp_entry in comp_entries:
             row = self.addRow(connect=False)
-            row.setRowData(comp_entry)
+            notNone(row).setRowData(comp_entry)
         self.connectRows()
         self.limitColumns()
 
@@ -447,7 +460,7 @@ class CompTable(CustomTable):
         :param connect: if should be connected
         """
 
-        not_loadable = []
+        not_loadable: List[str] = []
         rows = []
         for _ in arguments:
             rows.append(self.addRow(connect=False))
@@ -461,9 +474,9 @@ class CompTable(CustomTable):
                 not_loadable.append(f'Element "{old_element.symbol}" ({old_element}) not supported')
                 continue
             argument.element = updated_element
-            row.setArguments(argument, general_arguments)
+            notNone(row).setArguments(argument, general_arguments)
             if old_element.modified:
-                row.adaptElement(old_element)
+                notNone(row).adaptElement(old_element)
         if connect:
             self.connectRows()
             self.limitColumns()

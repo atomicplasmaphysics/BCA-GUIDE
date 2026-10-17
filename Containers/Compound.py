@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from Containers.Element import Element
 
 
@@ -11,7 +11,7 @@ class Compound:
     :param name_save: compound name used in input file
     """
 
-    def __init__(self, name: str = None, elements: Dict[str, int] = None, name_save: str = None):
+    def __init__(self, name: Optional[str] = None, elements: Optional[Dict[str, int]] = None, name_save: Optional[str] = None):
 
         if name_save is None:
             name_save = name
@@ -31,23 +31,23 @@ class Compound:
             name = '???'
             name_save = '???'
 
-        self.name = name
-        self.elements: Dict = elements
-        self.name_save = name_save
+        self.name: str = name
+        self.elements: Dict[str, int] = elements if elements is not None else {}
+        self.name_save: str = name_save if name_save is not None else name
 
     def __str__(self) -> str:
         """Returns the string interpretation of the compound"""
 
         return self.name_save
 
-    def matches(self, elements: List[Element] = None) -> bool:
+    def matches(self, elements: Optional[List[Element]] = None) -> bool:
         """
         Check if elements of compound are in list of provided elements
 
         :param elements: list of provided <Element> containers that should be checked against elements on compound
         """
 
-        if self.elements is None or elements is None:
+        if not self.elements or elements is None:
             return False
 
         return all(element in [element.symbol for element in elements] for element in self.elements.keys())

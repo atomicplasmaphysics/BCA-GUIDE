@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Optional, Dict, Callable
+from typing import Any, List, Union, Tuple, Optional, Dict, Callable, Literal
 from itertools import zip_longest
 from copy import deepcopy
 from pathlib import Path
@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 from scipy.optimize import curve_fit
-from matplotlib import colormaps
+from matplotlib.artist import Artist
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgb, LogNorm, Normalize, ListedColormap, BoundaryNorm
@@ -17,7 +17,7 @@ from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QApplication
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QApplication, QMainWindow
 
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, InputHBoxLayouts, VBoxTitleLayout,
@@ -27,10 +27,12 @@ from Utility.Layouts import (
 from Utility.Indexing import RunningIndex, DefaultAssumed, DeleteDict, ElementList
 from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt, readlines, pathToStr
 from Utility.Dialogs import DownloadDialog, selectFileDialog
+from Utility.Colors import layerHex, paletteColormap
 
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 from TableWidgets.DistributionEditor import (
     DistributionDialog, readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile
 )
@@ -115,7 +117,7 @@ def tableCrystals(crystal_args: Optional[GeneralCrystalArguments]) -> List[dict]
             {'name': str(crystal.get('name', '')), 'miller': list(crystal.get('miller', [0, 0, 0]))}
             for crystal in crystals[:CrystalTableLimits.max_crystals] if isinstance(crystal, dict)
         ]
-    return [{'name': crystal_args.name, 'miller': list(crystal_args.miller_ind)}]
+    return [{'name': crystal_args.name, 'miller': list(crystal_args.miller_ind.vec)}]
 
 
 def crystalLayers(arguments: SimulationArguments) -> List[dict]:
@@ -189,7 +191,7 @@ def distributionFileNames(arguments: SimulationArguments, version: str, group_el
     def numbered(name: str, index: int) -> str:
         return f'{name}.inp' if index == 1 else f'{name}{index:02d}.inp'
 
-    result = {'energy': [], 'angle': [], 'energy_angle': []}
+    result: Dict[str, List[Tuple[str, str]]] = {'energy': [], 'angle': [], 'energy_angle': []}
     if case_e0 == ArgumentValues.KineticEnergy.FILE:
         if Versions.atLeast(version, Versions.V_700):
             result['energy'] = [(symbol, numbered('energy', index)) for index, symbol in projectiles]
@@ -254,14 +256,14 @@ def readCrystalInp(path: Path) -> dict:
 
     def read(count: int) -> List[str]:
         """Reads count values starting at the next line"""
-        values = []
+        values: List[str] = []
         while len(values) < count:
             line = lines[position[0]].split('!')[0]
             position[0] += 1
             values += [value.strip('"\'') for value in line.replace(',', ' ').split()]
         return values[:count]
 
-    crystal = {'name': read(1)[0], 'lattice_id': int(float(read(1)[0]))}
+    crystal: Dict[str, Any] = {'name': read(1)[0], 'lattice_id': int(float(read(1)[0]))}
     species_count = int(float(read(1)[0]))
     crystal['species'] = [read(1)[0] for _ in range(species_count)]
     crystal['basis_vectors'] = [[float(value) for value in read(3)] for _ in range(3)]
@@ -332,9 +334,9 @@ def readTrajectoryFile(path: Path) -> List[dict]:
     numbers = findall(r'\d+\.\d+', header)
     generation_known = not numbers or float(numbers[0]) >= 6.09
 
-    trajectories = []
+    trajectories: List[dict] = []
     current = None
-    points = []
+    points: list = []
     expect_info = False
 
     def finish():
@@ -421,7 +423,7 @@ def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
     :param save_folder: folder of the simulation
     """
 
-    layers = []
+    layers: List[Tuple[float, float, str]] = []
     try:
         with open(save_folder / 'layer.inp', 'r', encoding='utf-8', errors='replace') as file:
             depth = 0.
@@ -452,6 +454,12 @@ def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
     except (OSError, ValueError):
         pass
     return []
+
+
+def joinValues(values: list) -> str:
+    """Returns the values as comma separated list of a Fortran namelist"""
+
+    return ', '.join(f'{value}' for value in values)
 
 
 def numbersOfLine(line: str) -> List[float]:
@@ -559,9 +567,9 @@ def readEnergyDepthMatrix(path: Path) -> List[dict]:
     except OSError:
         return []
 
-    matrices = []
+    matrices: List[Dict[str, Any]] = []
     projectiles = 0.
-    current = None
+    current: Optional[Dict[str, Any]] = None
     for line in lines[2:]:
         text = line.strip()
         lower = text.lower()
@@ -612,7 +620,7 @@ def readEnergyDepthMatrix(path: Path) -> List[dict]:
 def matrixSpecies(path: Path) -> List[str]:
     """Returns the names of the species of the matrices with linear energy intervals in a matrix file (e.g. meagb_p.dat)"""
 
-    names = []
+    names: List[str] = []
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as file:
             previous = ''
@@ -642,7 +650,7 @@ def readEnergyAngleMatrix(path: Path) -> List[dict]:
     except OSError:
         return []
 
-    matrices = []
+    matrices: List[Dict[str, Any]] = []
     i = 0
     while i < len(lines):
         text = lines[i].strip()
@@ -820,7 +828,9 @@ def estimateRange(energy: float, z1: int, m1: float, z2: float, m2: float, densi
         return 0.
     energies = np.geomspace(1., energy, 400)
     stopping = np.array([density * (nuclearStopping(e, z1, m1, z2, m2) + electronicStopping(e, z1, m1, z2)) for e in energies])
-    return float(np.trapezoid(1 / stopping, energies)) if hasattr(np, 'trapezoid') else float(np.trapz(1 / stopping, energies))
+    # numpy.trapz was renamed to numpy.trapezoid in numpy 2.0
+    integrate = getattr(np, 'trapezoid', None) or getattr(np, 'trapz')
+    return float(integrate(1 / stopping, energies))
 
 
 def usesCrystalLayerFile(arguments: SimulationArguments, version: str) -> bool:
@@ -1169,8 +1179,8 @@ class HlBeamSettings(HlGeneralBeamSettings):
         self.addLayout(self.layout_sweep)
 
         # distributions of energies and angles from files
-        self.distributions = {}
-        self.projectiles = lambda: []  # set by the page: symbols of the projectiles
+        self.distributions: Dict[str, Any] = {}
+        self.projectiles: Callable[[], List[str]] = lambda: []  # set by the page: symbols of the projectiles
         self.distribution_button = QPushButton(getIcon('file'), ' Distributions...')
         self.distribution_button.setAutoDefault(False)
         self.distribution_button.setToolTip(
@@ -1232,7 +1242,7 @@ class HlBeamSettings(HlGeneralBeamSettings):
             legacy_energy_angle=not Versions.atLeast(self.version, Versions.V_707)
         )
         if dialog.exec():
-            self.distributions = dialog.result()
+            self.distributions = dialog.distributionData()
             self.edited()
 
     def changedEnergy(self):
@@ -1514,10 +1524,10 @@ class HlTargetSettings(HlGeneralTargetSettings):
             disabled=True
         )
 
-        self.layout_global_density.checkbox.stateChanged.connect(lambda _: self.changedGlobDens())
+        self.layout_global_density.check.stateChanged.connect(lambda _: self.changedGlobDens())
         self.global_density.valueChanged.connect(lambda _: self.changedGlobDens())
 
-        self.layout_global_density.checkbox.stateChanged.connect(lambda _: self.edited())
+        self.layout_global_density.check.stateChanged.connect(lambda _: self.edited())
         self.global_density.valueChanged.connect(lambda _: self.edited())
 
         self.addLayout(self.layout_global_density)
@@ -1577,13 +1587,13 @@ class HlTargetSettings(HlGeneralTargetSettings):
         :param miller_ind: (optional) MillerIndex
         """
 
-        global_density = False
-        if self.layout_global_density.checkbox.isChecked():
+        global_density: Union[bool, float] = False
+        if self.layout_global_density.check.isChecked():
             global_density = self.global_density.value()
 
         crystal_flag = None
         if self.layout_crystal_file is not None:
-            crystal_flag = self.layout_crystal_file.checkbox.isChecked()
+            crystal_flag = self.layout_crystal_file.check.isChecked()
 
         return GeneralTargetArguments(
             thickness=self.thickness.value(),  # ttarget
@@ -1627,13 +1637,13 @@ class HlTargetSettings(HlGeneralTargetSettings):
         global_density = target_args.get('global_density')
         if global_density is False:
             self.global_density.reset()
-            self.layout_global_density.checkbox.setChecked(False)
+            self.layout_global_density.check.setChecked(False)
         elif isinstance(global_density, float):
             self.global_density.setValue(global_density)
-            self.layout_global_density.checkbox.setChecked(True)
+            self.layout_global_density.check.setChecked(True)
         else:
             self.global_density.reset()
-            self.layout_global_density.checkbox.setChecked(False)
+            self.layout_global_density.check.setChecked(False)
             self.layout_global_density.mark()
             not_loadable.append('Global density')
 
@@ -1641,7 +1651,7 @@ class HlTargetSettings(HlGeneralTargetSettings):
         crystal_flag = target_args.get('crystal_flag')
         if self.layout_crystal_file is not None:
             if isinstance(crystal_flag, bool):
-                self.layout_crystal_file.checkbox.setChecked(crystal_flag)
+                self.layout_crystal_file.check.setChecked(crystal_flag)
 
         self.changedGlobDens()
 
@@ -1657,7 +1667,7 @@ class HlTargetSettings(HlGeneralTargetSettings):
                 global_density = True
 
             self.layout_global_density.setEnabled(global_density)
-            if global_density and not self.layout_global_density.checkbox.isChecked():
+            if global_density and not self.layout_global_density.check.isChecked():
                 self.global_density.setEnabled(False)
 
 
@@ -1753,7 +1763,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         )
         self.addLayout(self.layout_histories_limit)
         self.histories_between_val = 0
-        self.layout_histories_limit.checkbox.toggled.connect(lambda state: self.changeHistoriesBetween(state))
+        self.layout_histories_limit.check.toggled.connect(lambda state: self.changeHistoriesBetween(state))
 
         # number of projectiles per history
         self.projectiles = SpinBox(
@@ -1859,7 +1869,8 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             'from mat_surfb.inp',
             'from electronegativity'
         ]
-        self.surface_binding_model_entries_save = [
+        # -1: entry that is not supported by the version
+        self.surface_binding_model_entries_save: List[Union[ArgumentValues.SurfaceBindingModel, int]] = [
             ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC,
             ArgumentValues.SurfaceBindingModel.AVERAGE,
             ArgumentValues.SurfaceBindingModel.ELEMENT_PAIRS,
@@ -1937,8 +1948,8 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=self.default_values.group_elements,
             tooltip='<i>Checked:</i> Elements that occur in beam and target will be treated as identical elements<br><i>Unchecked:</i> Elements in beam and target will be treated as different elements even if they are identical'
         )
-        self.layout_group_elements.checkbox.clicked.connect(lambda _: self.changedGroupElements())
-        self.layout_group_elements.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_group_elements.check.clicked.connect(lambda _: self.changedGroupElements())
+        self.layout_group_elements.check.clicked.connect(lambda _: self.edited())
         self.addLayout(self.layout_group_elements)
 
         # additional output options
@@ -1952,7 +1963,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=self.default_values.lparticle_p,
             tooltip='<i>lparticle_p</i><br>Compute the angle and energy distributions of reflected projectiles and write them to output files'
         )
-        self.layout_reflected.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_reflected.check.clicked.connect(lambda _: self.edited())
         self.addLayout(self.layout_reflected)
 
         # sputtered recoil atoms
@@ -1962,7 +1973,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=self.default_values.lparticle_r,
             tooltip='<i>lparticle_r</i><br>Compute the angle and energy distributions of sputtered recoil atoms and write them to output files'
         )
-        self.layout_sputtered.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_sputtered.check.clicked.connect(lambda _: self.edited())
         self.addLayout(self.layout_sputtered)
 
         # matrix files
@@ -1973,7 +1984,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>lmatrices</i><br>Compute and write the pre-sorted secondary particle distributions to output files'
         )
 
-        self.layout_matrix_files.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_matrix_files.check.clicked.connect(lambda _: self.edited())
         self.addLayout(self.layout_matrix_files)
 
         # trajectories
@@ -1996,7 +2007,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>numb_hist</i><br>Number of traced trajectories of projectiles and recoils'
         )
         for layout in (self.layout_trajectories_p, self.layout_trajectories_r):
-            layout.checkbox.clicked.connect(lambda _: self.changedOutputs())
+            layout.check.clicked.connect(lambda _: self.changedOutputs())
             self.addLayout(layout)
         self.trajectories_number.valueChanged.connect(lambda _: self.edited())
         self.addLayout(self.layout_trajectories_number)
@@ -2008,10 +2019,10 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=self.default_values.lenergy_distr,
             tooltip='<i>lenergy_distr</i><br>Write the distribution of stopped energy, electronic and nuclear losses in the target (E_distr_*.dat)'
         )
-        self.layout_energy_distribution.checkbox.clicked.connect(lambda _: self.changedOutputs())
+        self.layout_energy_distribution.check.clicked.connect(lambda _: self.changedOutputs())
         self.addLayout(self.layout_energy_distribution)
 
-        self.distribution_grid = [
+        self.distribution_grid: List[Union[SpinBox, DoubleSpinBox]] = [
             SpinBox(default=self.default_values.dist_nx, input_range=(1, 1e4)),
             SpinBox(default=self.default_values.dist_ny, input_range=(1, 1e4)),
             SpinBox(default=self.default_values.dist_nz, input_range=(1, 1e4)),
@@ -2044,10 +2055,10 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             checkbox=bool(self.default_values.sfin),
             tooltip='<i>sfin</i><br>Inelastic energy loss also outside the target surface (between surface potential and surface)'
         )
-        self.layout_inelastic_outside.checkbox.clicked.connect(lambda _: self.edited())
+        self.layout_inelastic_outside.check.clicked.connect(lambda _: self.edited())
         if not self.default_values.supports_sfin:
-            self.layout_inelastic_outside.checkbox.setEnabled(False)
-            self.layout_inelastic_outside.checkbox.setToolTip(
+            self.layout_inelastic_outside.check.setEnabled(False)
+            self.layout_inelastic_outside.check.setToolTip(
                 '<i>sfin</i><br>Inelastic energy loss also outside the target surface.<br>'
                 '<b>Disabled for SDTrimSP 7.00 and newer: sfin = 1 lets the simulation crash (access violation)</b>'
             )
@@ -2179,18 +2190,18 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             interaction_potential=self.potential.getValue(save=True),  # ipot
             integration_method=self.integration.getValue(save=True),  # iintegral
             surface_binding_model=self.surface_binding_model.getValue(save=True),  # isbv
-            group_elements=self.layout_group_elements.checkbox.isChecked(),
-            log_reflected=self.layout_reflected.checkbox.isChecked(),  # lparticle_p
-            log_sputtered=self.layout_sputtered.checkbox.isChecked(),  # lparticle_r
-            log_matrix=self.layout_matrix_files.checkbox.isChecked(),  # lmatrices
+            group_elements=self.layout_group_elements.check.isChecked(),
+            log_reflected=self.layout_reflected.check.isChecked(),  # lparticle_p
+            log_sputtered=self.layout_sputtered.check.isChecked(),  # lparticle_r
+            log_matrix=self.layout_matrix_files.check.isChecked(),  # lmatrices
             tbsp_format=self.tbsp_format.getValue(save=True) if self.tbsp_format is not None else None,  # tbsp_binary, tbsp_ascii
-            trajectories_projectiles=self.layout_trajectories_p.checkbox.isChecked(),  # ltraj_p
-            trajectories_recoils=self.layout_trajectories_r.checkbox.isChecked(),  # ltraj_r
+            trajectories_projectiles=self.layout_trajectories_p.check.isChecked(),  # ltraj_p
+            trajectories_recoils=self.layout_trajectories_r.check.isChecked(),  # ltraj_r
             trajectories_number=self.trajectories_number.value(),  # numb_hist
-            energy_distribution=self.layout_energy_distribution.checkbox.isChecked(),  # lenergy_distr
+            energy_distribution=self.layout_energy_distribution.check.isChecked(),  # lenergy_distr
             distribution_grid=[widget.value() for widget in self.distribution_grid],  # dist_nx, dist_ny, dist_nz, dist_delta
             random_seed=self.random_seed.value(),  # irand
-            inelastic_outside=self.layout_inelastic_outside.checkbox.isChecked()  # sfin
+            inelastic_outside=self.layout_inelastic_outside.check.isChecked()  # sfin
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
@@ -2229,10 +2240,10 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             self.layout_histories_between.mark()
             not_loadable.append('Histories between outputs')
         if idout >= 0:
-            self.layout_histories_limit.checkbox.setChecked(False)
+            self.layout_histories_limit.check.setChecked(False)
         else:
             idout = -1
-            self.layout_histories_limit.checkbox.setChecked(True)
+            self.layout_histories_limit.check.setChecked(True)
         self.histories_between.setValue(idout)
 
         # projectiles
@@ -2286,28 +2297,28 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
 
         # group elements
         if arguments.beam_args.kinetic_energy_mode == ArgumentValues.KineticEnergy.SWEEP or arguments.beam_args.angle_mode == ArgumentValues.Angle.SWEEP:
-            self.layout_group_elements.checkbox.setChecked(False)
+            self.layout_group_elements.check.setChecked(False)
         else:
             group_elements = settings.get('group_elements')
             if not isinstance(group_elements, bool):
                 group_elements = self.default_values.group_elements
-            self.layout_group_elements.checkbox.setChecked(group_elements)
+            self.layout_group_elements.check.setChecked(group_elements)
 
         # output matrices (not relevant in not_loadable list)
         lparticle_p = settings.get('log_reflected')
         if not isinstance(lparticle_p, bool):
             lparticle_p = self.default_values.lparticle_p
-        self.layout_reflected.checkbox.setChecked(lparticle_p)
+        self.layout_reflected.check.setChecked(lparticle_p)
 
         lparticle_r = settings.get('log_sputtered')
         if not isinstance(lparticle_r, bool):
             lparticle_r = self.default_values.lparticle_r
-        self.layout_sputtered.checkbox.setChecked(lparticle_r)
+        self.layout_sputtered.check.setChecked(lparticle_r)
 
         lmatrices = settings.get('log_matrix')
         if not isinstance(lmatrices, bool):
             lmatrices = self.default_values.lparticle_p
-        self.layout_matrix_files.checkbox.setChecked(lmatrices)
+        self.layout_matrix_files.check.setChecked(lmatrices)
 
         # trajectories, energy distribution, random seed and inelastic loss outside the surface
         for key, layout, default in [
@@ -2317,7 +2328,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             ('inelastic_outside', self.layout_inelastic_outside, bool(self.default_values.sfin))
         ]:
             value = settings.get(key)
-            layout.checkbox.setChecked(value if isinstance(value, bool) else default)
+            layout.check.setChecked(value if isinstance(value, bool) else default)
         numb_hist = settings.get('trajectories_number')
         self.trajectories_number.setValue(numb_hist if isinstance(numb_hist, int) else self.default_values.numb_hist)
         grid = settings.get('distribution_grid')
@@ -2353,14 +2364,14 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
                     self.layout_matrix_files.setEnabled(True)
             else:
                 self.layout_reflected.setEnabled(False)
-                self.layout_reflected.checkbox.setChecked(False)
+                self.layout_reflected.check.setChecked(False)
 
                 self.layout_sputtered.setEnabled(False)
-                self.layout_sputtered.checkbox.setChecked(False)
+                self.layout_sputtered.check.setChecked(False)
 
                 if self.calculation_method.getValue(save=True) != ArgumentValues.Mode.DYNAMIC:
                     self.layout_matrix_files.setEnabled(False)
-                    self.layout_matrix_files.checkbox.setChecked(False)
+                    self.layout_matrix_files.check.setChecked(False)
 
         row_added = value_dict.get('row_added')
         if row_added is True:
@@ -2376,7 +2387,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
 
         group_elements = value_dict.get('group_elements')
         if group_elements is not None:
-            self.layout_group_elements.checkbox.setChecked(bool(group_elements))
+            self.layout_group_elements.check.setChecked(bool(group_elements))
 
 
 class CompRowBeamSettings(CompRow):
@@ -2628,7 +2639,7 @@ class CompRowBeamSettings(CompRow):
         )
 
         self.inelastic_loss_model.currentIndexChanged.connect(self.contentChanged.emit)
-        self.inelastic_loss_model.mouseReleaseEvent = lambda _: setWidgetBackground(self.inelastic_loss_model, False)
+        self.inelastic_loss_model.mouseReleaseEvent = lambda _: setWidgetBackground(self.inelastic_loss_model, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
 
         # azimuthal angle, starting depth and charge of projectiles
         self.azimuth = DoubleSpinBox(default=self.default_values.beta0, input_range=(-360, 360), step_size=0.01)
@@ -2794,7 +2805,7 @@ class CompRowBeamSettings(CompRow):
             isotopes=self.isotopes.getValue(save=True)  # isot
         )
 
-    def setArguments(self, arguments: RowArguments, general_arguments: SimulationArguments):
+    def setArguments(self, arguments: RowArguments, general_arguments: Union[SimulationArguments, GeneralArguments]):
         """Sets <RowArguments> container of parameters for row"""
 
         assumed = arguments.get('assumed')
@@ -3028,8 +3039,8 @@ class HlPlot(HlGeneralPlot):
         self.trajectory_number.valueChanged.connect(self.emitTrajectories)
         self.trajectory_view.currentIndexChanged.connect(self.emitTrajectories)
         self.trajectory_color.currentIndexChanged.connect(self.emitTrajectories)
-        self.trajectory_recoils.checkbox.stateChanged.connect(self.emitTrajectories)
-        self.trajectory_layers.checkbox.stateChanged.connect(self.emitTrajectories)
+        self.trajectory_recoils.check.stateChanged.connect(self.emitTrajectories)
+        self.trajectory_layers.check.stateChanged.connect(self.emitTrajectories)
         self.trajectory_time.valueChanged.connect(self.emitTrajectories)
 
         # energy distribution in the target
@@ -3048,7 +3059,7 @@ class HlPlot(HlGeneralPlot):
             layout.setHidden(True)
             self.addLayout(layout)
         self.energy_distribution_view.currentIndexChanged.connect(self.emitEnergyDistribution)
-        self.energy_distribution_log.checkbox.stateChanged.connect(self.emitEnergyDistribution)
+        self.energy_distribution_log.check.stateChanged.connect(self.emitEnergyDistribution)
 
         self.addStretch(1)
 
@@ -3079,8 +3090,8 @@ class HlPlot(HlGeneralPlot):
             'projectile': self.trajectory_number.value(),
             'view': self.trajectory_view.getValue(save=True),
             'color': self.trajectory_color.getValue(save=True),
-            'recoils': self.trajectory_recoils.checkbox.isChecked(),
-            'layers': self.trajectory_layers.checkbox.isChecked(),
+            'recoils': self.trajectory_recoils.check.isChecked(),
+            'layers': self.trajectory_layers.check.isChecked(),
         }
         if animation:
             value = self.trajectory_time.value()
@@ -3301,7 +3312,7 @@ Andreas Mutzke
         super().__init__()
 
     @staticmethod
-    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, bool]:
+    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, Literal[False]]:
         """
         Returns version of simulation depending on selected folder and binary or False if no version can be determined
 
@@ -3475,7 +3486,7 @@ Andreas Mutzke
 
                     variable = sub(r'[^\w]', '', content[0])
 
-                    data_type = str
+                    data_type: type = str
                     try:
                         if content[1] in ['.true.', '.false.']:
                             data_type = bool
@@ -3520,7 +3531,7 @@ Andreas Mutzke
         :param version: version of simulation
         """
 
-        element_list = []
+        element_list: List[Element] = []
         table_path = folder / 'tables' / 'table1'
 
         try:
@@ -3546,7 +3557,7 @@ Andreas Mutzke
                 return False
 
             # divide table where a continuous column of whitespaces exists
-            table = []
+            table: List[List[str]] = []
             divisions = []
             i = 0
 
@@ -3574,11 +3585,11 @@ Andreas Mutzke
             divisions = [d + 1 for d in divisions]
 
             for t_str in table_str:
-                t = [t_str[:divisions[0]].strip()]
+                columns = [t_str[:divisions[0]].strip()]
                 for i in range(len(divisions) - 1):
-                    t.append(t_str[divisions[i]:divisions[i + 1]].strip())
-                t.append(t_str[divisions[-1]:].strip())
-                table.append(t)
+                    columns.append(t_str[divisions[i]:divisions[i + 1]].strip())
+                columns.append(t_str[divisions[-1]:].strip())
+                table.append(columns)
 
             last_atomic_nr = 0
             group = 0
@@ -3622,7 +3633,7 @@ Andreas Mutzke
                     name_en = name_list[1]
                     name_de = name_list[0].capitalize()
 
-                name = {
+                names = {
                     'en': name_en,
                     'de': name_de
                 }
@@ -3660,9 +3671,9 @@ Andreas Mutzke
                 energy_surfb = floatSafe(element[5])
                 energy_disp = floatSafe(element[6])
 
-                element = Element(
+                new_element = Element(
                     symbol=symbol,
-                    name=name,
+                    name=names,
                     atomic_nr=atomic_nr,
                     period=period,
                     group=group,
@@ -3675,9 +3686,9 @@ Andreas Mutzke
 
                 # Since He3 appears first, add He before it
                 if symbol == 'He':
-                    element_list.insert(-1, element)
+                    element_list.insert(-1, new_element)
                 else:
-                    element_list.append(element)
+                    element_list.append(new_element)
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{table_path}"!')
@@ -3706,7 +3717,7 @@ Andreas Mutzke
         if not isinstance(group_elements, bool):
             group_elements = default_values.group_elements
 
-        grouped_rows = []
+        grouped_rows: List[list] = []  # pairs of beam row and target row (one of them can be None)
         if group_elements:
             beam_rows = sorted([row for row in arguments.beam_rows if row.symbol])
             target_rows = sorted([row for row in arguments.target_rows if row.symbol])
@@ -3810,19 +3821,19 @@ Andreas Mutzke
         if changed_elements:
             for element, original_element in zip(elements, original_elements):
                 e_surfb.append(element.surface_binding_energy)
-                if element.surface_binding_energy != original_element.surface_binding_energy:
+                if element.surface_binding_energy != notNone(original_element).surface_binding_energy:
                     e_surfb_modified = True
 
                 e_displ.append(element.displacement_energy)
-                if element.displacement_energy != original_element.displacement_energy:
+                if element.displacement_energy != notNone(original_element).displacement_energy:
                     e_displ_modified = True
 
                 dns0.append(element.atomic_density)
-                if element.atomic_density != original_element.atomic_density:
+                if element.atomic_density != notNone(original_element).atomic_density:
                     dns0_modified = True
 
                 a_mass.append(element.atomic_mass)
-                if element.atomic_mass != original_element.atomic_mass:
+                if element.atomic_mass != notNone(original_element).atomic_mass:
                     a_mass_modified = True
 
         e_surfb = [f'{e}' for e in e_surfb]
@@ -3922,12 +3933,9 @@ Andreas Mutzke
         else:
             qubeam = [round(a, 2) if m == 1 else 0.0 for a, m in zip(abundances, mask_beam)]
         qubeam = normalizeList(qubeam)
-        qubeam = [f'{q}' for q in qubeam]
-        qubeam = ', '.join(qubeam)
 
-        case_e0 = arguments.beam_args.kinetic_energy_mode
-        if case_e0 is not None:
-            case_e0 = dict_lookup.case_e0.get(case_e0)
+        kinetic_energy_mode = arguments.beam_args.kinetic_energy_mode
+        case_e0 = dict_lookup.case_e0.get(kinetic_energy_mode) if kinetic_energy_mode is not None else None
         if case_e0 is None:
             case_e0 = default_values.case_e0
 
@@ -3935,12 +3943,9 @@ Andreas Mutzke
             e0 = [beam_row.energy if beam_row is not None else 0.0 for beam_row, _ in grouped_rows]
         else:
             e0 = [row.energy for row in rows]
-        e0 = [f'{e}' for e in e0]
-        e0 = ', '.join(e0)
 
-        case_alpha = arguments.beam_args.angle_mode
-        if case_alpha is not None:
-            case_alpha = dict_lookup.case_alpha.get(case_alpha)
+        angle_mode = arguments.beam_args.angle_mode
+        case_alpha = dict_lookup.case_alpha.get(angle_mode) if angle_mode is not None else None
         if case_alpha is None:
             case_alpha = default_values.case_alpha
 
@@ -3948,8 +3953,6 @@ Andreas Mutzke
             alpha0 = [beam_row.angle if beam_row is not None else 0.0 for beam_row, _ in grouped_rows]
         else:
             alpha0 = [row.angle for row in rows]
-        alpha0 = [f'{a}' for a in alpha0]
-        alpha0 = ', '.join(alpha0)
 
         number_calc = arguments.beam_args.get('sweep')
         if number_calc is None:
@@ -3995,8 +3998,6 @@ Andreas Mutzke
                     qu = [1.0 if symbol in target_species else 0. for symbol in species]
 
         qu = normalizeList(qu)
-        qu = [f'{q}' for q in qu]
-        qu = ', '.join(qu)
 
         if group_elements:
             qumax = []
@@ -4007,8 +4008,6 @@ Andreas Mutzke
                     qumax.append(beam_row.max_atomic_fraction)
         else:
             qumax = [row.max_atomic_fraction for row in rows]
-        qumax = [f'{q}' for q in qumax]
-        qumax = ', '.join(qumax)
 
         ttarget = arguments.target_args.thickness
 
@@ -4028,8 +4027,17 @@ text = "--- crystal ---"
             if crystal_flag and crystal_args is not None:
                 crystals = tableCrystals(crystal_args)
                 crystal_list = ''
+                # with layer.inp the orientation of each layer is used, a polycrystal ((0 0 0)) is not possible: the orientation
+                # of the first layer with the crystal is written
+                layers = crystalLayers(arguments) if usesCrystalLayerFile(arguments, version) else []
                 for i, crystal in enumerate(crystals, start=1):
-                    miller = ', '.join(f'{float(m):g}' for m in crystal['miller'])
+                    crystal_miller = crystal['miller']
+                    if layers and all(float(m) == 0 for m in crystal_miller):
+                        crystal_miller = next(
+                            (layer['miller'] for layer in layers if len(layer['fractions']) >= i and layer['fractions'][i - 1] > 0),
+                            [1, 0, 0]
+                        )
+                    miller = ', '.join(f'{float(m):g}' for m in crystal_miller)
                     crystal_list += f'''
     name_cryst{i} = '{crystal['name']}'
     miller_ind{i} = {miller}'''
@@ -4145,15 +4153,15 @@ text = "--- general ---"
     isbv = {isbv}
 
 text = "--- beam ---"
-    qubeam = {qubeam}
+    qubeam = {joinValues(qubeam)}
     case_e0 = {case_e0}
-    e0 = {e0}
+    e0 = {joinValues(e0)}
     case_alpha = {case_alpha}
-    alpha0 = {alpha0}
+    alpha0 = {joinValues(alpha0)}
 {number_calc}
 text = "--- target ---"
-    qu = {qu}
-    qumax = {qumax}
+    qu = {joinValues(qu)}
+    qumax = {joinValues(qumax)}
     ttarget = {ttarget}
     nqx = {nqx}
     iq0 = {iq0}
@@ -4174,8 +4182,8 @@ text = "--- extra ---"
         """Returns the version number of the simulation folder (e.g. 7.02) or None if unknown"""
 
         folder = getattr(self, 'simulation_folder', None)
-        name = self.getVersionName(folder, None) if folder is not None else False
-        numbers = findall(r'\d+\.\d+', name) if name else []
+        name = self.getVersionName(folder, None) if folder is not None else ''
+        numbers = findall(r'\d+\.\d+', name) if isinstance(name, str) else []
         return float(numbers[0]) if numbers else None
 
     def supportsEnergyAngleFile(self, version: str) -> bool:
@@ -4278,7 +4286,7 @@ text = "--- extra ---"
         if not isinstance(group_elements, bool):
             group_elements = default_values.group_elements
 
-        grouped_rows = []
+        grouped_rows: List[list] = []  # pairs of beam row and target row (one of them can be None)
         if group_elements:
             beam_rows = sorted([row for row in arguments.beam_rows if row.symbol])
             target_rows = sorted([row for row in arguments.target_rows if row.symbol])
@@ -4455,7 +4463,7 @@ text = "--- extra ---"
 
         return f'{out.strip()}\\n'
 
-    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
+    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, Literal[False]]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
         Returns string of error if input file can not be opened
@@ -4484,13 +4492,9 @@ text = "--- extra ---"
                     line = line.strip()
 
                     # strip off comments
-                    comment_offset = np.inf
-                    for c in ['!', '#']:
-                        try:
-                            comment_offset = min(comment_offset, line.index(c))
-                        except ValueError:
-                            pass
-                    if not np.isinf(comment_offset) and comment_offset > 0:
+                    comment_positions = [line.index(c) for c in ['!', '#'] if c in line]
+                    comment_offset = min(comment_positions) if comment_positions else -1
+                    if comment_offset > 0:
                         line = line[:comment_offset]
 
                     # split into key and value
@@ -4506,11 +4510,11 @@ text = "--- extra ---"
         assumed = DefaultAssumed()
         error_list = []
 
-        def getValue(value: str, value_type: type, default_value, item=None, assumed_cls: DefaultAssumed = None):
+        def getValue(value: str, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
             """Returns value if value has type value_type, otherwise return default_value"""
 
             if assumed_cls is None:
-                assumed_cls = []
+                assumed_cls = DefaultAssumed()
             # a single value may end with a separator in Fortran namelists (e.g. "ncp = 2,")
             if isinstance(value, str) and value_type is not str:
                 value = value.strip().rstrip(',').strip()
@@ -4541,11 +4545,11 @@ text = "--- extra ---"
             except ValueError:
                 return False
 
-        def getValueDict(value: str, lookup_dict: dict, default_value, item=None, assumed_cls: DefaultAssumed = None):
+        def getValueDict(value: str, lookup_dict: dict, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
             """Returns class member with name value if is class member, otherwise return default_value"""
 
             if assumed_cls is None:
-                assumed_cls = []
+                assumed_cls = DefaultAssumed()
             try:
                 return [k for k, v in lookup_dict.items() if v == int(value)][0]
             except (ValueError, IndexError, TypeError):
@@ -4553,11 +4557,11 @@ text = "--- extra ---"
                     assumed_cls.assumed(item)
                 return [k for k, v in lookup_dict.items() if v == default_value][0]
 
-        def getValueList(value: str, value_type, default_value, item=None, lookup_dict=None, split_str: str = ',', assumed_cls: DefaultAssumed = None) -> list:
+        def getValueList(value: str, value_type, default_value, item=None, lookup_dict=None, split_str: str = ',', assumed_cls: Optional[DefaultAssumed] = None) -> list:
             """Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value"""
 
             if assumed_cls is None:
-                assumed_cls = []
+                assumed_cls = DefaultAssumed()
             if not isinstance(value, str):
                 if item is not None:
                     assumed_cls.assumed(item)
@@ -4665,14 +4669,14 @@ text = "--- extra ---"
         if default_values.enable_crystal:
             l_crystal = getValueBool(contents.get('l_crystal'), default_values.l_crystal)
 
-        table_crystal = None
+        table_crystal: Optional[Dict[str, Any]] = None
         if l_crystal and default_values.crystal_table:
             # since 7.02: up to three crystals from tables/table.crystal (l_crystal1, l_crystal2 or l_crystal3)
             crystal_count = 1
             for i in range(1, CrystalTableLimits.max_crystals + 1):
                 if getValueBool(contents.get(f'l_crystal{i}'), False):
                     crystal_count = i
-            crystals = []
+            crystals: List[Dict[str, Any]] = []
             for i in range(1, CrystalTableLimits.max_crystals + 1):
                 name = str(contents.get(f'name_cryst{i}') or '').strip().strip('"\'')
                 miller = getValueList(contents.get(f'miller_ind{i}'), float, 0, 'miller_indices_list' if i <= crystal_count else None, assumed_cls=assumed)
@@ -4731,7 +4735,7 @@ text = "--- extra ---"
         if not len(symbol) == len(qubeam) == len(qu) == ncp:
             return f'Length of lists "symbol({len(symbol)})", "qubeam({len(qubeam)})", "qu({len(qu)})" and "ncp={ncp}" are different.'
 
-        index = RunningIndex()
+        row_index = RunningIndex()
 
         def rowList(qu_list: list, typ: str) -> List[RowArguments]:
             """Converts the qu_list into a list of <RowArguments>"""
@@ -4772,7 +4776,7 @@ text = "--- extra ---"
                     assumed_row.assumed('inelastic_loss_model_row')
 
                 row_parameters = {
-                    'index': index.get(),
+                    'index': row_index.get(),
                     'symbol': symbol_i,
                     'element': element_i,
                     'abundance': qu_i,
@@ -4849,8 +4853,8 @@ text = "--- extra ---"
 
         # beam_args data (<GeneralBeamArguments>)
         # distributions of energies and angles from files
-        distributions = {}
-        projectiles = [(index, symbol_i) for index, (symbol_i, qubeam_i) in enumerate(zip(symbol, qubeam), start=1) if qubeam_i and qubeam_i > 0]
+        distributions: Dict[str, Any] = {}
+        projectiles = [(number, symbol_i) for number, (symbol_i, qubeam_i) in enumerate(zip(symbol, qubeam), start=1) if qubeam_i and qubeam_i > 0]
 
         def numbered(name: str, index: int) -> str:
             return f'{name}.inp' if index == 1 else f'{name}{index:02d}.inp'
@@ -4983,19 +4987,19 @@ text = "--- extra ---"
                                 if error_layer not in error_list:
                                     error_list.append(error_layer)
                                 continue
-                            fractions = [0.] * len(table_crystal['crystals'])
+                            fractions = [0.] * len(notNone(table_crystal)['crystals'])
                             for (k, stoichiometry), value in zip(crystal_species, crystal_values):
                                 fractions[k] += value
                             crystal_layers.append({'fractions': fractions, 'miller': miller})
                             content = content[:ncp + 1] + content[ncp + 4 + crystal_columns:]
 
                         name = f'Layer{layer_counter.get()}'
-                        abundances = content[2:ncp + 1]
+                        abundance_texts = content[2:ncp + 1]
                         if len(content) > 1 + ncp:
                             name = content[ncp + 1]
 
                         try:
-                            abundances = [float(a) for a in abundances]
+                            abundances = [float(a) for a in abundance_texts]
                             abundances.insert(0, 1 - sum(abundances) - (sum(crystal_layers[-1]['fractions']) if crystal_columns else 0))
                             # abundances of the amorphous part are normalized
                             if crystal_columns and sum(abundances) > 1e-12:
@@ -5044,15 +5048,15 @@ text = "--- extra ---"
         elif structure and iq0 < 0 and 0 < sum(layer.segments for layer in structure) < nqx:
             original = list(structure)
             remaining = nqx - sum(layer.segments for layer in structure)
-            index = 0
+            layer_index = 0
             while remaining > 0:
-                layer = deepcopy(original[index % len(original)])
+                layer = deepcopy(original[layer_index % len(original)])
                 if layer.segments > remaining:
                     layer.thickness = layer.thickness / layer.segments * remaining
                     layer.segments = remaining
                 structure.append(layer)
                 remaining -= layer.segments
-                index += 1
+                layer_index += 1
             target_args.thickness = sum(layer.thickness for layer in structure)
 
         if not structure:
@@ -5077,7 +5081,7 @@ text = "--- extra ---"
                 basis_vec_a1=default_values.basis_vec_a1,
                 basis_vec_a2=default_values.basis_vec_a2,
                 basis_vec_a3=default_values.basis_vec_a3,
-                miller_ind=miller_ind,
+                miller_ind=notNone(miller_ind),
                 beam_dy=table_crystal['beam_dy'],
                 beam_dz=table_crystal['beam_dz'],
                 crystal_dyn=table_crystal['crystal_dyn'],
@@ -5142,7 +5146,7 @@ text = "--- extra ---"
                     basis_vec_a1=BasisVector(crystal['basis_vectors'][0]) / lattice_constant,
                     basis_vec_a2=BasisVector(crystal['basis_vectors'][1]) / lattice_constant,
                     basis_vec_a3=BasisVector(crystal['basis_vectors'][2]) / lattice_constant,
-                    miller_ind=miller_ind,
+                    miller_ind=notNone(miller_ind),
                     p_max=crystal['p_max'],
                     beam_dy=crystal['beam_dy'],
                     beam_dz=crystal['beam_dz'],
@@ -5295,16 +5299,32 @@ text = "--- extra ---"
             if layers and not any(fraction > 0 for layer in layers for fraction in layer['fractions']):
                 errors.append('No layer of the target structure contains a crystal')
             if usesCrystalLayerFile(arguments, version):
+                # layer.inp: each layer with crystal has its own orientation, polycrystals ((0 0 0)) are not possible
                 for structure, layer in zip(arguments.structure, layers):
                     error = layerMillerError(layer['miller'])
                     if sum(layer['fractions']) > 0 and error is not None:
                         miller = ' '.join(f'{float(m):g}' for m in layer['miller'])
+                        if all(float(m) == 0 for m in layer['miller']):
+                            errors.append(
+                                f'Layer "{structure.name}": {error}. With several layers each layer with crystal needs an '
+                                f'orientation of the form [1, 0...1, 0...1], e.g. (1 0 0)'
+                            )
+                            continue
                         suggestion = ' '.join(f'{m:g}' for m in layerMillerSuggestion(layer['miller']))
                         errors.append(
                             f'The miller index ({miller}) of layer "{structure.name}" is not accepted by SDTrimSP in layer.inp: {error}. '
                             f'Only the form [1, 0...1, 0...1] is allowed (h >= k, h >= l), e.g. ({suggestion}) '
                             f'which is equivalent for cubic crystals'
                         )
+            else:
+                # polycrystal ((0 0 0) in tri.inp): only the first crystal and not with the surface binding model 4
+                crystals = tableCrystals(arguments.crystal_args)
+                for i, crystal in enumerate(crystals):
+                    if all(float(m) == 0 for m in crystal['miller']):
+                        if i > 0:
+                            errors.append(f'Crystal "{crystal["name"]}": only the first crystal can be a polycrystal (miller index (0 0 0))')
+                        elif DictLookup(version).isbv.get(arguments.settings.get('surface_binding_model')) == 4:
+                            errors.append('A polycrystal (miller index (0 0 0)) is not possible with the surface binding model 4')
 
         # distributions of energies and angles from files must be defined
         group_elements = arguments.settings.get('group_elements')
@@ -5409,7 +5429,7 @@ text = "--- extra ---"
             if content[0].count('(') != content[0].count(')'):
                 errors.append(f'Line {i + 1}: Parentheses do not match')
 
-            data_type = str
+            data_type: type = str
             try:
                 if content[1] in ['.true.', '.false.']:
                     data_type = bool
@@ -5458,7 +5478,7 @@ text = "--- extra ---"
             except ValueError:
                 return -1
 
-        percent = -1
+        percent: float = -1
         try:
             with open(save_folder / log_file, 'r', encoding='utf-8', errors='replace') as file:
                 for line in reversed(file.readlines()):
@@ -5507,6 +5527,8 @@ class SimulationOutput(SimulationsOutput):
 
     # References to classes
     HlPlot = HlPlot
+
+    analysis: 'SimulationAnalysis'
 
     def __init__(self, plot: MplCanvas, element_data: Elements, title_label: VBoxTitleLayout):
         self.analysis = SimulationAnalysis(element_data)
@@ -5622,14 +5644,26 @@ class SimulationOutput(SimulationsOutput):
         canvas = MplCanvas(width=max(width, 4), height=max(height, 3), dpi=self.plot.fig.dpi)
         if arguments.get('view') == '3d':
             canvas.fig.clf()
-            canvas.axes = canvas.fig.add_subplot(projection='3d')
-            if getattr(self.plot.axes, 'name', '') == '3d':
-                canvas.axes.view_init(self.plot.axes.elev, self.plot.axes.azim)
+            axes_3d: Any = canvas.fig.add_subplot(projection='3d')
+            canvas.axes = axes_3d
+            plot_axes: Any = self.plot.axes
+            if getattr(plot_axes, 'name', '') == '3d':
+                axes_3d.view_init(plot_axes.elev, plot_axes.azim)
+
+        # the export blocks the GUI: the status bar of the main window shows the progress
+        main_window = self.plot.window()
+        status_bar = main_window.statusBar() if isinstance(main_window, QMainWindow) else None
+
+        def showStatus(message: str, timeout: int = 0):
+            if status_bar is not None:
+                status_bar.showMessage(message, timeout)
+                status_bar.repaint()
 
         images = []
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             for frame in range(frames + 1):
+                showStatus(f'Saving the animation as GIF: frame {frame + 1} of {frames + 1} (the GUI is blocked until it is saved)...')
                 result = self.analysis.plotTrajectories(**dict(arguments, time_fraction=frame / frames))
                 if result is None or result[0] is None:
                     break
@@ -5637,14 +5671,21 @@ class SimulationOutput(SimulationsOutput):
                 canvas.draw()
                 image = Image.fromarray(np.asarray(canvas.buffer_rgba())).convert('RGB')
                 images.append(image.convert('P', palette=Image.Palette.ADAPTIVE))
+
+            if not images:
+                showStatus('The animation could not be saved (no trajectories)', 5000)
+                return None
+            showStatus(f'Saving the animation as GIF: writing {pathToStr(path)}...')
+            durations = [frame_duration] * (len(images) - 1) + [frame_duration * 25]
+            images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0)
+        except Exception:
+            showStatus('The animation could not be saved', 5000)
+            raise
         finally:
             QApplication.restoreOverrideCursor()
             canvas.deleteLater()
 
-        if not images:
-            return None
-        durations = [frame_duration] * (len(images) - 1) + [frame_duration * 25]
-        images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0)
+        showStatus(f'Animation saved as {pathToStr(path)}', 8000)
         return path
 
     def listParameters(self, save_folder: Path, list_widget: ListWidget):
@@ -6024,7 +6065,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         result: Dict[str, Dict[str, float]] = {}
 
-        def add(quantity: str, values, total: Optional[float] = None, skip_zero: bool = True):
+        def add(quantity: str, values, total=None, skip_zero: bool = True):
             entries = {}
             for element, value in zip(self.elements, values):
                 if not skip_zero or value:
@@ -6072,13 +6113,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         self.particle_back_p_data = np.array([])
         self.particle_back_r_data = np.array([])
 
-        self.fluence_array = None
-        self.depth_array = None
-        self.conc_array = None
+        self.fluence_array: Optional[np.ndarray] = None
+        self.depth_array: Optional[np.ndarray] = None
+        self.conc_array: Optional[np.ndarray] = None
 
         # TODO: move this to general <Simulations.py>
         self.particle: Particle = Particle.Projectile
-        self.particle_data = None
+        self.particle_data: Optional[List[np.ndarray]] = None
 
         # trajectories (cached with the modification time of the file)
         self.trajectories: List[dict] = []
@@ -6111,13 +6152,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         # data from target file
         self.save_folder = save_folder
         try:
-            with open(target, 'r', encoding='utf-8', errors='replace') as file:
+            with open(target, 'r', encoding='utf-8', errors='replace') as target_file:
                 for i in range(4):
-                    file.readline()
-                contents = file.readline().split()
+                    target_file.readline()
+                contents = target_file.readline().split()
                 ncp = int(contents[2])
                 self.is_dynamic = int(contents[-1]) == 0
-                elements_raw = file.readline().split()
+                elements_raw = target_file.readline().split()
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{target}"!')
@@ -6139,7 +6180,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         for element in elements:
             self.elements.append(element)
 
-        self.masses = np.array([self.element_data.elementFromSymbol(element).atomic_mass for element in elements])
+        self.masses = np.array([notNone(self.element_data.elementFromSymbol(element)).atomic_mass for element in elements])
 
     def getElementIndex(self, element: str) -> int:
         """Returns index of element"""
@@ -6147,7 +6188,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             return 0
         return self.elements.index(element)
     
-    def getOutputFileData(self) -> Optional[Tuple[np.ndarray, ...]]:
+    def getOutputFileData(self) -> Optional[tuple]:
         """
         Return the output.dat file data
 
@@ -6447,24 +6488,24 @@ class SimulationAnalysis(SimulationsAnalysis):
                 expected_line_elements = 3 + 2 * ncp_proj + 2 * ncp
 
                 for i in range(nr_total):
-                    line = file.readline().split()
+                    values = file.readline().split()
 
-                    if not line:
+                    if not values:
                         break
 
-                    while len(line) < expected_line_elements:
-                        line.extend(file.readline().split())
+                    while len(values) < expected_line_elements:
+                        values.extend(file.readline().split())
 
-                    energies[i] = line[0]
-                    angles[i] = line[1]
-                    mean_depth[i] = line[2]
+                    energies[i] = values[0]
+                    angles[i] = values[1]
+                    mean_depth[i] = values[2]
 
                     for j in range(ncp_proj):
-                        refl_coefficients[i, j] = floatSafe(line[3 + 2 * j], 0)
-                        energ_refl_coefficients[i, j] = floatSafe(line[3 + 2 * j + 1], 0)
+                        refl_coefficients[i, j] = floatSafe(values[3 + 2 * j], 0)
+                        energ_refl_coefficients[i, j] = floatSafe(values[3 + 2 * j + 1], 0)
                     for j in range(ncp):
-                        sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j], 0)
-                        energ_sputt_coefficients[i, j] = floatSafe(line[3 + 2 * ncp_proj + 2 * j + 1], 0)
+                        sputt_coefficients[i, j] = floatSafe(values[3 + 2 * ncp_proj + 2 * j], 0)
+                        energ_sputt_coefficients[i, j] = floatSafe(values[3 + 2 * ncp_proj + 2 * j + 1], 0)
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{serie}"!')
@@ -6744,20 +6785,21 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         # colors: energy or time
         value_column = {'energy': 3, 'time': 4}.get(color)
-        norm, colormap, value_label = None, None, ''
+        norm: Optional[Normalize] = None
+        colormap, value_label = None, ''
         if value_column == 3:
             energies = all_points[:, 3][all_points[:, 3] > 0]
             vmax = float(energies.max()) if energies.size else 1.
             vmin = max(float(energies.min()) if energies.size else 1e-2, vmax * 1e-5)
             norm = LogNorm(vmin=vmin, vmax=max(vmax, vmin * 10))
-            colormap, value_label = colormaps['plasma'], 'Energy [eV]'
+            colormap, value_label = paletteColormap(), 'Energy [eV]'
         elif value_column == 4:
             norm = Normalize(vmin=0, vmax=max(end_time, 1e-9))
-            colormap, value_label = colormaps['viridis'], 'Time [fs]'
+            colormap, value_label = paletteColormap(), 'Time [fs]'
 
         def segmentValues(points: np.ndarray) -> np.ndarray:
             values = points[:-1, value_column]
-            return np.clip(values, norm.vmin, None) if value_column == 3 else values
+            return np.clip(values, notNone(norm).vmin, None) if value_column == 3 else values
 
         # ranges of all trajectories (constant during the animation), the layers are only drawn in the depth range
         margin = 0.05 * max(float(np.max(np.ptp(all_points[:, :3], axis=0))), 1.)
@@ -6765,14 +6807,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         upper = all_points[:, :3].max(axis=0) + margin
         layer_list = [
             (max(top, lower[0]), min(bottom, upper[0]), name)
-            for top, bottom, name in (readLayers(self.save_folder) if layers and view != 'top' else [])
+            for top, bottom, name in (readLayers(notNone(self.save_folder)) if layers and view != 'top' else [])
             if bottom > lower[0] and top < upper[0]
         ]
-        layer_colors = ['#bcbd22', '#17becf', '#9467bd', '#8c564b', '#7f7f7f']
         layer_names = list(dict.fromkeys(name for _, _, name in layer_list))
 
         def layerColor(name: str) -> str:
-            return layer_colors[layer_names.index(name) % len(layer_colors)]
+            return layerHex(layer_names.index(name))
 
         axis_labels = ['Depth x [Å]', 'Lateral position y [Å]', 'Lateral position z [Å]']
 
@@ -6870,7 +6911,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         colorbar_axes = 1 if view == 'both' else 0
 
         # legend: species of the projectile and the recoils, layers
-        handles = []
+        handles: List[Artist] = []
         if value_column is None:
             for recoil in (False, True):
                 for species in sorted({t['species'] for t, _ in parts if t['recoil'] == recoil}):
@@ -7000,7 +7041,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             positive = mapped[mapped > 0]
             norm = LogNorm(vmin=max(float(positive.min()), float(positive.max()) * 1e-6), vmax=float(positive.max()))
             mapped = np.where(mapped > 0, mapped, np.nan)
-        mpl_settings.axes.pcolormesh(edges[horizontal], edges[vertical], mapped, cmap='inferno', norm=norm, shading='flat')
+        mpl_settings.axes.pcolormesh(edges[horizontal], edges[vertical], mapped, cmap=paletteColormap(), norm=norm, shading='flat')
         mpl_settings.axes.pcolormesh_label('Energy [eV/Å²/projectile]')
         if vertical == 'x':
             mpl_settings.axes.set_ylim(edges['x'][-1], edges['x'][0])
@@ -7076,7 +7117,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             positive = counts[counts > 0]
             norm = LogNorm(vmin=float(positive.min()), vmax=float(positive.max()))
             counts = np.where(counts > 0, counts, np.nan)
-        mpl_settings.axes.pcolormesh(polar_edges, energy_edges, counts, cmap='viridis', norm=norm, shading='flat')
+        mpl_settings.axes.pcolormesh(polar_edges, energy_edges, counts, cmap=paletteColormap(), norm=norm, shading='flat')
         mpl_settings.axes.pcolormesh_label('Particles per projectile')
         mpl_settings.axes.set_xlabel('Polar angle [°]')
         mpl_settings.axes.set_ylabel('Energy [eV]')
@@ -7320,6 +7361,19 @@ class SimulationAnalysis(SimulationsAnalysis):
             conc_array
         )
     
+    @staticmethod
+    def depthIntervals(depth_x_values: np.ndarray) -> np.ndarray:
+        """
+        Returns the width of the depth intervals of each species from the centers of the intervals (depth_*.dat).
+        With only one depth interval (nqx = 1) the first interval starts at the surface, so its width is twice its center
+        """
+
+        if depth_x_values.shape[1] >= 2:
+            delta = depth_x_values[:, 1] - depth_x_values[:, 0]
+        else:
+            delta = 2 * depth_x_values[:, 0]
+        return np.where(delta > 0, delta, 1.)
+
     def plotImplantationDepth(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
         """Plot and return projectile stops over depth"""
 
@@ -7338,7 +7392,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         mpl_settings = MplCanvasSettings()
 
         depth_x_values = depth_data[:, :, 0]
-        depth_delta = depth_x_values[:, 1] - depth_x_values[:, 0]
+        depth_delta = self.depthIntervals(depth_x_values)
         stops = depth_data[:, :, 1]
 
         data = []
@@ -7387,7 +7441,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         mpl_settings = MplCanvasSettings()
 
         depth_x_values = depth_data[:, :, 0]
-        depth_delta = depth_x_values[:, 1] - depth_x_values[:, 0]
+        depth_delta = self.depthIntervals(depth_x_values)
         nuclear_loss = depth_data[:, :, 3] * 1e6  # convert from MeV to eV
         electron_loss = depth_data[:, :, 4] * 1e6  # convert from MeV to eV
         total_loss = nuclear_loss + electron_loss
@@ -7446,12 +7500,14 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         use_depth_damage = (self.save_folder / 'depth_damage.dat').is_file()
 
+        # number of projectiles: int (depth_damage.dat) or array (depth_recoil.dat)
+        file_data: Optional[Tuple[int, List[str], np.ndarray, int, Any, np.ndarray]]
         if use_depth_damage:
-            depth_data = self.getDamageDepthFileData('depth_damage.dat')
+            file_data = self.getDamageDepthFileData('depth_damage.dat')
         else:
-            depth_data = self.getDepthFileData('depth_recoil.dat')
+            file_data = self.getDepthFileData('depth_recoil.dat')
 
-        if depth_data is None:
+        if file_data is None:
             return None
 
         (ncp,
@@ -7459,17 +7515,17 @@ class SimulationAnalysis(SimulationsAnalysis):
          nr_of_depth_steps,
          max_nr_depth_steps,
          nr_of_projectiles,
-         depth_data) = depth_data
+         depth_data) = file_data
 
         mpl_settings = MplCanvasSettings()
 
         depth_x_values = depth_data[:, :, 0]
-        depth_delta = depth_x_values[:, 1] - depth_x_values[:, 0]
+        depth_delta = self.depthIntervals(depth_x_values)
         if use_depth_damage:
             vacancies = depth_data[:, :, -1]
         else:
             vacancies = depth_data[:, :, 7]
-            nr_of_projectiles = nr_of_projectiles[0]
+            nr_of_projectiles = np.asarray(nr_of_projectiles)[0]
 
         data = []
         plot_labels = []
@@ -8239,12 +8295,12 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         return (data, plot_labels), mpl_settings
 
-    def plotParticlesEnergyP(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
+    def plotParticlesEnergyP(self) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return energy of backscattered projectiles"""
 
         return self.updateParticlesEnergyPolar(Particle.Projectile, 0, 90)
 
-    def plotParticlesEnergyR(self) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
+    def plotParticlesEnergyR(self) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return energy of backscattered recoils"""
 
         return self.updateParticlesEnergyPolar(Particle.Recoil, 0, 90)
@@ -8381,7 +8437,7 @@ class SimulationAnalysis(SimulationsAnalysis):
         mpl_settings.axes.set_theta_direction(-1)
         mpl_settings.axes.set_theta_zero_location('E')
         mpl_settings.axes.set_yticklabels([])
-        mpl_settings.axes.pcolormesh(a, r, hist.T, cmap='viridis', zorder=-1, vmin=0.)
+        mpl_settings.axes.pcolormesh(a, r, hist.T, cmap=paletteColormap(), zorder=-1, vmin=0.)
         mpl_settings.axes.pcolormesh_label('Distribution of Particles [1/sr]', rotation=90)  # colorbar.set_label()
 
         plot_labels.append('Rows: polar angles [°], columns: azimuthal angles [°], distribution of particles in [1/sr], first row/column gives the respective angle (center of the bin of the histogram), polar bins are chosen so that all bins have the same solid angle')

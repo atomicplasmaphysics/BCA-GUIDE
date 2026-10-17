@@ -116,10 +116,21 @@ def no_message_boxes(monkeypatch):
 def errors(monkeypatch) -> List[str]:
     """Collects exceptions that are raised in Qt slots (they would only be printed otherwise)"""
 
+    import logging
     import traceback
     collected = []
     monkeypatch.setattr(sys, 'excepthook', lambda t, v, tb: collected.append(''.join(traceback.format_exception(t, v, tb))))
-    return collected
+
+    # exceptions that are caught by the GUI (e.g. in plots) are logged as errors
+    class Collector(logging.Handler):
+        def emit(self, record):
+            collected.append(self.format(record))
+
+    handler = Collector(level=logging.ERROR)
+    handler.setFormatter(logging.Formatter('%(levelname)s %(name)s: %(message)s'))
+    logging.getLogger().addHandler(handler)
+    yield collected
+    logging.getLogger().removeHandler(handler)
 
 
 def pump(app: QApplication, seconds: float = 0.2, until: Optional[Callable[[], bool]] = None):

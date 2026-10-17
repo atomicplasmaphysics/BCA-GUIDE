@@ -1,9 +1,10 @@
-from typing import List, Union, Optional
+from typing import Generic, List, Union, Optional, TypeVar
 
 from PyQt6.QtCore import pyqtSignal, QObject, Qt
 from PyQt6.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox, QFrame
 
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 
 class CustomRowField:
@@ -19,7 +20,7 @@ class CustomRowField:
     :param enabled: (optional) if field is enabled
     """
 
-    uniqueList = []
+    uniqueList: List[int] = []
     uniqueIdLast = 0
 
     def __init__(
@@ -94,7 +95,11 @@ class CustomRow(QObject):
         raise NotImplementedError('Must overwrite getArguments()')
 
 
-class CustomTable(QTableWidget):
+# type of the rows of a table
+RowT = TypeVar('RowT', bound=CustomRow)
+
+
+class CustomTable(QTableWidget, Generic[RowT]):
     """
     Class for custom QTableWidget
 
@@ -110,14 +115,14 @@ class CustomTable(QTableWidget):
     def __init__(self, row_count: int, header_labels, parent, frozen_columns: int = 0):
         self.header_labels = [''] + header_labels
         super().__init__(row_count, len(self.header_labels), parent)
-        self.rows: List[CustomRow] = []
+        self.rows: List[RowT] = []
 
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.verticalHeader().setVisible(False)
+        notNone(self.verticalHeader()).setVisible(False)
         self.setHorizontalHeaderLabels(self.header_labels)
 
-        self.horizontal_header = self.horizontalHeader()
+        self.horizontal_header = notNone(self.horizontalHeader())
         self.horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.horizontal_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.horizontal_header.setMinimumSectionSize(40)
@@ -202,7 +207,7 @@ class CustomTable(QTableWidget):
         if self.frozen is not None:
             self.frozen.removeRow(row)
 
-    def setCellWidget(self, row: int, column: int, widget: QWidget):
+    def setCellWidget(self, row: int, column: int, widget: Optional[QWidget]):
         if self.frozen is not None and column < self.frozen_columns:
             self.frozen.setCellWidget(row, column, widget)
         else:
@@ -228,9 +233,9 @@ class CustomTable(QTableWidget):
         :param tooltip: tooltip
         """
 
-        self.horizontalHeaderItem(column).setToolTip(tooltip)
+        notNone(self.horizontalHeaderItem(column)).setToolTip(tooltip)
         if self.frozen is not None and column < self.frozen_columns:
-            self.frozen.horizontalHeaderItem(column).setToolTip(tooltip)
+            notNone(self.frozen.horizontalHeaderItem(column)).setToolTip(tooltip)
 
     def createAddButton(self):
         """Creates add button"""
@@ -239,7 +244,7 @@ class CustomTable(QTableWidget):
         self.setCellWidget(0, 0, self.add_button)
         self.setSpan(0, 0, 1, len(self.header_labels))
 
-    def createRow(self, row_idx: int) -> CustomRow:
+    def createRow(self, row_idx: int) -> RowT:
         """
         Create row with index
 
@@ -248,7 +253,7 @@ class CustomTable(QTableWidget):
 
         raise NotImplementedError('Must override createRow()')
 
-    def addRow(self, update: bool = True, connect: bool = True) -> CustomRow:
+    def addRow(self, update: bool = True, connect: bool = True) -> Optional[RowT]:
         """
         Add a new row
 
@@ -355,7 +360,7 @@ class CustomTable(QTableWidget):
 
         raise NotImplementedError('Must overwrite getArguments()')
 
-    def emit(self, value_dict: dict = None):
+    def emit(self, value_dict: Optional[dict] = None):
         """
         Emits settingsChanged pyqtSignal
 

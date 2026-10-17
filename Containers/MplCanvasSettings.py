@@ -1,4 +1,4 @@
-from typing import Tuple, Union, List, Optional
+from typing import Any, Tuple, Union, List, Optional, cast
 import logging
 
 from Utility.Layouts import MplCanvas
@@ -6,7 +6,6 @@ from Utility.Functions import setDictIfNotExists
 
 from matplotlib import rc_context
 from matplotlib.figure import Figure
-from matplotlib.axes import Axes
 
 
 class Logger:
@@ -49,13 +48,15 @@ class MplCanvasSettings:
     def __init__(self):
         # Logger() has wrong data type, but the python editor will suggest hints for Figure and Axes
         self.fig: Union[Figure, Logger] = Logger()
-        self.axes: Union[Axes, Logger] = Logger()
+        # the axes are typed as Any, because the calls can also be the ones of polar and 3D axes and the calls of the canvas
+        # (e.g. pcolormesh_label)
+        self.axes: Any = Logger()
 
         # further axes (args and kwargs of fig.add_subplot, calls) and colorbars (mappable, kwargs, index of axes)
         self.extra_axes: List[Tuple[tuple, dict, Logger]] = []
-        self.colorbars: List[Tuple[object, dict, int]] = []
+        self.colorbars: List[Tuple[Any, dict, int]] = []
 
-    def addAxes(self, *args, **kwargs) -> Union[Axes, Logger]:
+    def addAxes(self, *args, **kwargs) -> Any:
         """
         Adds a further axes (arguments of Figure.add_subplot) and returns its call logger.
         The first axes is self.axes (created with self.fig.add_subplot(...) or as a single axes)
@@ -78,7 +79,7 @@ class MplCanvasSettings:
 
     def get_calls(self) -> Tuple[list, list]:
         """Returns list of all function calls and variable assignments for .fig and .axes"""
-        return self.fig.get_calls(), self.axes.get_calls()
+        return cast(Logger, self.fig).get_calls(), cast(Logger, self.axes).get_calls()
 
     def apply(self, canvas: MplCanvas):
         """
@@ -88,13 +89,14 @@ class MplCanvasSettings:
         """
 
         # get all call lists (copies, so that the settings can be applied more than once)
-        fig_calls: list = list(self.fig.get_calls())
-        axes_calls: list = list(self.axes.get_calls())
+        fig_calls: list = list(cast(Logger, self.fig).get_calls())
+        axes_calls: list = list(cast(Logger, self.axes).get_calls())
 
         # the view of a 3D plot is kept when it is redrawn (e.g. while animating)
         old_view: Optional[Tuple[float, float]] = None
         if getattr(canvas.axes, 'name', '') == '3d':
-            old_view = (canvas.axes.elev, canvas.axes.azim)
+            axes_3d: Any = canvas.axes
+            old_view = (axes_3d.elev, axes_3d.azim)
 
         with rc_context(canvas.get_rc_context()):
             # clear figure
@@ -147,6 +149,7 @@ class MplCanvasSettings:
                     self.apply_call(axes, call)
 
                 if getattr(axes, 'name', '') == '3d':
+                    axes = cast(Any, axes)
                     if old_view is not None and not any(call[1] == 'view_init' for call in calls):
                         axes.view_init(*old_view)
                     # transparent panes, so that the background follows the theme
@@ -159,7 +162,11 @@ class MplCanvasSettings:
                     canvas.fig.colorbar(mappable, ax=axes_list[index], **kwargs)
 
             # draw to canvas
-            canvas.fig.tight_layout()
+            # the tight layout is applied at each drawing (also after resizing), tight_layout() only once (matplotlib < 3.6)
+            if hasattr(canvas.fig, 'set_layout_engine'):
+                canvas.fig.set_layout_engine('tight')
+            else:
+                canvas.fig.tight_layout()
             canvas.fig.canvas.draw_idle()
 
     @staticmethod

@@ -10,6 +10,7 @@ from GlobalConf import GlobalConf
 from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
 from Utility.Layouts import ProgressTabBar, TimeProgressBar
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 from Pages.ConfigurationPage import ConfigurationPage
 from Pages.ProgramPage import SimulationPage
@@ -49,14 +50,14 @@ class MainWindow(QMainWindow):
         #
 
         # File
-        self.menu = self.menuBar()
-        self.menu_file = self.menu.addMenu('&File')
+        self.menu = notNone(self.menuBar())
+        self.menu_file = notNone(self.menu.addMenu('&File'))
         self.menu_file.setToolTipsVisible(True)
 
         # Save all
-        self.action_save_all = self.menu_file.addAction(getIcon('save'), 'Save all')
+        self.action_save_all = notNone(self.menu_file.addAction(getIcon('save'), 'Save all'))
         self.action_save_all.setToolTip('Save configuration for all tabs')
-        self.action_save_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_S))
+        self.action_save_all.setShortcut(QKeySequence('Ctrl+Alt+S'))
         self.action_save_all.triggered.connect(lambda: self.menuSave())
 
         # Open all - not needed
@@ -66,43 +67,43 @@ class MainWindow(QMainWindow):
         # self.action_open_all.triggered.connect(lambda: self.menuOpen())
 
         # Reset all
-        self.action_reset_all = self.menu_file.addAction(getIcon('refresh'), 'Reset all')
+        self.action_reset_all = notNone(self.menu_file.addAction(getIcon('refresh'), 'Reset all'))
         self.action_reset_all.setToolTip('Resets configuration for all tabs')
-        self.action_reset_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_N))
+        self.action_reset_all.setShortcut(QKeySequence('Ctrl+Alt+N'))
         self.action_reset_all.triggered.connect(lambda: self.menuReset())
 
         self.menu_file.addSeparator()
 
         # Close all
-        self.action_close_all = self.menu_file.addAction(getIcon('close'), 'Close all tabs')
+        self.action_close_all = notNone(self.menu_file.addAction(getIcon('close'), 'Close all tabs'))
         self.action_close_all.setToolTip('Closes all tabs')
-        self.action_close_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_W))
+        self.action_close_all.setShortcut(QKeySequence('Ctrl+Alt+W'))
         self.action_close_all.triggered.connect(lambda: self.menuCloseAll())
 
         self.menu_file.addSeparator()
 
         # Preferences
-        self.action_preferences = self.menu_file.addAction(getIcon('preferences'), 'Preferences')
+        self.action_preferences = notNone(self.menu_file.addAction(getIcon('preferences'), 'Preferences'))
         self.action_preferences.setToolTip('Open preferences dialog')
-        self.action_preferences.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_H))
+        self.action_preferences.setShortcut(QKeySequence('Ctrl+H'))
         self.action_preferences.triggered.connect(self.openPreferences)
 
         self.menu_file.addSeparator()
 
         # Quit
-        self.action_quit = self.menu_file.addAction('Quit')
+        self.action_quit = notNone(self.menu_file.addAction('Quit'))
         self.action_quit.setToolTip('Quit the program')
         self.action_quit.setShortcut(QKeySequence.StandardKey.Quit)
         self.action_quit.triggered.connect(lambda: self.close())
 
         # Simulation
-        self.menu_simulation = self.menu.addMenu('&Simulation')
+        self.menu_simulation = notNone(self.menu.addMenu('&Simulation'))
         self.menu_simulation.setToolTipsVisible(True)
 
         # Close current tab
-        self.closeAction = self.menu_simulation.addAction(getIcon('close'), 'Close current tab')
+        self.closeAction = notNone(self.menu_simulation.addAction(getIcon('close'), 'Close current tab'))
         self.closeAction.setToolTip('Closes currently active tab')
-        self.closeAction.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_W))
+        self.closeAction.setShortcut(QKeySequence('Ctrl+W'))
         self.closeAction.setDisabled(True)
         self.closeAction.triggered.connect(lambda: self.menuClose())
 
@@ -119,15 +120,15 @@ class MainWindow(QMainWindow):
         self.run_status_timer.timeout.connect(self.updateRunAllStatus)
 
         # Run all tabs
-        self.action_run_all = self.menu_simulation.addAction(getIcon('play'), 'Run all tabs')
+        self.action_run_all = notNone(self.menu_simulation.addAction(getIcon('play'), 'Run all tabs'))
         self.action_run_all.setToolTip('Runs all opened tabs, at most the given number of simulations at the same time (the others wait in a queue)')
-        self.action_run_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_R))
+        self.action_run_all.setShortcut(QKeySequence('Ctrl+Alt+R'))
         self.action_run_all.triggered.connect(lambda: self.menuRun())
 
         # Run all tabs detached
-        self.action_run_all_detached = self.menu_simulation.addAction(getIcon('play_detached'), 'Run all tabs detached')
+        self.action_run_all_detached = notNone(self.menu_simulation.addAction(getIcon('play_detached'), 'Run all tabs detached'))
         self.action_run_all_detached.setToolTip('Runs all opened tab in detached mode')
-        self.action_run_all_detached.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Modifier.SHIFT | Qt.Key.Key_R))
+        self.action_run_all_detached.setShortcut(QKeySequence('Ctrl+Alt+Shift+R'))
         self.action_run_all_detached.triggered.connect(lambda: self.menuRun(detached=True))
 
         # number of simultaneous simulations of "Run all"
@@ -149,39 +150,39 @@ class MainWindow(QMainWindow):
         self.menu_simulation.addSeparator()
 
         # parameter scan and comparison of simulations
-        self.action_parameter_scan = self.menu_simulation.addAction(getIcon('play'), 'Parameter scan of current tab...')
+        self.action_parameter_scan = notNone(self.menu_simulation.addAction(getIcon('play'), 'Parameter scan of current tab...'))
         self.action_parameter_scan.setToolTip('Runs a series of simulations in which one parameter of the current tab is varied and compares the results')
         self.action_parameter_scan.triggered.connect(lambda: self.openParameterScan())
-        self.action_compare = self.menu_simulation.addAction(getIcon('search'), 'Compare simulations...')
+        self.action_compare = notNone(self.menu_simulation.addAction(getIcon('search'), 'Compare simulations...'))
         self.action_compare.setToolTip('Compares the results of several simulations of the program of the current tab in one table and plot')
         self.action_compare.triggered.connect(lambda: self.openComparison())
 
         self.menu_simulation.addSeparator()
 
         # Abort all tabs
-        self.action_abort_all = self.menu_simulation.addAction(getIcon('abort'), 'Abort all tabs')
+        self.action_abort_all = notNone(self.menu_simulation.addAction(getIcon('abort'), 'Abort all tabs'))
         self.action_abort_all.setToolTip('Aborts all running tabs')
-        self.action_abort_all.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Modifier.ALT | Qt.Key.Key_P))
+        self.action_abort_all.setShortcut(QKeySequence('Ctrl+Alt+P'))
         self.action_abort_all.triggered.connect(lambda: self.menuAbort())
 
         # Help
-        self.menu_help = self.menu.addMenu('&Help')
+        self.menu_help = notNone(self.menu.addMenu('&Help'))
         self.menu_help.setToolTipsVisible(True)
 
         # Manual
         self.manual_path = Path(QDir.currentPath())
-        self.action_manual = self.menu_help.addAction(getIcon('book'), 'Manual')
+        self.action_manual = notNone(self.menu_help.addAction(getIcon('book'), 'Manual'))
         self.action_manual.triggered.connect(lambda: self.openUserManual())
 
         # Manual
-        self.action_manual = self.menu_help.addAction(getIcon('help'), 'Quick Manual')
+        self.action_manual = notNone(self.menu_help.addAction(getIcon('help'), 'Quick Manual'))
         self.action_manual.triggered.connect(lambda: ManualDialog(self).show())
 
 
         self.menu_help.addSeparator()
 
         # About
-        self.action_about = self.menu_help.addAction('About')
+        self.action_about = notNone(self.menu_help.addAction('About'))
         self.action_about.triggered.connect(lambda: AboutDialog(self).open())
 
         self.setMenuBar(self.menu)
@@ -203,7 +204,7 @@ class MainWindow(QMainWindow):
 
         # apply the theme from the preferences, also react to theme changes of the operating system
         self.applyTheme()
-        self.app.styleHints().colorSchemeChanged.connect(lambda _: QTimer.singleShot(0, self.refreshStyleSheets))
+        notNone(self.app.styleHints()).colorSchemeChanged.connect(lambda _: QTimer.singleShot(0, self.refreshStyleSheets))
 
         #
         # STATUS BAR
@@ -217,9 +218,13 @@ class MainWindow(QMainWindow):
 
         self.tab_simulations.currentChanged.connect(lambda index: self.writeWindowTitleTab(index))
 
+        # the saved geometry contains the display and the maximized state, the window opens on the same display again
         width, height = GlobalConf.getWindowSize()
         x, y = GlobalConf.getWindowCenter()
-        if width == height == -1:
+        geometry = GlobalConf.getWindowGeometry()
+        if geometry is not None and self.restoreGeometry(geometry):
+            pass
+        elif width == height == -1:
             self.showMaximized()
         else:
             self.resize(width, height)
@@ -228,7 +233,7 @@ class MainWindow(QMainWindow):
 
             # the stored center also defines the display; if this display is not available anymore, use the primary display
             if (x == y == 0) or QGuiApplication.screenAt(center_point) is None:
-                center_point = QGuiApplication.primaryScreen().availableGeometry().center()
+                center_point = notNone(QGuiApplication.primaryScreen()).availableGeometry().center()
             frame_geometry.moveCenter(center_point)
             self.move(frame_geometry.topLeft())
 
@@ -303,9 +308,9 @@ class MainWindow(QMainWindow):
 
         :param index: index of active tab
         """
-        tab_widget = self.tab_simulations.widget(index)
-        if hasattr(tab_widget, 'updateWidget'):
-            tab_widget.updateWidget()
+        update_widget = getattr(self.tab_simulations.widget(index), 'updateWidget', None)
+        if update_widget is not None:
+            update_widget()
 
         # disable/enable close current tab - menu
         self.closeAction.setDisabled(index == 0)
@@ -326,7 +331,7 @@ class MainWindow(QMainWindow):
         :param visible_time: (optional) time in ms until status bar is cleared again. If 0, then message will stay persistent
         """
 
-        self.statusBar().showMessage(msg, visible_time)
+        notNone(self.statusBar()).showMessage(msg, visible_time)
 
     def writeWindowTitleTab(self, index: int):
         """
@@ -495,16 +500,13 @@ class MainWindow(QMainWindow):
         return page if isinstance(page, SimulationPage) else None
 
     def openParameterScan(self):
-        """Opens the parameter scan of the current simulation tab"""
-
-        from Pages.ParameterScanDialog import ParameterScanDialog
+        """Shows the tabs of the parameter scan of the current simulation tab"""
 
         page = self.currentSimulationPage()
         if page is None:
             self.writeStatusBar('Select the tab of a simulation for the parameter scan')
             return
-        dialog = ParameterScanDialog(page)
-        dialog.show()
+        page.openParameterScan()
 
     def openComparison(self, page: Optional[SimulationPage] = None):
         """Opens the comparison of simulations (of the program of the current tab, starting with its folder)"""
@@ -627,21 +629,22 @@ class MainWindow(QMainWindow):
         duration of the finished and running ones and start when a simulation finishes
         """
 
-        slots = []
+        # remaining time of the running simulations (None if unknown)
+        running: List[Optional[float]] = []
         durations = list(self.run_durations)
         for page in self.run_active:
             progress = page.run_progress.value()
             elapsed = page.run_progress.elapsed_timer.elapsed() / 1000
             if progress < 1 or elapsed <= 0:
-                slots.append(None)
+                running.append(None)
                 continue
             total = elapsed * 100 / progress
             durations.append(total)
-            slots.append(max(total - elapsed, 0.))
+            running.append(max(total - elapsed, 0.))
         if not durations:
             return None
         mean_duration = sum(durations) / len(durations)
-        slots = [mean_duration if slot is None else slot for slot in slots]
+        slots = [mean_duration if slot is None else slot for slot in running]
         slots += [0.] * max(0, max(1, GlobalConf.max_parallel_runs) - len(slots))
         for _ in self.run_queue:
             index = slots.index(min(slots))
@@ -682,6 +685,8 @@ class MainWindow(QMainWindow):
         for sc in self.simulation_configs:
             if sc.running:
                 sc.tab_widget.process.kill()
+            if sc.tab_widget is not None and sc.tab_widget.scan_page is not None:
+                sc.tab_widget.scan_page.abort()
 
     def openPreferences(self):
         """Opens the preferences dialog"""
@@ -741,12 +746,15 @@ class MainWindow(QMainWindow):
             if style_sheet:
                 widget.setStyleSheet(style_sheet)
 
-    def closeEvent(self, event: QCloseEvent):
+    def closeEvent(self, event: Optional[QCloseEvent]):
         """
         Executed when close button is pressed
 
         :param event: close event
         """
+
+        if event is None:
+            return
 
         # check for unsaved changes/running simulations
         closable = self.simulation_configuration_page.checkClosableAll()
@@ -756,18 +764,22 @@ class MainWindow(QMainWindow):
 
             # terminate all running processes
             for sc in self.simulation_configs:
-                sc.tab_widget.process.kill()
+                if sc.tab_widget is not None:
+                    sc.tab_widget.process.kill()
+                    if sc.tab_widget.scan_page is not None:
+                        sc.tab_widget.scan_page.stop(ask=False)
 
             GlobalConf.updateSettings()
 
+            # the center is also saved for maximized windows, it defines the display (also of the splash screen)
             if self.isMaximized():
                 dimensions = (-1, -1)
-                center = (0, 0)
             else:
                 dimensions = (self.width(), self.height())
-                center = (int(self.pos().x() + self.width() / 2), int(self.pos().y() + self.height() / 2))
+            center = self.frameGeometry().center()
             GlobalConf.updateWindowSize(*dimensions)
-            GlobalConf.updateWindowCenter(*center)
+            GlobalConf.updateWindowCenter(center.x(), center.y())
+            GlobalConf.updateWindowGeometry(self.saveGeometry())
 
             event.accept()
 

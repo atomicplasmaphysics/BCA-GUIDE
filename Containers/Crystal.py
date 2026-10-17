@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Optional, Union
+from typing import Iterator, List, Optional, Union
 import logging
 
 
@@ -29,6 +29,9 @@ class Vec3:
 
     def __getitem__(self, idx: int) -> float:
         return self.vec[idx]
+
+    def __iter__(self) -> Iterator[float]:
+        return iter(self.vec)
 
     def __setitem__(self, idx: int, val: float):
         self.vec[idx] = val
@@ -112,17 +115,17 @@ class MillerIndex(Vec3):
                 logging.warning(f'Miller index "{miller_index}" is not purely integers, will convert to int()')
 
     @property
-    def h(self) -> int:
+    def h(self) -> float:
         """Returns h (=1) component of miller index vector"""
         return self.vec[0]
 
     @property
-    def k(self) -> int:
+    def k(self) -> float:
         """Returns k (=2) component of miller index vector"""
         return self.vec[1]
 
     @property
-    def l(self) -> int:
+    def l(self) -> float:
         """Returns l (=3) component of miller index vector"""
         return self.vec[2]
 

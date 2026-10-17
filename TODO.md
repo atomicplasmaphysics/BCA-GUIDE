@@ -22,6 +22,9 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 - [ ] Miller indices of layers in `layer.inp` (SDTrimSP 7.02+) must have the form [1, 0...1, 0...1]. The GUI marks other
       indices and suggests the equivalent index for cubic crystals; an automatic conversion (also for non-cubic
       crystals) would be more convenient.
+- [ ] Polycrystals (Miller index (0 0 0)) are only possible in SDTrimSP without a layer file and only for the first
+      crystal. With several layers each layer with crystal needs an orientation. Input files of colleagues with crystals
+      in layers would help to check the crystal options of the GUI.
 
 ## Simulation results
 
@@ -29,8 +32,14 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 - [ ] Save plot settings (e.g. of the trajectories) as templates; the 3D view of the trajectories could also be rotated
       during the GIF export.
 - [ ] Comparison of simulations: overlay of the 2D maps (energy distribution, matrices) as difference plots.
-- [ ] Parameter scans over two parameters (2D maps of yields), and scans of element parameters (e.g. surface binding
-      energy).
+- [ ] Parameter scans: values from a file or from a list of complete parameter sets (instead of all combinations), and
+      an adaptive refinement of the values where the yield changes strongly.
+- [ ] Parameter scans: rerun only the failed (or not run) simulations of a scan, several scans per simulation tab (list
+      of the scans in its folder) and one queue with "Run all" (one limit of simultaneous simulations for both).
+- [ ] Export of GIF animations in a background thread (the GUI is blocked during the export, the status bar shows the
+      progress).
+- [ ] Comparison of simulations: fits (e.g. of the energy dependence of the yield) and the comparison with
+      experimental data from a file.
 
 ## Simulation setup
 
@@ -58,7 +67,7 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 - [ ] Update the manual (https://doi.org/10.34726/3526) with the new features: distribution editor, trajectories
       (3D, animation), energy distributions and matrices, parameter scans, comparison of simulations, "Run all" queue,
       run warnings, automatic search of simulations, crystals from `table.crystal`, examples.
-- [ ] Fix the type errors reported by mypy (about 900, mostly `Optional` values of PyQt6 and missing annotations) and
-      make the type checking in the continuous integration blocking.
+- [ ] Stricter type checking: `check_untyped_defs` and annotations of the remaining functions (mypy only checks
+      annotated functions), then `disallow_untyped_defs` for new modules.
 - [ ] Check the continuous integration (`.github/workflows/ci.yml`) on GitHub after the first push, add a PyInstaller
       build.

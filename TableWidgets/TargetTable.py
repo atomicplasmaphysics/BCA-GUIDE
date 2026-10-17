@@ -8,6 +8,7 @@ from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Functions import limitSum
 from Utility.Layouts import SpinBox, DoubleSpinBox, SpinBoxRange
 from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 from TableWidgets.CustomTable import CustomTable, CustomRow
 
@@ -88,7 +89,7 @@ class TargetLayersRow(CustomRow):
         self.edit_button.setLayout(self.edit_button_hl)
 
         self.name_validator = QRegularExpressionValidator(QRegularExpression('[a-zA-Z1-9]+'))
-        self.element_cells = []
+        self.element_cells: list = []
         self.segment_thickness = 0
 
         self.segment_count = SpinBox(
@@ -279,7 +280,7 @@ class TargetLayersRow(CustomRow):
         self.setCrystalValues(arguments.get('crystal_fractions'), arguments.get('miller'))
 
 
-class TargetLayersTable(CustomTable):
+class TargetLayersTable(CustomTable[TargetLayersRow]):
     """
     Table for target layers
 
@@ -325,9 +326,9 @@ class TargetLayersTable(CustomTable):
         self.target_row = custom_table_row
 
         super().__init__(0, self.labels, parent)
-        self.rows: List[TargetLayersRow] = []
+        self.rows = []
 
-        self.elements = []
+        self.elements: List[str] = []
         self.crystal_names: List[str] = []
         self.segment_thickness = target_thickness / target_segments_count
         self.target_segments_count = target_segments_count
@@ -337,7 +338,7 @@ class TargetLayersTable(CustomTable):
 
         for i, tooltip in enumerate(self.tooltips):
             if tooltip:
-                self.horizontalHeaderItem(i + 1).setToolTip(tooltip)
+                notNone(self.horizontalHeaderItem(i + 1)).setToolTip(tooltip)
 
     def createRow(self, row_idx):
         """
@@ -359,7 +360,7 @@ class TargetLayersTable(CustomTable):
         :param connect: if row should be connected
         """
 
-        row = super().addRow(update=update, connect=connect)
+        row = notNone(super().addRow(update=update, connect=connect))
         self.label_row_idx += 1
         row.layer_name.setText(f'Layer{self.label_row_idx}')
 
@@ -487,9 +488,9 @@ class TargetLayersTable(CustomTable):
 
         self.setHorizontalHeaderLabels(self.header_labels)
         for i in range(len(names)):
-            self.horizontalHeaderItem(column + i).setToolTip(self.crystalTooltip)
+            notNone(self.horizontalHeaderItem(column + i)).setToolTip(self.crystalTooltip)
         if names:
-            self.horizontalHeaderItem(column + len(names)).setToolTip(self.millerTooltip)
+            notNone(self.horizontalHeaderItem(column + len(names))).setToolTip(self.millerTooltip)
         self.resizeTable()
         self.updateLayers()
 
@@ -647,7 +648,7 @@ class TargetLayersTable(CustomTable):
         """
 
         self.resetTable()
-        not_loadable = []
+        not_loadable: List[str] = []
         rows = []
         for _ in arguments:
             rows.append(self.addRow(update=False, connect=False))

@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Type
 from os import listdir, path
 from sys import exit
 
@@ -15,14 +15,14 @@ class SimulationsList:
     __initialized = False
 
     # simulation programs
-    simulation_program_list: List[SimulationsInput] = []
+    simulation_program_list: List[Type[SimulationsInput]] = []
     simulation_program_versions: Dict = {}
-    simulation_evaluation_list: List[SimulationsOutput] = []
-    simulation_program_names = []
-    simulation_program_description = []
-    simulation_program_logo = []
-    simulation_program_about = []
-    input_files = []
+    simulation_evaluation_list: List[Type[SimulationsOutput]] = []
+    simulation_program_names: List[str] = []
+    simulation_program_description: List[str] = []
+    simulation_program_logo: List[str] = []
+    simulation_program_about: List[str] = []
+    input_files: List[str] = []
 
     def __new__(cls):
         """

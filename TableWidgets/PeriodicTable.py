@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from string import ascii_lowercase
 
 from PyQt6.QtCore import pyqtSignal, Qt, QSize, QEvent
@@ -111,7 +111,7 @@ class ElementWidget(HoverLabel):
 
         self.mouseRelease.emit(self.element)
 
-    def borderForSelectedElement(self, border_color: str = None):
+    def borderForSelectedElement(self, border_color: Optional[str] = None):
         """
         Set border with color to element. If border_color is None, remove border
 
@@ -269,7 +269,7 @@ class PeriodicTableDialog(QDialog):
         self.no_data_hbox.addWidget(self.hint_simulation_data)
         self.grid_layout.addLayout(self.no_data_hbox, 3, 0)
 
-    def openDialog(self, element: Element, existing_elements: List[Element] = None):
+    def openDialog(self, element: Element, existing_elements: Optional[List[Element]] = None):
         """
         Open QDialog
 
@@ -378,7 +378,7 @@ class PeriodicTableDialog(QDialog):
             widget.mouseLeave.connect(lambda: self.element_info.clear())
             widget.mouseRelease.connect(lambda _, w=widget: self.setChosenElement(w))
 
-    def setChosenElement(self, element_widget: ElementWidget = None):
+    def setChosenElement(self, element_widget: Optional[ElementWidget] = None):
         """
         Sets element to chosen element
 

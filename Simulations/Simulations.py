@@ -1,16 +1,16 @@
-from typing import Union, Tuple, Optional, List, Callable, Dict
+from typing import Any, Union, Tuple, Optional, List, Callable, Dict, Type, TYPE_CHECKING, Literal
 from pathlib import Path
 from re import findall, sub
 import logging
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QObject, QThread
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
 from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout, InputHBoxLayout
-from Utility.Indexing import RepeatingList, ElementList
+from Utility.Indexing import ElementList
+from Utility.Colors import Palette, paletteRgb, FIRST_COLOR_INDEX
 from Utility.Functions import getFileNameFromFileList, fileToNpArray, pathToStr, findExecutables
 
 from TableWidgets.CompTable import CompRow
@@ -30,7 +30,14 @@ class GeneralDefaultValues:
     enable_crystal = False
 
 
-class GeneralSettings:
+# the settings classes are combined with a layout (QObject), for the type check the signals need a QObject
+if TYPE_CHECKING:
+    SettingsBase = QObject
+else:
+    SettingsBase = object
+
+
+class GeneralSettings(SettingsBase):
     """
     General settings class, that will be inherited by other GeneralSetting classes
     """
@@ -111,7 +118,7 @@ class HlGeneralTargetSettings(GeneralSettings, QHBoxLayout):
         self.version = version
 
         self.include_crystal = False if default_values is None else default_values.enable_crystal
-        self.layout_crystal_file = None
+        self.layout_crystal_file: Optional[InputHBoxLayout] = None
 
     def getArguments(self, *args, **kwargs) -> GeneralTargetArguments:
         """Returns <GeneralTargetArguments> container of parameters for general target settings"""
@@ -122,17 +129,18 @@ class HlGeneralTargetSettings(GeneralSettings, QHBoxLayout):
         if not self.include_crystal:
             raise ValueError('Cannot create Crystal checkbox is not allowed in default values')
 
-        self.layout_crystal_file = InputHBoxLayout(
+        layout_crystal_file = InputHBoxLayout(
             'Crystal',
             None,
             checkbox=checkbox,
             tooltip=tooltip
         )
-        if self.layout_crystal_file.checkbox is not None:
-            self.layout_crystal_file.checkbox.stateChanged.connect(lambda _: self.edited())
-            self.layout_crystal_file.checkbox.stateChanged.connect(lambda state: self.emit({'crystal_state': state}))
+        self.layout_crystal_file = layout_crystal_file
+        if layout_crystal_file.checkbox is not None:
+            layout_crystal_file.checkbox.stateChanged.connect(lambda _: self.edited())
+            layout_crystal_file.checkbox.stateChanged.connect(lambda state: self.emit({'crystal_state': state}))
         self.addStretch(1)
-        self.addLayout(self.layout_crystal_file)
+        self.addLayout(layout_crystal_file)
 
     def reset(self):
         """Resets all input fields"""
@@ -179,7 +187,7 @@ class CompRowBeamSettings(CompRow):
         ...
     ]
     """
-    rowFields = []
+    rowFields: List[Any] = []
 
     def __init__(self, *args, version: str = '', **kwargs):
         super().__init__(*args, **kwargs)
@@ -202,7 +210,7 @@ class CompRowBeamSettings(CompRow):
 
         return super().getArguments()
 
-    def setArguments(self, arguments: RowArguments, general_arguments: GeneralArguments):
+    def setArguments(self, arguments: RowArguments, general_arguments: Union[SimulationArguments, GeneralArguments]):
         """
         Sets <RowArguments> container of parameters for row
 
@@ -233,7 +241,7 @@ class CompRowTargetSettings(CompRow):
         ...
     ]
     """
-    rowFields = []
+    rowFields: List[Any] = []
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -255,7 +263,7 @@ class CompRowTargetSettings(CompRow):
 
         return super().getArguments()
 
-    def setArguments(self, arguments: RowArguments, general_arguments: SimulationArguments):
+    def setArguments(self, arguments: RowArguments, general_arguments: Union[SimulationArguments, GeneralArguments]):
         """
         Sets <RowArguments> container of parameters for row
 
@@ -1794,7 +1802,7 @@ class SimulationsInput:
     # name of the simulation
     Name = 'SIMULATION NAME MISSING'
     # supported versions
-    Versions = []
+    Versions: List[str] = []
     # detailed description of the simulation
     Description = 'SIMULATION DESCRIPTION MISSING'
     # logo for simulation if exists
@@ -1822,19 +1830,19 @@ class SimulationsInput:
     # dictionary of tooltips for output files
     OutputTooltips = {'output': 'Output of simulation'}
     # possible input parameters
-    InputParameters = {}
+    InputParameters: Dict[str, Any] = {}
     # list of possible compounds
     CompoundList: List[Compound] = []
     # group elements in beam and target
     GroupElements = False
 
     # Reference to classes
-    HlBeamSettings = HlGeneralBeamSettings
-    HlTargetSettings = HlGeneralTargetSettings
-    VlSimulationSettings = VlGeneralSimulationSettings
-    CompRowBeamSettings = CompRowBeamSettings
-    CompRowTargetSettings = CompRowTargetSettings
-    CrystalRowSettings = CrystalRow
+    HlBeamSettings: Type[HlGeneralBeamSettings] = HlGeneralBeamSettings
+    HlTargetSettings: Type[HlGeneralTargetSettings] = HlGeneralTargetSettings
+    VlSimulationSettings: Type[VlGeneralSimulationSettings] = VlGeneralSimulationSettings
+    CompRowBeamSettings: Type[CompRow] = CompRowBeamSettings
+    CompRowTargetSettings: Type[CompRow] = CompRowTargetSettings
+    CrystalRowSettings: Type[CrystalRow] = CrystalRow
 
     # Maximum number of components
     MaxComponents = 10
@@ -1845,7 +1853,7 @@ class SimulationsInput:
         self.element_data_default = True
 
     @staticmethod
-    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, bool]:
+    def getVersionName(folder: Optional[Path], binary: Optional[Path]) -> Union[str, Literal[False]]:
         """
         Returns version of simulation depending on selected folder and binary
 
@@ -2041,7 +2049,7 @@ class SimulationsInput:
 
         return ''
 
-    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, bool]:
+    def loadFiles(self, folder: Path, version: str) -> Union[Tuple[SimulationArguments, list], str, Literal[False]]:
         """
         Returns Tuple of <SimulationArguments> container if it can load input files from folder and list of errors while loading
         Returns string of error if input file can not be opened
@@ -2200,13 +2208,13 @@ class SimulationsOutput(QObject):
         self.element_data = element_data
         self.title_label = title_label
 
-        self.analyse_queue = []
+        self.analyse_queue: List[tuple] = []
         self.waiting = None
         self.waits_counter = 0
 
         if not hasattr(self, 'analysis'):
             self.analysis = SimulationsAnalysis(element_data)
-        self.thread = QThread()
+        self.analysis_thread = QThread()
 
         # connect signals
         self.analyseFunc.connect(self.analysis.analyse)
@@ -2214,8 +2222,8 @@ class SimulationsOutput(QObject):
         self.analysis.hlChange.connect(self.emit)
 
         # move to thread and start
-        self.analysis.moveToThread(self.thread)
-        self.thread.start()
+        self.analysis.moveToThread(self.analysis_thread)
+        self.analysis_thread.start()
 
     def emit(self, value_dict: Optional[dict] = None):
         """
@@ -2283,7 +2291,7 @@ class SimulationsOutput(QObject):
 
         counter, plot, plot_args, hide, text = self.analyse_queue[-1]
         self.waiting = counter
-        self.analyse_queue = []
+        self.analyse_queue: List[tuple] = []
 
         self.emit({
             'hide': hide
@@ -2396,16 +2404,12 @@ class SimulationsAnalysis(QObject):
         self.elements = ElementList()
         self.masses = np.array([])
 
-        self.first_color = 0, 0, 0  # (r, g, b)
+        self.first_color = 0., 0., 0.  # (r, g, b)
         self.line_width = 2
 
-        # colors for plots
-        self.colors = RepeatingList()
-        order = [4, 0, 6, 8, 14, 12, 16, 18, 10, 3, 5, 1, 7, 9, 15, 13, 17, 11, 19]
-        colors = plt.get_cmap('tab20').colors  # is actually a ListedColormap not just a Colormap, so obj.colors is fine
-        for i in order:
-            self.colors.append(colors[i])
-        self.first_color = colors[2]
+        # colors for plots (hypercorporateAF design, see Utility/Colors.py)
+        self.colors = Palette()
+        self.first_color = paletteRgb(FIRST_COLOR_INDEX)
 
     def reset(self):
         """Reset class"""
@@ -2462,7 +2466,16 @@ class SimulationsAnalysis(QObject):
         # check if func exists and is executable
         analyse_func: Optional[Callable] = getattr(self, func, None)
         if callable(analyse_func):
-            result = analyse_func(**func_args)
+            # an exception in this slot would terminate the application (PyQt6), unreadable output only shows an error
+            try:
+                result = analyse_func(**func_args)
+            except Exception as error:
+                logging.exception(f'Plot "{func}" failed')
+                self.data = None
+                mpl_settings = MplCanvasSettings()
+                mpl_settings.axes.set_title(f'The output can not be plotted:\n{type(error).__name__}: {error}', fontsize='small')
+                self.returnSignal.emit(mpl_settings, identifier)
+                return
 
             # no return data
             if result is None:

@@ -1,11 +1,11 @@
 from __future__ import annotations
-from typing import Union, Optional, Tuple, List, Callable, Dict
+from typing import Union, Optional, Tuple, List, Callable, Dict, Sequence, Any, cast
 from pathlib import Path
 
 from Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QElapsedTimer, QEvent, QTimer
-from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat
+from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat, QWheelEvent, QStandardItemModel
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
@@ -18,6 +18,7 @@ from matplotlib import rc_context
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.colors import same_color
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle, FancyBboxPatch
@@ -27,6 +28,7 @@ from matplotlib.text import Text
 from Utility.ModifyWidget import setWidgetBackground
 from Utility.Icons import ICON_COLORS, getIcon
 from Utility.Functions import getUniqueColor, setDictIfNotExists
+from Utility.Typing import notNone
 
 from Containers.Element import Element
 
@@ -83,7 +85,7 @@ class InputHBoxLayouts(QHBoxLayout):
     def __init__(
         self,
         label: str,
-        widgets: Optional[List[QWidget]],
+        widgets: Optional[Sequence[QWidget]],
         tooltip: Optional[str] = None,
         widgets_labels: Optional[List[str]] = None,
         widgets_tooltips: Optional[List[str]] = None,
@@ -98,10 +100,10 @@ class InputHBoxLayouts(QHBoxLayout):
 
         self.checkbox: Optional[QCheckBox] = None
         self.default_checkbox = checkbox
-        self.label = None
-        self.widgets = widgets
+        self.label: Optional[QLabel] = None
+        self.widgets: List[QWidget] = list(widgets) if widgets is not None else []
         self.widgets_hbox = QHBoxLayout()
-        self.widgets_list = []
+        self.widgets_list: List[QWidget] = []
 
         # Label without checkbox
         if not isinstance(checkbox, bool):
@@ -112,7 +114,7 @@ class InputHBoxLayouts(QHBoxLayout):
                 self.label.hide()
             if tooltip is not None:
                 self.label.setToolTip(tooltip)
-            self.label.mouseReleaseEvent = lambda _: self.mark(False)
+            self.label.mouseReleaseEvent = lambda _: self.mark(False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
 
             self.addWidget(self.label, stretch=split)
             if widgets is None or not len(widgets):
@@ -146,7 +148,7 @@ class InputHBoxLayouts(QHBoxLayout):
             for widget in self.widgets:
                 widget.hide()
 
-        if self.widgets is not None and len(self.widgets):
+        if len(self.widgets):
             if widgets_tooltips is not None:
                 if len(widgets_tooltips) == len(self.widgets):
                     for widget, tooltip in zip(self.widgets, widgets_tooltips):
@@ -157,17 +159,17 @@ class InputHBoxLayouts(QHBoxLayout):
         stretch_widgets_hbox = 100 - split
         self.addLayout(self.widgets_hbox, stretch=stretch_widgets_hbox)
 
-        if self.widgets is not None and len(self.widgets):
+        if len(self.widgets):
             stretch_widget = 100 // len(self.widgets)
             if widgets_labels is not None:
                 if len(widgets_labels) == len(self.widgets):
                     for widget, label_str in zip(self.widgets, widgets_labels):
-                        label = QLabel(label_str)
+                        widget_label = QLabel(label_str)
                         hbox = QHBoxLayout()
-                        hbox.addWidget(label, alignment=Qt.AlignmentFlag.AlignRight)
+                        hbox.addWidget(widget_label, alignment=Qt.AlignmentFlag.AlignRight)
                         hbox.addWidget(widget, stretch=stretch_widget)
                         self.widgets_hbox.addLayout(hbox)
-                        self.widgets_list.extend([label, widget])
+                        self.widgets_list.extend([widget_label, widget])
                 else:
                     raise ValueError(f'Length of widgets_labels ({len(widgets_labels)}) does not match length of widgets ({len(self.widgets)})')
             else:
@@ -178,10 +180,16 @@ class InputHBoxLayouts(QHBoxLayout):
 
         if self.widgets is not None:
             for widget in self.widgets:
-                widget.mouseReleaseEvent = lambda _: self.mark(False)
+                widget.mouseReleaseEvent = lambda _: self.mark(False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
 
                 if isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
                     widget.valueChanged.connect(lambda _: self.mark(False))
+
+    @property
+    def check(self) -> QCheckBox:
+        """Returns the checkbox of a layout that was created with a checkbox"""
+
+        return notNone(self.checkbox)
 
     def setEnabled(self, state: bool):
         """
@@ -257,20 +265,17 @@ class InputHBoxLayout(InputHBoxLayouts):
         self,
         label: str,
         widget: Optional[QWidget],
-        tooltip: str = None,
+        tooltip: Optional[str] = None,
         split: int = 50,
         disabled: bool = False,
         hidden: bool = False,
-        checkbox: bool = None,
+        checkbox: Optional[bool] = None,
         checkbox_connected: bool = True,
         **kwargs
     ):
-        if widget is not None:
-            widget = [widget]
-
         super().__init__(
             label=label,
-            widgets=widget,
+            widgets=[widget] if widget is not None else None,
             tooltip=tooltip,
             split=split,
             disabled=disabled,
@@ -309,8 +314,8 @@ class SpinBox(QSpinBox):
     def __init__(
         self,
         default: Union[float, int] = 0,
-        step_size: int = None,
-        input_range: Tuple[float, float] = None,
+        step_size: Optional[int] = None,
+        input_range: Optional[Tuple[float, float]] = None,
         scroll: bool = False,
         buttons: bool = False,
         **kwargs
@@ -331,10 +336,15 @@ class SpinBox(QSpinBox):
         if buttons is False:
             self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
 
-        if not scroll:
-            self.wheelEvent = lambda event: None
+        self.scroll_enabled = scroll
 
         self.setValue(default)
+
+    def wheelEvent(self, event: Optional[QWheelEvent]):
+        """Ignores the mouse wheel if scrolling is disabled (e.g. to scroll the page instead of changing the value)"""
+
+        if self.scroll_enabled:
+            super().wheelEvent(event)
 
     def reset(self):
         """Resets itself to its default value"""
@@ -360,10 +370,10 @@ class DoubleSpinBox(QDoubleSpinBox):
     def __init__(
         self,
         default: float = 0,
-        step_size: float = None,
-        input_range: Tuple[float, float] = None,
+        step_size: Optional[float] = None,
+        input_range: Optional[Tuple[float, float]] = None,
         scroll: bool = False,
-        decimals: int = None,
+        decimals: Optional[int] = None,
         buttons: bool = False,
         **kwargs
     ):
@@ -386,10 +396,15 @@ class DoubleSpinBox(QDoubleSpinBox):
         if buttons is False:
             self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
 
-        if not scroll:
-            self.wheelEvent = lambda event: None
+        self.scroll_enabled = scroll
 
         self.setValue(default)
+
+    def wheelEvent(self, event: Optional[QWheelEvent]):
+        """Ignores the mouse wheel if scrolling is disabled (e.g. to scroll the page instead of changing the value)"""
+
+        if self.scroll_enabled:
+            super().wheelEvent(event)
 
     def reset(self):
         """Resets itself to its default value"""
@@ -428,8 +443,8 @@ class LineEdit(QLineEdit):
     def __init__(
         self,
         default: str = '',
-        placeholder: str = None,
-        max_length: int = None,
+        placeholder: Optional[str] = None,
+        max_length: Optional[int] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -455,7 +470,7 @@ class PasswordLineEdit(QLineEdit):
     :param placeholder: (optional) placeholder text
     """
 
-    def __init__(self, placeholder: str = None, **kwargs):
+    def __init__(self, placeholder: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self.setEchoMode(QLineEdit.EchoMode.Password)
 
@@ -483,12 +498,12 @@ class ComboBox(QComboBox):
     def __init__(
         self,
         default: int = 0,
-        entries: List[str] = None,
-        tooltips: List[str] = None,
-        entries_save: list = None,
-        numbering: int = None,
+        entries: Optional[List[str]] = None,
+        tooltips: Optional[List[str]] = None,
+        entries_save: Optional[list] = None,
+        numbering: Optional[int] = None,
         label_default: bool = False,
-        disabled_list: List[int] = None,
+        disabled_list: Optional[List[int]] = None,
         scroll: bool = False,
         **kwargs
     ):
@@ -518,10 +533,15 @@ class ComboBox(QComboBox):
 
         if disabled_list is not None:
             for i in disabled_list:
-                self.model().item(i, 0).setEnabled(False)
+                notNone(cast(QStandardItemModel, self.model()).item(i, 0)).setEnabled(False)
 
-        if not scroll:
-            self.wheelEvent = lambda event: None
+        self.scroll_enabled = scroll
+
+    def wheelEvent(self, event: Optional[QWheelEvent]):
+        """Ignores the mouse wheel if scrolling is disabled (e.g. to scroll the page instead of changing the value)"""
+
+        if self.scroll_enabled:
+            super().wheelEvent(event)
 
     def reset(self):
         """Resets itself to its default value"""
@@ -571,7 +591,7 @@ class ComboBox(QComboBox):
             return self.entries_save[self.default]
         return None
 
-    def updateDisabledList(self, disabled_list: List[int] = None):
+    def updateDisabledList(self, disabled_list: Optional[List[int]] = None):
         """
         Update the disabled list
 
@@ -585,7 +605,7 @@ class ComboBox(QComboBox):
             enable = True
             if i in disabled_list:
                 enable = False
-            self.model().item(i, 0).setEnabled(enable)
+            notNone(cast(QStandardItemModel, self.model()).item(i, 0)).setEnabled(enable)
 
 
 class FilePath(QWidget):
@@ -604,19 +624,19 @@ class FilePath(QWidget):
 
     def __init__(
         self,
-        placeholder: str = None,
-        function_loc: Callable = None,
-        icon_loc: QIcon = None,
-        function_ssh: Callable = None,
-        icon_ssh: QIcon = None,
+        placeholder: Optional[str] = None,
+        function_loc: Optional[Callable] = None,
+        icon_loc: Optional[QIcon] = None,
+        function_ssh: Optional[Callable] = None,
+        icon_ssh: Optional[QIcon] = None,
         clearable: bool = False,
         **kwargs
     ):
         super().__init__(**kwargs)
 
-        self.layout = QHBoxLayout()
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(self.layout)
+        self.main_layout = QHBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.main_layout)
 
         self.path: Path | None = None
         self.ssh = False
@@ -626,7 +646,7 @@ class FilePath(QWidget):
             self.path_display.setPlaceholderText(placeholder)
         self.path_display.setReadOnly(True)
         self.path_display.setMinimumWidth(300)
-        self.layout.addWidget(self.path_display, Qt.AlignmentFlag.AlignLeft)
+        self.main_layout.addWidget(self.path_display, Qt.AlignmentFlag.AlignLeft)
 
         self.function_loc = function_loc
         self.button_loc = QPushButton()
@@ -637,20 +657,20 @@ class FilePath(QWidget):
                 self.button_loc.setIcon(icon_loc)
             self.button_loc.setMinimumSize(40, 10)
             self.button_loc.setMaximumSize(40, 30)
-            self.layout.addWidget(self.button_loc, Qt.AlignmentFlag.AlignRight)
+            self.main_layout.addWidget(self.button_loc, Qt.AlignmentFlag.AlignRight)
 
             self.button_loc.clicked.connect(self.select_path_loc)
 
         self.function_ssh = function_ssh
         self.button_ssh = QPushButton()
         if self.function_ssh is not None:
-            if icon_loc is None:
+            if icon_ssh is None:
                 self.button_ssh.setText('...')
             else:
                 self.button_ssh.setIcon(icon_ssh)
             self.button_ssh.setMinimumSize(40, 10)
             self.button_ssh.setMaximumSize(40, 30)
-            self.layout.addWidget(self.button_ssh, Qt.AlignmentFlag.AlignRight)
+            self.main_layout.addWidget(self.button_ssh, Qt.AlignmentFlag.AlignRight)
 
             self.button_ssh.clicked.connect(self.select_path_ssh)
 
@@ -661,7 +681,7 @@ class FilePath(QWidget):
             self.button_clear.setToolTip('Clear the path')
             self.button_clear.setMinimumSize(40, 10)
             self.button_clear.setMaximumSize(40, 30)
-            self.layout.addWidget(self.button_clear, Qt.AlignmentFlag.AlignRight)
+            self.main_layout.addWidget(self.button_clear, Qt.AlignmentFlag.AlignRight)
             self.button_clear.clicked.connect(lambda: self.setPath(None))
 
     def setPath(self, path: Optional[Path], ssh: bool = False):
@@ -682,8 +702,9 @@ class FilePath(QWidget):
             prefix = 'ssh' if self.ssh else 'local'
             self.path_display.setText(f'{prefix}: {self.path}')
 
-    def setToolTip(self, tooltip: str):
+    def setToolTip(self, tooltip: Optional[str]):
         """Sets a tooltip"""
+        tooltip = tooltip or ''
         super().setToolTip(tooltip)
         if self.function_ssh is not None:
             self.button_loc.setToolTip('<i>Local directory</i>\n' + tooltip)
@@ -757,7 +778,7 @@ class VBoxTitleLayout(QVBoxLayout):
         **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.parent = parent
+        self.parent_widget = parent
         self.title_str = title
         self.title_style = title_style
         self.title_style_busy = title_style_busy
@@ -766,7 +787,7 @@ class VBoxTitleLayout(QVBoxLayout):
         self.setSpacing(spacing)
         self.hl = QHBoxLayout()
 
-        self.title = QLabel(self.title_str, self.parent)
+        self.title = QLabel(self.title_str, self.parent_widget)
         self.title.setStyleSheet(title_style)
         self.title.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.hl.addWidget(self.title)
@@ -826,7 +847,7 @@ class ProgressTabBar(QTabBar):
 
         self.color.setAlphaF(self.color_alpha)
 
-        self.progress = {}
+        self.progress: Dict[int, float] = {}
 
     def setProgress(self, index: int, value: int):
         """
@@ -885,7 +906,7 @@ class TimeProgressBar(QProgressBar):
         self.setFixedHeight(bar_height)
 
         self.setRange(0, 100)
-        self.val = 0
+        self.val: float = 0
         self.setTextVisible(False)
 
         self.elapsed_timer = QElapsedTimer()
@@ -926,7 +947,7 @@ class TimeProgressBar(QProgressBar):
             return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
         return f'{minutes:02d}:{seconds:02d}'
 
-    def value(self) -> float:
+    def value(self) -> float:  # type: ignore[override]  # the value is a float (the progress bar shows an int)
         """Returns value of progress bar as float"""
         return self.val
 
@@ -1027,14 +1048,12 @@ class ListWidgetItem(QListWidgetItem):
         grey: bool = False,
         selectable: bool = True,
         tooltip: str = '',
-        function: Callable = None,
-        function_args: dict = None,
+        function: Optional[Callable] = None,
+        function_args: Optional[dict] = None,
         **kwargs
     ):
         if indent > 0 and args and isinstance(args[0], str):
-            args = list(args)
-            args[0] = '    ' * indent + args[0]
-            args = tuple(args)
+            args = ('    ' * indent + args[0],) + tuple(args[1:])
 
         super().__init__(*args, **kwargs)
 
@@ -1099,7 +1118,7 @@ class ListWidget(QListWidget):
         """Adds an empty item"""
         super().addItem(ListWidgetItem('', selectable=False))
 
-    def addItem(self, item: ListWidgetItem):
+    def addItem(self, item: Union[QListWidgetItem, str, None]):
         """Adds an item, the text color of non-grey items follows the palette"""
         super().addItem(item)
 
@@ -1182,7 +1201,7 @@ class FileEditor(QPlainTextEdit):
         self.marked_lines = dict(marked_lines)
         selections = []
         for line in self.marked_lines:
-            block = self.document().findBlockByNumber(line)
+            block = notNone(self.document()).findBlockByNumber(line)
             if not block.isValid():
                 continue
             selection = QTextEdit.ExtraSelection()
@@ -1341,11 +1360,11 @@ class MplCanvas(FigureCanvasQTAgg):
         self.bg_color = self.pal.color(QPalette.ColorRole.Window).name()
         self.fg_color = self.pal.color(QPalette.ColorRole.WindowText).name()
 
-        self.palette_kwargs = {}
+        self.palette_kwargs: Dict[str, Any] = {}
         if use_device_palette:
             self.palette_kwargs['facecolor'] = self.bg_color
 
-        self.axes_kwargs = {}
+        self.axes_kwargs: Dict[str, Any] = {}
         if enable_3d:
             self.axes_kwargs['projection'] = '3d'
 
@@ -1634,7 +1653,7 @@ class TargetPreview(QWidget):
                     round(last_x + w) - round(last_x),
                     layer_height
                 )
-                painter.fillRect(rect2, QColor.fromHsv(int(j * 359 / len(self.elements)), 255, 255, 127))
+                painter.fillRect(rect2, getUniqueColor(j, len(self.elements)))
                 last_x += w
 
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f'{layer[1]}')
@@ -1670,6 +1689,8 @@ class CrystalPreview(MplCanvas):
 
     :param size_hint: (optional): size hint for widget
     """
+
+    axes: Axes3D
 
     def __init__(
         self,
@@ -1795,7 +1816,7 @@ class CrystalPreview(MplCanvas):
         :param plot_kwargs: (optional) parameters for plot
         """
 
-        plot_params = {
+        plot_params: Dict[str, Any] = {
             'linewidth': self.line_width,
             'color': self.fg_color
         }
@@ -1817,7 +1838,7 @@ class CrystalPreview(MplCanvas):
         :param plot_kwargs: (optional) parameters for plot
         """
 
-        plot_params = {
+        plot_params: Dict[str, Any] = {
             'linewidth': self.line_width,
             'color': self.fg_color
         }
