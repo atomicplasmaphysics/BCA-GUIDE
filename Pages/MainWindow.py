@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         self.menu_help.setToolTipsVisible(True)
 
         # Manual
-        self.manual_path = GlobalConf.assets_path
+        self.manual_path = GlobalConf.program_path
         self.action_manual = notNone(self.menu_help.addAction(getIcon('book'), 'Manual'))
         self.action_manual.triggered.connect(lambda: self.openUserManual())
 

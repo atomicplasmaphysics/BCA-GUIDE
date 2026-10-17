@@ -12,7 +12,7 @@
 #      scipy        1.9.1
 #
 #  2) Just run this python script and a 'BCA-GUIDE' executable will be generated in the main folder
-#     (python setup/pyinstaller.py, requires: pip install pyinstaller)
+#     (python setup/pyinstaller.py, requires: pip install -r requirements-dev.txt)
 #
 # The executable contains the assets (images in assets/resources.py, manual of the GUI) and the simulation modules
 # (Simulations/*.py are loaded by SimulationsList at runtime). The simulation programs are not part of it.
@@ -80,7 +80,7 @@ pyinstaller_parameters = [
     # the simulation modules are found by their files and imported at runtime
     f'--add-data={parent_dir / "Simulations"}{divider}Simulations',
     '--collect-submodules=Simulations',
-    f'--add-data={parent_dir / "assets" / "BCA-GUIDE_manual.pdf"}{divider}assets',
+    f'--add-data={parent_dir / "BCA-GUIDE_manual.pdf"}{divider}.',
     '--onefile',
     f'--distpath={dist_path}',
     f'--workpath={build_path}',

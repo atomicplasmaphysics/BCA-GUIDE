@@ -51,8 +51,8 @@ def selfTest() -> int:
         problems.append(f'simulation modules: {SimulationsList().simulation_program_names}')
     if QPixmap(':/assets/tu_logo.png').isNull():
         problems.append('resources')
-    if not (GlobalConf.assets_path / 'BCA-GUIDE_manual.pdf').is_file():
-        problems.append(f'manual in {GlobalConf.assets_path}')
+    if not (GlobalConf.program_path / 'BCA-GUIDE_manual.pdf').is_file():
+        problems.append(f'manual in {GlobalConf.program_path}')
     for problem in problems:
         logging.error(f'Self test failed: {problem}')
     return 1 if problems else 0

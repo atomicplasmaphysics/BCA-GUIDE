@@ -74,7 +74,7 @@ To execute the GUI, download all files from this repository and execute the `mai
 
 ### Alternative Installation
 If one wishes to execute the GUI without calling it from the console, [PyInstaller](https://pyinstaller.org/en/stable/) can be used to compile all needed python files into one executable.
-After executing `python setup/pyinstaller.py` (same packages and package PyInstaller are needed), an executable
+After executing `python setup/pyinstaller.py` (needs the packages in `requirements-dev.txt`), an executable
 (`BCA-GUIDE_windows.exe`, `BCA-GUIDE_linux` or `BCA-GUIDE_mac.app`) is created in the main folder. The script then
 starts it once with `--self-test` (without showing the window): it checks that the simulation modules, the images and
 the manual of the GUI are found. The simulation programs are not part of the executable.
@@ -159,7 +159,7 @@ Structure of the project:
 - `TableWidgets`, `Containers`: tables of the input and the data classes of the arguments
 - `Utility`: global configuration (`GlobalConf.py`), styles and colors (`Styles.py`), icons, layouts, dialogs, ...
 - `assets`: images of the window, the about dialog and the splash screen (compiled into `assets/resources.py` with
-  `python setup/build_resources.py`, sources in `assets/source`) and the manual of the GUI
+  `python setup/build_resources.py`, sources in `assets/source`); the manual of the GUI is `BCA-GUIDE_manual.pdf`
 - `setup`: building the resources and the executable (PyInstaller)
 
 ## Tests

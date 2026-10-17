@@ -4,5 +4,7 @@ pytest-xdist>=3.0
 # linting and type checking (also in the continuous integration, .github/workflows/ci.yml)
 ruff==0.15.0
 mypy==1.18.2
-# only needed to rebuild resources.py (python setup/build_resources.py)
+# only needed to rebuild assets/resources.py (python setup/build_resources.py)
 pyside6>=6.5.0
+# only needed to build the executable (python setup/pyinstaller.py)
+pyinstaller>=6.0
