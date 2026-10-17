@@ -147,7 +147,7 @@ class CompoundList(QListWidget):
         selected_items = []
 
         for index in range(self.count()):
-            item = self.item(index)
+            item = notNone(self.item(index))
             item_widget = self.itemWidget(item)
             if item_widget.checkbox.isChecked():
                 selected_items.append((index, item, item_widget))

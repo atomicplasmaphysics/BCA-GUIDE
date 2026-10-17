@@ -83,10 +83,11 @@ def test_tabulated_model_exists():
 
 @pytest.mark.parametrize('version, selection', [(Versions.V_702, False), (Versions.V_707, True)])
 def test_tbsp_file_selection(qapp, version, selection):
-    """Since 7.07 the file of the tabulated stopping power is selected (tbsp_binary, tbsp_ascii)"""
+    """Since 7.07 the file of the tabulated stopping power is selected (tbsp_binary, tbsp_ascii), the GUI always uses the
+    binary file (both files contain the same data), so the selection is not shown"""
 
     settings = VlSimulationSettings(version)
-    assert (settings.tbsp_format is not None) == selection
+    assert settings.tbsp_format is None
     assert DefaultValues(version).tbsp_file_selection == selection
 
 

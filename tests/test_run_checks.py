@@ -201,7 +201,7 @@ class StubPage:
 
 
 def test_run_all_queue(main_window, qapp, monkeypatch):
-    from GlobalConf import GlobalConf
+    from Utility.GlobalConf import GlobalConf
     from Pages.ProgramPage import SimulationPage
     monkeypatch.setattr(GlobalConf, 'max_parallel_runs', 2)
     monkeypatch.setattr(GlobalConf, 'skip_delete_info', True)

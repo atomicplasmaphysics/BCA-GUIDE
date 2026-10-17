@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtCore import pyqtSignal, QRegularExpression
@@ -30,7 +30,7 @@ class TargetLayerEntry:
 
     def __init__(self, segment_count, segment_thickness, abundances, layer_name):
         self.segment_count = segment_count
-        self.segment_thickness = segment_thickness
+        self.segment_thickness: float = segment_thickness
         self.abundances = abundances
         self.layer_name = layer_name
 
@@ -90,7 +90,7 @@ class TargetLayersRow(CustomRow):
 
         self.name_validator = QRegularExpressionValidator(QRegularExpression('[a-zA-Z1-9]+'))
         self.element_cells: list = []
-        self.segment_thickness = 0
+        self.segment_thickness: float = 0
 
         self.segment_count = SpinBox(
             input_range=SpinBoxRange.ZERO_INF
@@ -454,7 +454,7 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
 
         self.header_labels.insert(column, '?? abundance')
         self.setHorizontalHeaderLabels(self.header_labels)
-        self.horizontalHeaderItem(column).setToolTip(self.abundanceTooltip)
+        notNone(self.horizontalHeaderItem(column)).setToolTip(self.abundanceTooltip)
         self.updateLayers()
 
     def setCrystals(self, names: List[str]):
@@ -534,6 +534,12 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
         # Limit the total amount of segments
         limitSum([r.row_widgets[1] for r in self.rows], self.target_segments_count)
 
+        # layer.inp (with the miller indices of the layers) is only written for several layers, several crystals or a layer
+        # that is not completely crystalline (as usesCrystalLayerFile() of SDTrimSP), otherwise (0 0 0) is a polycrystal
+        layer_file = len(self.rows) > 1 or len(self.crystal_names) > 1 or any(
+            abs(cell.value() - 1) > 1e-9 for r in self.rows for cell in r.crystal_cells
+        )
+
         # Update the abundance input fields of all target layers or optionally just the given layer (=row)
         rows = self.rows if row is None else [row]
         for i, row in enumerate(rows):
@@ -546,10 +552,12 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
             for cell in row.crystal_cells:
                 setWidgetHighlight(cell, too_much_crystal)
 
+        # miller indices of all layers (depend on the number of layers)
+        for row in self.rows:
             # SDTrimSP only accepts miller indices [1, 0...1, 0...1] in layer.inp (amorphous layers are written as [1, 0, 0])
             if row.miller_cells:
                 miller_error = layerMillerError([cell.value() for cell in row.miller_cells])
-                miller_error = miller_error if any(cell.value() > 0 for cell in row.crystal_cells) else None
+                miller_error = miller_error if layer_file and any(cell.value() > 0 for cell in row.crystal_cells) else None
                 for cell in row.miller_cells:
                     setWidgetHighlight(cell, miller_error is not None)
                     cell.setToolTip(
@@ -572,7 +580,7 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
                 setWidgetHighlight(cell, i in element_indices)
 
         self.layersChanged.emit(self.elements, self.getData())
-        emit_dict = {'layer_table_rows': len(self.rows)}
+        emit_dict: Dict[str, Any] = {'layer_table_rows': len(self.rows)}
         if self.rows:
             emit_dict.update({'first_abundances': [element_cell.value() for element_cell in self.rows[0].element_cells]})
         self.emit(emit_dict)
@@ -624,7 +632,7 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
 
         self.segment_thickness = segment_thickness
         for i, row in enumerate(self.rows):
-            row.segmentThickness = segment_thickness
+            row.segment_thickness = segment_thickness
             row.layer_thickness.setValue(row.segment_count.value() * segment_thickness)
         self.resizeColumnsToContents()
 

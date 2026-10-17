@@ -26,6 +26,19 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
       crystal. With several layers each layer with crystal needs an orientation. Input files of colleagues with crystals
       in layers would help to check the crystal options of the GUI.
 
+- [ ] The download of the SDTrimSP documentation (IPP report 2019-02 on pure.mpg.de) is refused by the server (HTTP 403).
+      SDTrimSP 7.05 and 7.07 come without pdf, the GUI opens the documentation of another installed version instead; a
+      current download link (e.g. of the IPP report 2024-06 that comes with 7.00) would be better.
+- [ ] tbsp_ascii (tabulated stopping power as text file, since 7.07) is not shown in the GUI, tbsp.db is always used
+      (same data). A loaded tri.inp with tbsp_ascii = .true. is written with tbsp_binary.
+
+## Build
+
+- [ ] Build the executables with PyInstaller in the continuous integration (Windows, Linux, macOS) and attach them to
+      releases, including the self test (`--self-test`).
+- [ ] The executable is about 100 MB (one file): a folder build (`--onedir`) starts faster, as nothing is unpacked at
+      each start.
+
 ## Simulation results
 
 - [ ] Plots of the matrices with logarithmic energies (`lmatout_log_energ`) and over the azimuthal angle (`meagb_*`).
@@ -35,7 +48,7 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 - [ ] Parameter scans: values from a file or from a list of complete parameter sets (instead of all combinations), and
       an adaptive refinement of the values where the yield changes strongly.
 - [ ] Parameter scans: rerun only the failed (or not run) simulations of a scan, scans over the layers of the target
-      (thickness and composition of each layer) and over combo boxes (e.g. the inelastic loss model).
+      (thickness and composition of each layer, the first layer can already be scanned).
 - [ ] Parameter scans: undo/redo of the values, and a list of the scans of a folder (scan.json is overwritten by a new
       scan in the same folder).
 - [ ] Parameter scans: an entry of the scan menu could also jump to the field of the parameter (switch to the simulation

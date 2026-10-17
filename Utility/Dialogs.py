@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 from pathlib import Path
 
 from urllib.parse import urlparse
@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QWidget, QDialogButtonBox, QComboBox, QSpinBox
 )
 
-from GlobalConf import GlobalConf
+from Utility.GlobalConf import GlobalConf
 
 from Simulations.SimulationsList import SimulationsList
 
@@ -148,9 +148,19 @@ class DownloadDialog(QDialog):
         self.downloadProgress.setValue(int(downloaded * 100))
 
     def tryDownloadFile(self):
-        """Tries to download the file"""
-        urlretrieve(self.url, self.path / self.name, reporthook=self.updateProgress)
+        """Tries to download the file, errors (e.g. the server refuses the download) are shown in the dialog"""
+
+        self.downloadStatus.setText('Downloading...')
+        try:
+            self.path.mkdir(parents=True, exist_ok=True)
+            urlretrieve(self.url, self.path / self.name, reporthook=self.updateProgress)
+        except Exception as error:
+            self.downloadProgress.setValue(0)
+            self.downloadStatus.setText(f'<span style="color: #c62828">Download failed ({error})</span>')
+            self.downloadStatus.setToolTip('The file could not be downloaded, please download it manually (link below)')
+            return
         self.downloadProgress.setValue(100)
+        self.downloadStatus.setText('Downloaded')
 
 
 class ManualDialog(QDialog):
@@ -413,8 +423,9 @@ class PreferencesDialog(QDialog):
         if theme != GlobalConf.theme:
             GlobalConf.theme = theme
             GlobalConf.setValue(GlobalConf.theme_name, theme)
-            if hasattr(self.parent(), 'applyTheme'):
-                self.parent().applyTheme()
+            parent: Any = self.parent()
+            if hasattr(parent, 'applyTheme'):
+                parent.applyTheme()
 
         self.accept()
 
@@ -442,7 +453,7 @@ class AboutDialog(QDialog):
         self.main_layout.addWidget(self.title_label_gui, 0, 0, 1, 2)
 
         self.iap_logo = QLabel('', self)
-        self.iap_logo.setPixmap(QPixmap(':icons/aboutlogo_iap.png').scaled(280, 113, transformMode=Qt.TransformationMode.SmoothTransformation))
+        self.iap_logo.setPixmap(QPixmap(':/assets/aboutlogo_iap.png').scaled(280, 113, transformMode=Qt.TransformationMode.SmoothTransformation))
         self.main_layout.addWidget(self.iap_logo, 1, 0)
 
         self.iap_label = QLabel(

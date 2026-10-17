@@ -25,7 +25,7 @@ from Utility.Layouts import MplCanvas, PlotToolbar
 from Utility.Dialogs import selectFileDialog
 from Utility.Functions import pathToStr
 from Utility.Icons import getIcon
-from Utility.Colors import paletteRgb, paletteColormap
+from Utility.Styles import paletteRgb, paletteColormap
 from Utility.Typing import notNone
 
 
@@ -130,7 +130,7 @@ class CompareWidget(QWidget):
         left_layout.addWidget(QLabel('Simulations (checked ones are compared):'))
         self.list = QListWidget(self)
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.list.itemChanged.connect(lambda _: self.update())
+        self.list.itemChanged.connect(lambda _: self.refresh())
         left_layout.addWidget(self.list)
         buttons = QHBoxLayout()
         self.button_add = QPushButton(getIcon('add'), 'Add...', self)
@@ -348,7 +348,8 @@ class CompareWidget(QWidget):
         axes = {self.x_parameter.currentText()} | ({self.y_parameter.currentText()} if map_plot else set())
         current = {name: combobox.currentText() for name, combobox in self.filters.items()}
         while self.filter_layout.count():
-            widget = self.filter_layout.takeAt(0).widget()
+            item = self.filter_layout.takeAt(0)
+            widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
@@ -407,8 +408,8 @@ class CompareWidget(QWidget):
 
         self.quantity.setCurrentIndex(self.indexOf((kind, name)))
 
-    def update(self):
-        """Updates table and plot"""
+    def refresh(self):
+        """Updates table and plot (not update(), which repaints the widget)"""
 
         self.updateTable()
         self.updatePlot()
@@ -440,7 +441,7 @@ class CompareWidget(QWidget):
             for column, (quantity, species) in enumerate(columns, start=1 + len(names)):
                 value = entry['summary'].get(quantity, {}).get(species)
                 self.table.setItem(row, column, QTableWidgetItem('' if value is None else f'{value:.6g}'))
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        notNone(self.table.horizontalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
 
     def updatePlot(self):
         """Draws the selected comparison"""

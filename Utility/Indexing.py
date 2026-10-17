@@ -92,11 +92,12 @@ class DeleteDict(dict):
     def __init__(self):
         super().__init__()
 
-    def get(self, key):
+    def get(self, key, default=None):  # type: ignore[override]  # the key is deleted when it is requested
         result = super().get(key)
         if result is not None:
             super().__delitem__(key)
-        return result
+            return result
+        return default
 
 
 class DefaultAssumed(list):

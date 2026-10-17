@@ -136,8 +136,47 @@ def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
     assert notNone(settings.histories_total.findChild(ScanFieldOverlay)).key == 'histories'
     assert notNone(page.target_layers.rows[0].element_cells[0].findChild(ScanFieldOverlay)).key == 'fraction_Au'
     parameters = page.scan.parameters()
-    for key in ('sbe_Au', 'ed_Au', 'ecut_Ar', 'ebulk_Au', 'thickness', 'projectiles'):
+    for key in ('sbe_Au', 'ed_Au', 'ecut_Ar', 'ebulk_Au', 'thickness', 'projectiles', 'segments', 'x0_Ar', 'charge_Ar',
+                'potential', 'integration', 'surface_binding_model', 'inel_Ar', 'inel_Au'):
         assert parameters[key].widgets, key
+    # the number of histories between outputs does not change the results
+    assert 'histories_between' not in parameters
+
+    # combo boxes: the popup selects the choices, the field shows their texts, the folders contain their indices
+    from PyQt6.QtCore import Qt
+    from Pages.ParameterScan import ScanValuesEditor
+    potential = parameters['potential']
+    assert potential.choices and potential.choices[0] == '1: KrC'
+    editor = ScanValuesEditor(page.scan, potential, settings.potential)
+    assert editor.choices is not None and editor.choices.isVisibleTo(editor) and editor.start.isHidden()
+    for i in range(editor.choices.count()):
+        notNone(editor.choices.item(i)).setCheckState(Qt.CheckState.Checked if i in (0, 2) else Qt.CheckState.Unchecked)
+    assert page.scan.values['potential'] == {'values': '0, 2'}
+    assert page.scan.valuesStrings('potential') == [potential.choices[0], potential.choices[2]]
+    editor.close()
+    simulations, names = page.scan.plan()
+    assert 'Interaction potential' in names
+    assert {simulation['values'][names.index('Interaction potential')] for simulation in simulations} == {potential.choices[0], potential.choices[2]}
+    assert any('potential_2' in simulation['label'] for simulation in simulations)
+    index = settings.potential.currentIndex()
+    arguments = page.scan.arguments([(potential, 2)])
+    assert arguments.settings.get('interaction_potential') == settings.potential.entries_save[2]
+    assert settings.potential.currentIndex() == index
+    page.scan.setValues('potential', None)
+
+    # number of segments of the target: the layers keep their relative number of segments
+    arguments = page.makeArguments()
+    parameters['segments'].apply(arguments, 50)
+    assert arguments.target_args.segments == 50 and sum(layer.segments for layer in arguments.structure) == 50
+    parameters['x0_Ar'].apply(arguments, 2.5)
+    assert arguments.beam_rows[0].get('start_depth') == 2.5
+
+    # the number of simulations includes the other versions
+    sc_other, _ = examplePage(main_window, qapp, tmp_path, 'example_07_Ar_on_W_amorphous')
+    count = page.scan.count()
+    page.scan.setVersions([sc_other.title])
+    assert page.scan.count() == 2 * count and len(page.scan.plan()[0]) == 2 * count
+    page.scan.setVersions([])
     # further numeric simulation settings are set in their field
     generic = [parameter for parameter in parameters.values() if parameter.apply is None]
     assert generic and all(parameter.widgets for parameter in generic)
@@ -338,7 +377,7 @@ def test_compare_parameters(main_window, qapp, tmp_path, errors):
 
 @pytest.mark.simulation
 def test_parameter_scan_run(main_window, qapp, tmp_path, monkeypatch, errors):
-    from GlobalConf import GlobalConf
+    from Utility.GlobalConf import GlobalConf
     from Pages.ProgramPage import SimulationPage
 
     sc, page = examplePage(main_window, qapp, tmp_path)

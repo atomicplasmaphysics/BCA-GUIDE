@@ -4,6 +4,23 @@
 /tools/
 /Simulation Programs/
 /save/
+
+# saves: only the examples of the GUI are part of the repository (the simulations of the user stay local)
+/saves/*
+!/saves/SDTrimSP/
+!/saves/TRIDYN/
+/saves/SDTrimSP/*
+/saves/TRIDYN/*
+!/saves/SDTrimSP/example_*/
+!/saves/TRIDYN/example_*/
+
+# executables of setup/pyinstaller.py and their build folders
+/BCA-GUIDE_windows.exe
+/BCA-GUIDE_linux
+/BCA-GUIDE_mac.app
+/setup/build/
+/setup/dist/
+/setup/*.spec
 __pycache__/
 .pytest_cache/
 /tests/simulation_data/

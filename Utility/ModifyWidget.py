@@ -81,7 +81,7 @@ def widgetSetValueOfWidget(target, source):
     :param source: widget where to get value from
     """
 
-    value = 0
+    value: float = 0
     if isinstance(source, QSpinBox) or isinstance(source, QDoubleSpinBox):
         value = source.value()
 

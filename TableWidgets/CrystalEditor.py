@@ -1,7 +1,7 @@
 # TODO: this is not a very general class for different simulation codes, but rather only SDTrimSP...
 #   we should create a base class and nest simulation code specific layouts into this at some point
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, cast
 from pathlib import Path
 
 
@@ -401,9 +401,9 @@ class CrystalEditorDialog(QDialog):
 
         self.crystal_list = QTableWidget(0, 4, self)
         self.crystal_list.setHorizontalHeaderLabels(['Crystal', 'h', 'k', 'l'])
-        self.crystal_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.crystal_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.crystal_list.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        notNone(self.crystal_list.horizontalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        notNone(self.crystal_list.horizontalHeader()).setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        notNone(self.crystal_list.verticalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.crystal_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.crystal_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.crystal_list.setToolTip(
@@ -464,7 +464,7 @@ class CrystalEditorDialog(QDialog):
 
         self.table_atoms = QTableWidget(0, 4, self)
         self.table_atoms.setHorizontalHeaderLabels(['Element', 'a₁', 'a₂', 'a₃'])
-        self.table_atoms.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        notNone(self.table_atoms.horizontalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_atoms.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table_atoms.setToolTip(
             'Atoms of the selected crystal in relative coordinates along the basis vectors a₁, a₂, a₃ of the unit cell, defined in table.crystal.<br>'
@@ -506,13 +506,13 @@ class CrystalEditorDialog(QDialog):
 
         for row in range(self.crystal_list.rowCount()):
             combobox = self.crystal_list.cellWidget(row, 0)
-            if combobox is not None:
+            if isinstance(combobox, QComboBox):
                 self.fillCrystalCombobox(combobox, combobox.currentData())
 
         if select is not None:
             row = self.selectedCrystalRow()
-            if row >= 0 and self.crystal_list.cellWidget(row, 0) is not None:
-                combobox = self.crystal_list.cellWidget(row, 0)
+            combobox = self.crystal_list.cellWidget(row, 0) if row >= 0 else None
+            if isinstance(combobox, QComboBox):
                 combobox.setCurrentIndex(max(0, combobox.findData(select)))
 
         self.new_crystal_button.setEnabled(self.table_file is not None)
@@ -592,8 +592,8 @@ class CrystalEditorDialog(QDialog):
         for row in range(self.crystal_list.rowCount()):
             if any(self.crystal_list.cellWidget(row, column) is None for column in range(4)):
                 continue
-            name = self.crystal_list.cellWidget(row, 0).currentData()
-            miller = [self.crystal_list.cellWidget(row, column).value() for column in (1, 2, 3)]
+            name = cast(QComboBox, self.crystal_list.cellWidget(row, 0)).currentData()
+            miller = [cast(Any, self.crystal_list.cellWidget(row, column)).value() for column in (1, 2, 3)]
             crystals.append({'name': name or '', 'miller': miller})
         return crystals
 
@@ -666,17 +666,18 @@ class CrystalEditorDialog(QDialog):
         if row >= 0 and self.crystal_list.cellWidget(row, 0) is None:
             # row is being created
             return
-        name = self.crystal_list.cellWidget(row, 0).currentData() if row >= 0 else None
-        crystal = self.table_file.crystal(name) if self.table_file is not None and name is not None else None
+        name = cast(QComboBox, self.crystal_list.cellWidget(row, 0)).currentData() if row >= 0 else None
+        table_file = self.table_file
+        crystal = table_file.crystal(name) if table_file is not None and name is not None else None
         self.table_crystal_selected = crystal
         self.table_atoms.setRowCount(0)
 
-        crystal_coordinates_dict = {}
-        if crystal is None:
-            if self.table_file is not None:
+        crystal_coordinates_dict: Dict[Element, np.ndarray] = {}
+        if crystal is None or table_file is None:
+            if table_file is not None:
                 self.table_crystal_info.setText('No crystal selected')
         else:
-            structure = self.table_file.structure(crystal.structure)
+            structure = table_file.structure(crystal.structure)
             structure_name = structure.name if structure is not None else f'{crystal.structure} (missing)'
             info = (
                 f'<b>{crystal.name}</b>: {crystal.compositionStr()}, structure {structure_name}<br>'
@@ -696,12 +697,12 @@ class CrystalEditorDialog(QDialog):
                     for column, value in enumerate(position, start=1):
                         self.table_atoms.setItem(atom_row, column, QTableWidgetItem(f'{value:.4f}'))
 
-            _, coordinates = self.table_file.basisAndCoordinates(crystal)
+            _, coordinates = table_file.basisAndCoordinates(crystal)
             for symbol, positions in coordinates.items():
-                element = self.elementFromSymbol(symbol)
-                if element is None:
+                atom_element = self.elementFromSymbol(symbol)
+                if atom_element is None:
                     continue
-                crystal_coordinates_dict[element] = np.vstack([getPeriodicCoords(position) for position in positions])
+                crystal_coordinates_dict[atom_element] = np.vstack([getPeriodicCoords(position) for position in positions])
 
         errors = self.validateTableCrystals()
         self.table_crystal_validation.setText('<br>'.join(errors))
@@ -821,8 +822,8 @@ class CrystalEditorDialog(QDialog):
         if self.table_mode:
             return
 
-        crystal_coordinates_dict = {}
-        total_coord_list = []
+        crystal_coordinates_dict: Dict[Any, Any] = {}
+        total_coord_list: List[np.ndarray] = []
 
         for element in self.available_elements:
             crystal_coordinates_dict[element] = []
@@ -905,13 +906,13 @@ class CrystalEditorDialog(QDialog):
 
     def showCoordinateSystem(self):
         """Gets called if show_coordinate_system button is checked"""
-        self.orientation_preview.updateParams(show_coordinate_system=self.show_coordinate_system.checkbox.isChecked())
+        self.orientation_preview.updateParams(show_coordinate_system=self.show_coordinate_system.check.isChecked())
 
     def matrixClicked(self, layout_matrix_clicked):
         """Gets called if matrix button changes"""
 
         for layout_matrix in self.layout_matrices:
-            layout_matrix.checkbox.setChecked(False)
+            layout_matrix.check.setChecked(False)
 
         layout_matrix_clicked.checkbox.setChecked(True)
 
@@ -943,7 +944,7 @@ class CrystalEditorDialog(QDialog):
 
                 beam_dy=self.beam_dy.value(),
                 beam_dz=self.beam_dz.value(),
-                crystal_dyn=self.crystal_dyn.checkbox.isChecked(),
+                crystal_dyn=self.crystal_dyn.check.isChecked(),
                 crystals=crystals,
                 table_crystal=True
             )
@@ -1114,7 +1115,7 @@ class CrystalEditorDialog(QDialog):
 
         # dynamic amorphization
         crystal_dyn = crystal_args.optional.get('crystal_dyn', DefaultValues.l_crystal_dyn)
-        self.crystal_dyn.checkbox.setChecked(bool(crystal_dyn))
+        self.crystal_dyn.check.setChecked(bool(crystal_dyn))
 
         self.crystal_list.selectRow(0)
         self.tableCrystalChanged()

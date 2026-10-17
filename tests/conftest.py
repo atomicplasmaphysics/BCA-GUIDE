@@ -28,7 +28,9 @@ from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 SIMULATION_PROGRAMS = ROOT / 'Simulation Programs'
+# examples of the GUI (saves/<program>/example_*) and further simulations of the tests (tests/saves/<program>)
 SAVES = ROOT / 'saves'
+TEST_SAVES = Path(__file__).resolve().parent / 'saves'
 DATA = Path(__file__).resolve().parent / 'data'
 
 
@@ -89,8 +91,8 @@ def qapp(tmp_path_factory):
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    import resources  # noqa: F401 (registers resources)
-    from GlobalConf import GlobalConf
+    import assets.resources  # noqa: F401 (registers resources)
+    from Utility.GlobalConf import GlobalConf
 
     settings_dir = tmp_path_factory.mktemp('settings')
     GlobalConf.settings = QSettings(str(settings_dir / 'settings.ini'), QSettings.Format.IniFormat)
@@ -105,11 +107,11 @@ def no_message_boxes(monkeypatch):
     """Message boxes do not block the tests"""
 
     import Utility.Dialogs
-    import MainWindow
+    import Pages.MainWindow
     import Pages.ProgramPage
     import Pages.ConfigurationPage
     import Pages.ParameterScan
-    for module in (Utility.Dialogs, MainWindow, Pages.ProgramPage, Pages.ConfigurationPage, Pages.ParameterScan):
+    for module in (Utility.Dialogs, Pages.MainWindow, Pages.ProgramPage, Pages.ConfigurationPage, Pages.ParameterScan):
         monkeypatch.setattr(module, 'showMessageBox', fakeShowMessageBox)
 
 
@@ -154,12 +156,12 @@ def pump(app: QApplication, seconds: float = 0.2, until: Optional[Callable[[], b
 def main_window(qapp, tmp_path):
     """MainWindow without any simulation configurations"""
 
-    import MainWindow
-    from GlobalConf import GlobalConf
+    import Pages.MainWindow
+    from Utility.GlobalConf import GlobalConf
     GlobalConf.save_path = tmp_path / 'saves'
     GlobalConf.save_path.mkdir()
 
-    window = MainWindow.MainWindow(qapp)
+    window = Pages.MainWindow.MainWindow(qapp)
     window.simulation_configs.clear()
     window.simulation_configuration_page.listConfigView()
     pump(qapp)

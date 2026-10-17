@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
 from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout, InputHBoxLayout
 from Utility.Indexing import ElementList
-from Utility.Colors import Palette, paletteRgb, FIRST_COLOR_INDEX
+from Utility.Styles import Palette, paletteRgb, FIRST_COLOR_INDEX
 from Utility.Functions import getFileNameFromFileList, fileToNpArray, pathToStr, findExecutables
 
 from TableWidgets.CompTable import CompRow
@@ -1849,7 +1849,7 @@ class SimulationsInput:
 
     def __init__(self):
         self.default_values = GeneralDefaultValues()
-        self.element_data = GeneralElementData()
+        self.element_data: Elements = GeneralElementData()
         self.element_data_default = True
 
     @staticmethod
@@ -2291,7 +2291,7 @@ class SimulationsOutput(QObject):
 
         counter, plot, plot_args, hide, text = self.analyse_queue[-1]
         self.waiting = counter
-        self.analyse_queue: List[tuple] = []
+        self.analyse_queue = []
 
         self.emit({
             'hide': hide
@@ -2407,7 +2407,7 @@ class SimulationsAnalysis(QObject):
         self.first_color = 0., 0., 0.  # (r, g, b)
         self.line_width = 2
 
-        # colors for plots (hypercorporateAF design, see Utility/Colors.py)
+        # colors for plots (hypercorporateAF design, see Utility/Styles.py)
         self.colors = Palette()
         self.first_color = paletteRgb(FIRST_COLOR_INDEX)
 

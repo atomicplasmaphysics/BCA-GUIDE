@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QDir
 
-from GlobalConf import GlobalConf
+from Utility.GlobalConf import GlobalConf
 
 from Simulations.SimulationsList import SimulationsList
 

@@ -1,5 +1,5 @@
 """
-Builds resources.py from resources.qrc
+Builds assets/resources.py from assets/resources.qrc
 
 pyside6-rcc is used, since PyQt6 does not provide a resource compiler anymore.
 The generated file is changed to import QtCore from PyQt6, so that PySide6 is not needed to run the GUI.
@@ -16,14 +16,14 @@ import sys
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    qrc_file = root / 'resources.qrc'
-    py_file = root / 'resources.py'
+    qrc_file = root / 'assets' / 'resources.qrc'
+    py_file = root / 'assets' / 'resources.py'
 
     rcc = which('pyside6-rcc') or which('pyside6-rcc', path=str(Path(sys.executable).parent))
     if rcc is None:
         sys.exit('pyside6-rcc not found, install it with "pip install pyside6"')
 
-    run([rcc, '-o', str(py_file), str(qrc_file)], check=True, cwd=root)
+    run([rcc, '-o', str(py_file), str(qrc_file)], check=True, cwd=qrc_file.parent)
 
     content = py_file.read_text(encoding='utf-8')
     if 'from PySide6 import QtCore' not in content:

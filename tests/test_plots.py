@@ -195,7 +195,7 @@ def test_matrix_readers(tmp_path):
 
 def test_depth_intervals_and_colors():
     from Simulations.SDTrimSP import SimulationAnalysis
-    from Utility.Colors import PALETTE, paletteHex, paletteRgb, Palette
+    from Utility.Styles import PALETTE, paletteHex, paletteRgb, Palette
 
     # one depth interval (nqx = 1) starts at the surface
     assert list(SimulationAnalysis.depthIntervals(np.array([[0.5], [5.]]))) == [1., 10.]

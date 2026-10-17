@@ -2,9 +2,11 @@
 Parameter scan: a series of simulations in which any number of parameters of a simulation tab are varied (all combinations).
 The scan is enabled with the scan button in the toolbar of the simulation tab. Then the input fields that can be scanned
 show a small mark in their corner: a click opens a popup in which several values are entered (directly or as linear or
-logarithmic range), the field then shows its values. Parameters: energies and angles of the beam species, the properties
-of the elements, the atomic fractions (first layer) and thickness of the target, the numeric simulation settings (e.g.
-fluence, number of histories) and the version of the simulation program (other configurations, menu of the scan button).
+logarithmic range, or a selection of the choices of a combo box), the field then shows its values. Parameters: energies,
+angles, starting depth and charge of the beam species, the properties of the elements (also the inelastic loss model), the
+atomic fractions (first layer), thickness and number of segments of the target, the numeric simulation settings (e.g.
+fluence, number of histories), the models of the simulation settings (interaction potential, integration method, surface
+binding model) and the version of the simulation program (other configurations, menu of the scan button).
 The simulations of the scan are written into subfolders of the folder of the simulation, the scan is described in
 scan.json in this folder (opening scan.json opens the scan again, each subfolder is a simulation on its own). The
 simulations run with a lower priority than the GUI and at most GlobalConf.max_parallel_runs simulations of all tabs run
@@ -26,7 +28,7 @@ from PyQt6.QtCore import Qt, QProcess, QTimer, QObject, QEvent, QPoint, pyqtSign
 from PyQt6.QtGui import QPainter, QPolygon, QColor, QMouseEvent, QPaintEvent
 from PyQt6.QtWidgets import (
     QComboBox, QLabel, QLineEdit, QPushButton, QDoubleSpinBox, QSpinBox, QMessageBox, QGridLayout, QWidget, QFrame,
-    QTableWidgetItem, QHeaderView, QApplication, QHBoxLayout
+    QTableWidgetItem, QHeaderView, QApplication, QHBoxLayout, QListWidget, QListWidgetItem
 )
 
 from Pages.CompareDialog import CompareWidget, SCAN_FILE
@@ -35,18 +37,17 @@ from Simulations.Simulations import writeInputFiles
 
 from TableWidgets.CompTable import setSpinboxValue
 
-from Utility.Colors import paletteQColor
+from Utility.Styles import paletteQColor
 from Utility.Dialogs import showMessageBox
 from Utility.Functions import pathToStr, lowerProcessPriority
 from Utility.Icons import getIcon
 from Utility.Layouts import InputHBoxLayouts
+from Utility.Typing import notNone
 
 if TYPE_CHECKING:
     from Pages.ProgramPage import SimulationPage
     from Containers.Arguments import SimulationArguments
 
-
-# maximum number of parameters of a scan (without the version)
 
 # scales of the range of values
 SCALES = ['linear', 'logarithmic (dense at start)', 'logarithmic (dense at end)']
@@ -62,11 +63,22 @@ ROW_FIELDS = [
     ('kinetic_energy', 'energy'), ('angle', 'angle'), ('azimuth', 'azimuth'), ('atomic_mass', 'mass'),
     ('atomic_density', 'density'), ('surface_binding_energy', 'sbe'), ('displacement_energy', 'ed'),
     ('cutoff_energy', 'ecut'), ('cutoff_energy_input', 'ecut'), ('bulk_binding_energy', 'ebulk'),
-    ('heat_of_formation', 'dhf'), ('inelastic_correction', 'ck')
+    ('heat_of_formation', 'dhf'), ('inelastic_correction', 'ck'), ('start_depth', 'x0'), ('charge', 'charge')
 ]
+
+# combo boxes of the rows of the composition tables: attribute of the row, key of the parameter (with the symbol), label
+ROW_CHOICES = [('inelastic_loss_model', 'inel', 'Inelastic loss model')]
 
 # fields of the simulation settings that are parameters with own keys (attribute: key)
 SETTINGS_KEYS = {'fluence': 'fluence', 'histories_total': 'histories', 'projectiles': 'projectiles'}
+
+# numeric fields of the simulation settings that are not scanned (they do not change the results)
+SETTINGS_EXCLUDED = {'histories_between'}
+
+# combo boxes of the simulation settings that can be scanned (attribute: label)
+SETTINGS_CHOICES = {
+    'potential': 'Interaction potential', 'integration': 'Integration method', 'surface_binding_model': 'Surface binding model'
+}
 
 
 def formatValue(value) -> str:
@@ -87,14 +99,17 @@ class ScanParameter:
     :param apply: function that sets a value in the arguments or None: the value is set in the widgets of the parameter
         before the arguments are created (fields of the simulation settings)
     :param integer: integer values
+    :param choices: (optional) texts of the choices of a combo box, the values are the indices of the choices
     """
 
-    def __init__(self, key: str, label: str, current: Callable[..., Any], apply: Optional[Callable[..., None]], integer: bool = False):
+    def __init__(self, key: str, label: str, current: Callable[..., Any], apply: Optional[Callable[..., None]], integer: bool = False,
+                 choices: Optional[List[str]] = None):
         self.key = key
         self.label = label
         self.current = current
         self.apply = apply
-        self.integer = integer
+        self.integer = integer or choices is not None
+        self.choices = choices
         # input fields of the parameter
         self.widgets: List[QWidget] = []
 
@@ -205,6 +220,40 @@ def setTargetFraction(arguments, symbol: str, value: float):
             row.abundance = layers[0].abundances[i]
 
 
+def setSegments(arguments, value: float):
+    """Sets the number of segments of the target (nqx), the layers keep their relative number of segments (at least 1)"""
+
+    number = max(int(round(value)), 1)
+    arguments.target_args.segments = number
+    layers = arguments.structure
+    total = sum(layer.segments for layer in layers)
+    if not layers or total <= 0:
+        return
+    remaining = number
+    for i, layer in enumerate(layers):
+        if i == len(layers) - 1:
+            segments = max(remaining, 1)
+        else:
+            segments = min(max(int(round(layer.segments * number / total)), 1), max(remaining - (len(layers) - 1 - i), 1))
+        layer.segments = segments
+        remaining -= segments
+
+
+def choiceTexts(widget: QComboBox) -> List[str]:
+    """Texts of the choices of a combo box (without the mark of the default choice)"""
+
+    return [widget.itemText(i).replace(' (default)', '') for i in range(widget.count())]
+
+
+def choiceEnabled(widget: QComboBox, index: int) -> bool:
+    """Returns if a choice of a combo box can be selected"""
+
+    model = widget.model()
+    if model is None:
+        return True
+    return bool(model.flags(model.index(index, 0)) & Qt.ItemFlag.ItemIsEnabled)
+
+
 def setThickness(arguments, value: float):
     """Sets the thickness of the target, the layers keep their relative thickness"""
 
@@ -230,6 +279,13 @@ def scanParameters(arguments, simulation_name: str, supports_azimuth: bool = Tru
             parameters.append(ScanParameter(f'azimuth_{symbol}', f'Azimuthal angle of {symbol} [°]',
                                             lambda a, i=i: a.beam_rows[i].get('azimuth') or 0.,
                                             lambda a, v, i=i: a.beam_rows[i].optional.__setitem__('azimuth', float(v))))
+        if simulation_name == 'SDTrimSP':
+            for key, name, option in (('x0', 'Starting depth', 'start_depth'), ('charge', 'Charge', 'charge')):
+                parameters.append(ScanParameter(
+                    f'{key}_{symbol}', f'{name} of {symbol}' + (' [Å]' if key == 'x0' else ''),
+                    lambda a, i=i, o=option: float(a.beam_rows[i].get(o) or 0.),
+                    lambda a, v, i=i, o=option: a.beam_rows[i].optional.__setitem__(o, float(v))
+                ))
 
     symbols = list(dict.fromkeys(row.symbol for row in arguments.beam_rows + arguments.target_rows if row.symbol))
     element_properties = [
@@ -271,6 +327,8 @@ def scanParameters(arguments, simulation_name: str, supports_azimuth: bool = Tru
             ))
 
     parameters.append(ScanParameter('thickness', 'Target thickness [Å]', lambda a: a.target_args.thickness, setThickness))
+    if isinstance(getattr(arguments.target_args, 'segments', None), int):
+        parameters.append(ScanParameter('segments', 'Target segments (nqx)', lambda a: a.target_args.segments, setSegments, integer=True))
     parameters.append(ScanParameter('fluence', 'Fluence [atoms/Å²]', lambda a: a.settings.fluence,
                                     lambda a, v: setattr(a.settings, 'fluence', float(v))))
     labels = {'histories': 'Number of histories (nh)', 'projectiles': 'Projectiles per history (nr_pproj)'}
@@ -308,7 +366,7 @@ def settingsFields(owner) -> List[Tuple[str, str, QWidget]]:
             label = plainLabel(layout.checkbox.text())
         else:
             continue
-        spinboxes = [widget for widget in layout.widgets if id(widget) in names]
+        spinboxes = [widget for widget in layout.widgets if id(widget) in names and names[id(widget)] not in SETTINGS_EXCLUDED]
         for i, widget in enumerate(spinboxes):
             fields.append((names[id(widget)], f'{label} ({i + 1})' if len(spinboxes) > 1 else label, widget))
     return fields
@@ -334,9 +392,10 @@ def fieldWidgets(page: SimulationPage) -> Iterator[Tuple[str, QWidget]]:
             if row.element.symbol and i < len(layers[0].element_cells):
                 yield f'fraction_{row.element.symbol}', layers[0].element_cells[i]
 
-    thickness = getattr(page.general_target_settings, 'thickness', None)
-    if isinstance(thickness, QWidget):
-        yield 'thickness', thickness
+    for name in ('thickness', 'segments'):
+        widget = getattr(page.general_target_settings, name, None)
+        if isinstance(widget, QWidget):
+            yield name, widget
 
 
 class ScanFieldOverlay(QWidget):
@@ -431,6 +490,22 @@ class ScanValuesEditor(QFrame):
         grid.setVerticalSpacing(4)
         grid.addWidget(QLabel(f'<b>{parameter.label}</b>: values of the parameter scan', self), 0, 0, 1, 2)
 
+        # combo box: selection of the choices
+        self.choices: Optional[QListWidget] = None
+        if parameter.choices is not None:
+            self.choices = QListWidget(self)
+            self.choices.setToolTip('The simulations of the scan are run with each selected choice')
+            combo = field if isinstance(field, QComboBox) else None
+            for i, text in enumerate(parameter.choices):
+                item = QListWidgetItem(text, self.choices)
+                enabled = combo is None or choiceEnabled(combo, i)
+                item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled if enabled else Qt.ItemFlag.ItemIsUserCheckable)
+                item.setCheckState(Qt.CheckState.Unchecked)
+            self.choices.setMinimumWidth(360)
+            self.choices.setMaximumHeight(min(self.choices.sizeHintForRow(0) * len(parameter.choices) + 6, 300))
+            self.choices.itemChanged.connect(lambda _: self.choicesChanged())
+            grid.addWidget(self.choices, 1, 0, 1, 2)
+
         self.start = QDoubleSpinBox(self)
         self.stop = QDoubleSpinBox(self)
         for spinbox in (self.start, self.stop):
@@ -448,16 +523,22 @@ class ScanValuesEditor(QFrame):
         )
         self.scale.currentIndexChanged.connect(lambda _: self.updateValues())
         line = QHBoxLayout()
-        for widget in (QLabel('from', self), self.start, QLabel('to', self), self.stop, QLabel('number', self), self.number, self.scale):
+        range_widgets: List[QWidget] = [QLabel('from', self), self.start, QLabel('to', self), self.stop, QLabel('number', self), self.number, self.scale]
+        for widget in range_widgets:
             line.addWidget(widget)
-        grid.addLayout(line, 1, 0, 1, 2)
-
-        grid.addWidget(QLabel('Values:', self), 2, 0)
+        values_label = QLabel('Values:', self)
         self.values = QLineEdit(self)
         self.values.setToolTip('Values of the parameter separated by commas (filled from the range, can be edited)')
         self.values.setMinimumWidth(360)
         self.values.textChanged.connect(lambda _: self.apply())
-        grid.addWidget(self.values, 2, 1)
+        if self.choices is None:
+            grid.addLayout(line, 1, 0, 1, 2)
+            grid.addWidget(values_label, 2, 0)
+            grid.addWidget(self.values, 2, 1)
+        else:
+            # the values (indices of the choices) are set by the selection
+            for widget in range_widgets + [values_label, self.values]:
+                widget.setHidden(True)
 
         buttons = QHBoxLayout()
         self.count = QLabel('', self)
@@ -472,7 +553,11 @@ class ScanValuesEditor(QFrame):
         grid.addLayout(buttons, 3, 0, 1, 2)
 
         state = scan.values.get(parameter.key)
-        if state is None:
+        if state is None and parameter.choices is not None:
+            # all choices that can be selected
+            selectable = [i for i in range(len(parameter.choices)) if not isinstance(field, QComboBox) or choiceEnabled(field, i)]
+            state = {'values': ', '.join(str(i) for i in selectable)}
+        elif state is None:
             current = float(field.value()) if isinstance(field, (QSpinBox, QDoubleSpinBox)) else 0.
             state = defaultRange(parameter.key, current)
         self.setState(state)
@@ -510,8 +595,24 @@ class ScanValuesEditor(QFrame):
             self.values.blockSignals(False)
         else:
             self.updateValues()
+        if self.choices is not None:
+            selected = parseValues(self.values.text(), True)
+            self.choices.blockSignals(True)
+            for i in range(self.choices.count()):
+                notNone(self.choices.item(i)).setCheckState(Qt.CheckState.Checked if i in selected else Qt.CheckState.Unchecked)
+            self.choices.blockSignals(False)
+
+    def choicesChanged(self):
+        """The selection of the choices sets the values (indices of the choices)"""
+
+        if self.choices is None:
+            return
+        selected = [i for i in range(self.choices.count()) if notNone(self.choices.item(i)).checkState() == Qt.CheckState.Checked]
+        self.values.setText(', '.join(str(i) for i in selected))
 
     def state(self) -> dict:
+        if self.choices is not None:
+            return {'values': self.values.text()}
         return {'start': self.start.value(), 'stop': self.stop.value(), 'number': self.number.value(),
                 'scale': self.scale.currentIndex(), 'values': self.values.text()}
 
@@ -561,8 +662,9 @@ class ParameterScan(QObject):
         self.values: Dict[str, dict] = {}
         # titles of other configurations of the same program (version of the simulation program)
         self.versions: List[str] = []
-        # labels of the parameters (of the current input fields)
+        # labels of the parameters (of the current input fields) and the texts of the choices of combo boxes
         self.labels: Dict[str, str] = {}
+        self.choices: Dict[str, List[str]] = {}
         self.overlays: List[ScanFieldOverlay] = []
         self.editor: Optional[ScanValuesEditor] = None
 
@@ -615,6 +717,26 @@ class ParameterScan(QObject):
                 parameter = ScanParameter(key, label, lambda a, w=widget: w.value(), None, integer=isinstance(widget, QSpinBox))
                 parameter.widgets.append(widget)
                 parameters[key] = parameter
+        # combo boxes of the simulation settings and of the composition tables (the choice is set in the combo box)
+        choices: List[Tuple[str, str, Any]] = [
+            (name, label, getattr(page.settings_group_layout_settings, name, None)) for name, label in SETTINGS_CHOICES.items()
+        ]
+        for table in (page.table_beam, page.table_target):
+            for row in table.rows:
+                symbol = row.element.symbol
+                for attribute, prefix, label in ROW_CHOICES:
+                    combo = getattr(row, attribute, None)
+                    if symbol and combo in row.row_widgets:
+                        choices.append((f'{prefix}_{symbol}', f'{label} of {symbol}', combo))
+        for key, label, widget in choices:
+            if not isinstance(widget, QComboBox):
+                continue
+            if key in parameters:
+                parameters[key].widgets.append(widget)
+                continue
+            parameter = ScanParameter(key, label, lambda a, w=widget: w.currentIndex(), None, choices=choiceTexts(widget))
+            parameter.widgets.append(widget)
+            parameters[key] = parameter
         return parameters
 
     def setValues(self, key: str, state: Optional[dict]) -> bool:
@@ -658,6 +780,9 @@ class ParameterScan(QObject):
         state = self.values.get(key)
         if state is None:
             return []
+        choices = self.choices.get(key)
+        if choices is not None:
+            return [choices[i] if 0 <= i < len(choices) else str(i) for i in parseValues(state.get('values', ''), True)]
         return [formatRangeValue(value) for value in parseValues(state.get('values', ''))]
 
     def valuesText(self, key: str) -> str:
@@ -681,7 +806,9 @@ class ParameterScan(QObject):
         count = 1
         for key in self.values:
             count *= max(len(self.valuesStrings(key)), 1)
-        return count * max(len(self.versions), 1)
+        # the configuration of the tab and the other versions
+        titles = {sc.title for sc in self.otherVersions()}
+        return count * (1 + len([title for title in self.versions if title in titles]))
 
     def editValues(self, key: str, field: QWidget):
         """Opens the popup for the values of a parameter below its field"""
@@ -720,6 +847,7 @@ class ParameterScan(QObject):
         except Exception:
             return
         self.labels = {key: parameter.label for key, parameter in parameters.items()}
+        self.choices = {key: parameter.choices for key, parameter in parameters.items() if parameter.choices is not None}
         overlays = []
         for key, parameter in parameters.items():
             for widget in parameter.widgets:
@@ -774,7 +902,9 @@ class ParameterScan(QObject):
                     values.append(value.title)
                     labels.append(formatValue(value.title))
                     continue
-                values.append(value)
+                # combo boxes: the text of the choice (the folder name contains its index)
+                choices = parameter.choices
+                values.append(choices[value] if choices is not None and 0 <= value < len(choices) else value)
                 labels.append(f'{parameter.key}_{formatValue(value)}')
                 assignments.append((parameter, value))
             simulations.append({'values': values, 'label': '__'.join(labels), 'assignments': assignments, 'configuration': configuration})
@@ -783,7 +913,7 @@ class ParameterScan(QObject):
     def arguments(self, assignments: List[Tuple[ScanParameter, Any]]) -> SimulationArguments:
         """Returns the arguments of the tab with the values of a simulation of the scan"""
 
-        restore = []
+        restore: List[Tuple[Any, Any, bool]] = []
         for parameter, value in assignments:
             if parameter.apply is not None:
                 continue
@@ -792,11 +922,18 @@ class ParameterScan(QObject):
                     restore.append((widget, widget.value(), widget.signalsBlocked()))
                     widget.blockSignals(True)
                     setSpinboxValue(widget, value)
+                elif isinstance(widget, QComboBox) and 0 <= int(value) < widget.count():
+                    restore.append((widget, widget.currentIndex(), widget.signalsBlocked()))
+                    widget.blockSignals(True)
+                    widget.setCurrentIndex(int(value))
         try:
             arguments = self.page.makeArguments()
         finally:
             for widget, value, blocked in reversed(restore):
-                setSpinboxValue(widget, value)
+                if isinstance(widget, QComboBox):
+                    widget.setCurrentIndex(int(value))
+                else:
+                    setSpinboxValue(widget, value)
                 widget.blockSignals(blocked)
         for parameter, value in assignments:
             if parameter.apply is not None:

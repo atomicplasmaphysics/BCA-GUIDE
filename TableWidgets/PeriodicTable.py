@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, cast
 from string import ascii_lowercase
 
 from PyQt6.QtCore import pyqtSignal, Qt, QSize, QEvent
@@ -7,10 +7,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QListWidgetItem
 )
 
-from GlobalConf import GlobalConf
-from Styles import Styles
+from Utility.GlobalConf import GlobalConf
+from Utility.Styles import Styles
 
 from Containers.Element import Element, Elements
+from Utility.Typing import notNone
 
 
 class HoverLabel(QLabel):
@@ -25,7 +26,7 @@ class HoverLabel(QLabel):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.element = None
+        self.element: Optional[Element] = None
 
     def enterEvent(self, event=None):
         """
@@ -57,6 +58,8 @@ class ElementWidget(HoverLabel):
 
     mouseRelease = pyqtSignal(Element)
     widgetSize = 35
+
+    element: Element
 
     sColor = (0, 0, 255, 75)
     pColor = (0, 255, 0, 75)
@@ -148,6 +151,8 @@ class IsotopeWidget(HoverLabel):
 
     isotopeChosen = pyqtSignal(Element)
 
+    element: Element
+
     def __init__(self, parent, element):
         super().__init__(parent)
         self.element = element
@@ -174,7 +179,8 @@ class PeriodicTableDialog(QDialog):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.element_data = None
+        # all elements, set in setup()
+        self.element_data: Elements = cast(Elements, None)
         self.disallowed_elements = []
         self.disallowed_element_widgets = []
         self.search_text = ''
@@ -223,12 +229,12 @@ class PeriodicTableDialog(QDialog):
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.table.horizontalHeader().hide()
-        self.table.verticalHeader().hide()
+        notNone(self.table.horizontalHeader()).hide()
+        notNone(self.table.verticalHeader()).hide()
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.table.horizontalHeader().setMinimumSectionSize(int(ElementWidget.widgetSize))
-        self.table.verticalHeader().setMinimumSectionSize(int(ElementWidget.widgetSize))
+        notNone(self.table.horizontalHeader()).setMinimumSectionSize(int(ElementWidget.widgetSize))
+        notNone(self.table.verticalHeader()).setMinimumSectionSize(int(ElementWidget.widgetSize))
         self.table.setShowGrid(False)
         self.table.installEventFilter(self)
         self.periodic_table_hbox.addWidget(self.table)
@@ -297,7 +303,7 @@ class PeriodicTableDialog(QDialog):
                 self.previous_chosen_element = element_widget
                 if len(self.previous_chosen_element.isotopes) > 1:
                     for i in range(self.isotope_list.count()):
-                        if self.isotope_list.itemWidget(self.isotope_list.item(i)).element.symbol == element.symbol:
+                        if self.isotopeWidget(notNone(self.isotope_list.item(i))).element.symbol == element.symbol:
                             self.isotope_list.setCurrentRow(i)
                             break
                 break
@@ -362,8 +368,8 @@ class PeriodicTableDialog(QDialog):
 
         self.table.resizeColumnsToContents()
         self.table.resizeRowsToContents()
-        width = self.table.horizontalHeader().length() + 2  # to fit content exactly
-        height = self.table.verticalHeader().length() + 2
+        width = notNone(self.table.horizontalHeader()).length() + 2  # to fit content exactly
+        height = notNone(self.table.verticalHeader()).length() + 2
         self.table.setFixedSize(width, height)
         self.isotope_list.setMaximumHeight(height - self.isotopeTitleHeight)
 
@@ -455,7 +461,7 @@ class PeriodicTableDialog(QDialog):
             if self.isotope_list.count():
                 selected_items = self.isotope_list.selectedItems()
                 if len(selected_items):
-                    selected_element = self.isotope_list.itemWidget(selected_items[0]).element
+                    selected_element = self.isotopeWidget(selected_items[0]).element
                     self.dialogFinished(selected_element)
             if self.isSearching():
                 for widget in self.element_widgets:
@@ -502,13 +508,18 @@ class PeriodicTableDialog(QDialog):
             self.search_label.setStyleSheet(Styles.search_style_placeholder)
         self.updateAllowedElements()
 
+    def isotopeWidget(self, item: QListWidgetItem) -> 'IsotopeWidget':
+        """Returns the widget of an item of the list of isotopes"""
+
+        return cast(IsotopeWidget, self.isotope_list.itemWidget(item))
+
     def updateSearchIsotopes(self):
         """Updates search results in isotopes list"""
 
         selected = False
         for i in range(self.isotope_list.count()):
-            list_item = self.isotope_list.item(i)
-            isotope = self.isotope_list.itemWidget(list_item)
+            list_item = notNone(self.isotope_list.item(i))
+            isotope = self.isotopeWidget(list_item)
             list_item.setFlags(list_item.flags() | Qt.ItemFlag.ItemIsSelectable)
             isotope.setEnabled(True)
             if self.search_text not in isotope.text().lower() or isotope.element.symbol in self.disallowed_elements:

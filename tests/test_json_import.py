@@ -9,7 +9,7 @@ from re import findall, IGNORECASE, MULTILINE
 
 import pytest
 
-from conftest import SAVES, SIMULATION_PROGRAMS, addSimulationPage, pump
+from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, pump
 
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions, namelistParameters
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
@@ -33,8 +33,10 @@ TARGETS = [('SDTrimSP', folder, version) for folder, version in sdtrimspInstalla
 if TRIDYN_FOLDER.is_dir():
     TARGETS.append(('TRIDYN', TRIDYN_FOLDER, '2022'))
 
-SOURCES = sorted(path.parent for path in (SAVES / 'SDTrimSP').glob('*/input.json') if path.parent.name.startswith(('example_', 'Ar_on_W', 'H_Ar')))
-SOURCES += sorted(path.parent for path in (SAVES / 'TRIDYN').glob('*/input.json'))
+SOURCES = sorted(path.parent for path in (SAVES / 'SDTrimSP').glob('example_*/input.json'))
+SOURCES += sorted(path.parent for path in (TEST_SAVES / 'SDTrimSP').glob('*/input.json'))
+SOURCES += sorted(path.parent for path in (SAVES / 'TRIDYN').glob('example_*/input.json'))
+SOURCES += sorted(path.parent for path in (TEST_SAVES / 'TRIDYN').glob('*/input.json'))
 
 
 def addPage(main_window, program: str, folder, version: str, save):

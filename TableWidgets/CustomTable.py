@@ -145,28 +145,30 @@ class CustomTable(QTableWidget, Generic[RowT]):
         self.frozen = QTableWidget(self.rowCount(), self.frozen_columns, self)
         self.frozen.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.frozen.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.frozen.verticalHeader().setVisible(False)
+        notNone(self.frozen.verticalHeader()).setVisible(False)
         self.frozen.setHorizontalHeaderLabels(self.header_labels[:self.frozen_columns])
-        self.frozen.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.frozen.horizontalHeader().setMinimumSectionSize(self.horizontal_header.minimumSectionSize())
+        frozen_header = notNone(self.frozen.horizontalHeader())
+        frozen_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        frozen_header.setMinimumSectionSize(self.horizontal_header.minimumSectionSize())
         self.frozen.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.frozen.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.frozen.setFrameShape(QFrame.Shape.NoFrame)
         self.frozen.setVerticalScrollMode(self.verticalScrollMode())
         # opaque, otherwise the scrolled columns are visible below the frozen ones
-        for widget in (self.frozen, self.frozen.viewport(), self.frozen.horizontalHeader(), self.frozen.horizontalHeader().viewport()):
-            widget.setAutoFillBackground(True)
+        for widget in (self.frozen, self.frozen.viewport(), frozen_header, frozen_header.viewport()):
+            notNone(widget).setAutoFillBackground(True)
 
         for column in range(self.frozen_columns):
             self.horizontal_header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
         self.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
 
-        self.frozen.verticalScrollBar().valueChanged.connect(self.verticalScrollBar().setValue)
-        self.verticalScrollBar().valueChanged.connect(self.frozen.verticalScrollBar().setValue)
+        frozen_scroll_bar, scroll_bar = notNone(self.frozen.verticalScrollBar()), notNone(self.verticalScrollBar())
+        frozen_scroll_bar.valueChanged.connect(scroll_bar.setValue)
+        scroll_bar.valueChanged.connect(frozen_scroll_bar.setValue)
         self.horizontal_header.sectionResized.connect(self.frozenSectionResized)
         self.horizontal_header.geometriesChanged.connect(self.updateFrozenGeometry)
 
-        self.viewport().stackUnder(self.frozen)
+        notNone(self.viewport()).stackUnder(self.frozen)
         self.updateFrozenGeometry()
         self.frozen.show()
 
@@ -185,12 +187,12 @@ class CustomTable(QTableWidget, Generic[RowT]):
             return
         width = sum(self.columnWidth(column) for column in range(self.frozen_columns))
         header_height = self.horizontal_header.height()
-        self.frozen.horizontalHeader().setFixedHeight(header_height)
+        notNone(self.frozen.horizontalHeader()).setFixedHeight(header_height)
         self.frozen.setGeometry(
             self.frameWidth(),
             self.frameWidth(),
             width,
-            self.viewport().height() + header_height
+            notNone(self.viewport()).height() + header_height
         )
 
     def resizeEvent(self, event):
@@ -305,7 +307,7 @@ class CustomTable(QTableWidget, Generic[RowT]):
 
         # first column needs to be resized as well
         if self.rowCount() > 1:
-            first_width = self.cellWidget(0, 0).sizeHint().width()
+            first_width = notNone(self.cellWidget(0, 0)).sizeHint().width()
             self.setColumnWidth(0, first_width)
         self.updateFrozenGeometry()
 

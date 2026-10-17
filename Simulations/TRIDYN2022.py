@@ -9,7 +9,7 @@ import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
 
-from Utility.Colors import paletteColormap
+from Utility.Styles import paletteColormap
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, DoubleSpinBox, SpinBox, VBoxTitleLayout,
     SpinBoxRange, LineEdit, ComboBox, ListWidget, ListWidgetItem, setWidgetBackground
@@ -272,8 +272,8 @@ class HlTargetSettings(HlGeneralTargetSettings):
     def changedGlobDens(self):
         """Detects when global density is changed"""
 
-        global_density_state = self.layout_global_density.checkbox.isChecked()
-        global_density = False
+        global_density_state = self.layout_global_density.check.isChecked()
+        global_density: Union[bool, float] = False
         if global_density_state:
             global_density = self.global_density.value()
         self.emit({
@@ -813,7 +813,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
 
         if self.calculation_method.getValue(save=True) == ArgumentValues.Mode.DYNAMIC:
             self.layout_vacancy_level.setEnabled(True)
-            if not self.layout_vacancy_level.checkbox.isChecked():
+            if not self.layout_vacancy_level.check.isChecked():
                 self.vacancy_level.setEnabled(False)
         else:
             self.layout_vacancy_level.setEnabled(False)
@@ -822,11 +822,11 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         """Checks if output settings can be selected"""
 
         if self.calculation_method.getValue(save=True) == ArgumentValues.Mode.DYNAMIC:
-            self.layout_reflected_projectiles.checkbox.setChecked(True)
-            self.layout_reflected_projectiles.checkbox.setEnabled(False)
+            self.layout_reflected_projectiles.check.setChecked(True)
+            self.layout_reflected_projectiles.check.setEnabled(False)
 
         else:
-            self.layout_reflected_projectiles.checkbox.setEnabled(True)
+            self.layout_reflected_projectiles.check.setEnabled(True)
 
     def updatePrecisionOrProjectiles(self, precision: bool = True):
         """Either precision or projectiles can be set"""
@@ -3212,7 +3212,7 @@ and provides detailed statistics on ion slowing down, recoil transport and
 ion mixing, sputtering and vacuum/solid transitions. It may also be run
 in static mode.
 '''
-    Logo = ':icons/aboutlogo_hzdr.png'
+    Logo = ':/assets/aboutlogo_hzdr.png'
     About = '''
 Wolfhard Möller
 

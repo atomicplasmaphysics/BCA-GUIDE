@@ -22,8 +22,8 @@ from PyQt6.QtWidgets import (
 )
 
 
-from GlobalConf import GlobalConf
-from Styles import Styles
+from Utility.GlobalConf import GlobalConf
+from Utility.Styles import Styles
 
 from Utility.Layouts import (
     TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview, contentButton, StayOpenMenu,
@@ -52,7 +52,7 @@ from Containers.GlobalDensity import GlobalDensity
 
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
-    from MainWindow import MainWindow
+    from Pages.MainWindow import MainWindow
 
 
 class SimulationPage(TabWithToolbar):
@@ -153,32 +153,32 @@ class SimulationPage(TabWithToolbar):
         #
 
         # New
-        self.action_new = self.toolbar.addAction(getIcon('new'), 'New')
+        self.action_new = notNone(self.toolbar.addAction(getIcon('new'), 'New'))
         self.action_new.setToolTip('<b>Reset</b> this simulation-tab and the input fields to their default states')
         self.action_new.setShortcut(QKeySequence('Ctrl+N'))
         self.action_new.triggered.connect(lambda: self.resetSettings())
 
         # Open
-        self.action_open = self.toolbar.addAction(getIcon('open'), 'Open')
+        self.action_open = notNone(self.toolbar.addAction(getIcon('open'), 'Open'))
         self.action_open.setToolTip('<b>Open</b> an existing simulation input setting')
         self.action_open.setShortcut(QKeySequence('Ctrl+O'))
         self.action_open.triggered.connect(lambda: self.loadSettings())  # self.loadSettings(from_json=False)
 
         # Import
-        self.action_import = self.toolbar.addAction(getIcon('convert'), 'Convert')
+        self.action_import = notNone(self.toolbar.addAction(getIcon('convert'), 'Convert'))
         self.action_import.setToolTip('<b>Convert</b> simulation input setting')
         self.action_import.setShortcut(QKeySequence('Ctrl+I'))
         self.action_import.triggered.connect(lambda: self.importSettings())
 
         # Save
-        self.action_save = self.toolbar.addAction(getIcon('save'), 'Save')
+        self.action_save = notNone(self.toolbar.addAction(getIcon('save'), 'Save'))
         self.action_save.setToolTip('<b>Save</b> the current settings of this simulation-tab to a simulation-tab input file')
         self.action_save.setShortcut(QKeySequence('Ctrl+S'))
         self.action_save.setEnabled(False)
         self.action_save.triggered.connect(lambda: self.saveSettings())
 
         # Save as
-        self.action_save_as = self.toolbar.addAction(getIcon('save_as'), 'Save as')
+        self.action_save_as = notNone(self.toolbar.addAction(getIcon('save_as'), 'Save as'))
         self.action_save_as.setToolTip('<b>Save</b> the current settings of this simulation-tab under a different name and/or in a different location')
         self.action_save_as.setShortcut(QKeySequence('Ctrl+Shift+S'))
         self.action_save_as.setEnabled(False)
@@ -189,7 +189,7 @@ class SimulationPage(TabWithToolbar):
 
         # Parameter scan: several values in the input fields, the menu selects other versions
         self.scan = ParameterScan(self)
-        self.action_scan = self.toolbar.addAction(getIcon('scan'), 'Parameter scan')
+        self.action_scan = notNone(self.toolbar.addAction(getIcon('scan'), 'Parameter scan'))
         self.action_scan.setCheckable(True)
         self.action_scan.setToolTip(
             '<b>Parameter scan</b>: simulations in which any number of parameters are varied (all combinations of their values).<br>'
@@ -211,7 +211,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Preferences
-        self.action_preferences = self.toolbar.addAction(getIcon('preferences'), 'Preferences')
+        self.action_preferences = notNone(self.toolbar.addAction(getIcon('preferences'), 'Preferences'))
         self.action_preferences.setToolTip('Open the <b>general settings</b> of this simulation configuration')
         self.action_preferences.setShortcut(QKeySequence.StandardKey.Preferences)
         self.action_preferences.triggered.connect(lambda: self.main_window.switchSettingsTab(self.simulation_configuration))
@@ -232,7 +232,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Run
-        self.action_run = self.toolbar.addAction(getIcon('play'), 'Run')
+        self.action_run = notNone(self.toolbar.addAction(getIcon('play'), 'Run'))
         self.action_run.setToolTip('Save the current settings and <b>run the simulation</b> on the input file')
         self.action_run.setShortcut(QKeySequence('Ctrl+R'))
         self.action_run.triggered.connect(lambda: self.runSimulation())
@@ -245,7 +245,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addWidget(self.run_progress)
 
         # Run abort
-        self.action_abort = self.toolbar.addAction(getIcon('abort'), 'Abort')
+        self.action_abort = notNone(self.toolbar.addAction(getIcon('abort'), 'Abort'))
         self.action_abort.setToolTip('<b>Abort</b> the currently active simulation')
         self.action_abort.setShortcut(QKeySequence('Ctrl+P'))
         self.action_abort.setEnabled(False)
@@ -253,7 +253,7 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addSeparator()
 
         # Run detached
-        self.action_run_detached = self.toolbar.addAction(getIcon('play_detached'), 'Run detached')
+        self.action_run_detached = notNone(self.toolbar.addAction(getIcon('play_detached'), 'Run detached'))
         self.action_run_detached.setToolTip('Save the current settings and <b>run the simulation</b> on the input file in detached mode.\nThe simulation is run in a separate window, and the GUI can be closed')
         self.action_run_detached.setShortcut(QKeySequence('Ctrl+Shift+R'))
         self.action_run_detached.triggered.connect(lambda: self.runSimulation(detached=True))
@@ -272,12 +272,12 @@ class SimulationPage(TabWithToolbar):
         self.toolbar.addWidget(self.working_dir)
 
         # Open working directory button
-        self.open_working_dir = self.toolbar.addAction(getIcon('open_workdir'), 'Open working directory')
+        self.open_working_dir = notNone(self.toolbar.addAction(getIcon('open_workdir'), 'Open working directory'))
         self.open_working_dir.setToolTip('Open the working directory in the file explorer')
         self.open_working_dir.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.simulation_configuration.save_folder))))
 
         # Open docs button
-        self.action_open_documentation = self.toolbar.addAction(getIcon('book'), 'Simulation documentation')
+        self.action_open_documentation = notNone(self.toolbar.addAction(getIcon('book'), 'Simulation documentation'))
         self.action_open_documentation.setShortcut(QKeySequence.StandardKey.HelpContents)
         self.updateDocs()
         self.action_open_documentation.triggered.connect(self.openDocs)
@@ -1071,7 +1071,7 @@ class SimulationPage(TabWithToolbar):
         :param return_element: selected element or 0 if no element was selected
         """
 
-        if return_element > 0:
+        if return_element > 0 and self.dialog_source_row is not None and self.periodic_table_dialog.isotope is not None:
             self.dialog_source_row.setElement(self.periodic_table_dialog.isotope)
 
     def updateGlobalDensity(self, value_dict: dict):
@@ -1991,7 +1991,7 @@ EOF
     def processReadyRead(self):
         """Called when process has new readable data"""
 
-        process_log = self.process_log = bytes(self.process.readAll()).decode(getpreferredencoding(), 'ignore')
+        process_log = self.process_log = self.process.readAll().data().decode(getpreferredencoding(), 'ignore')
         # Remove trailing newlines
         self.simulation_output.appendPlainText(process_log.rstrip())
 
@@ -2073,14 +2073,13 @@ EOF
     def updateProgress(self):
         """Update the progress bar"""
 
-        percent = self.simulation_class.getProgress(
-            self.simulation_configuration.save_folder,
-            self.process_log,
-            self.simulation_configuration.version
-        )
+        save_folder = self.simulation_configuration.save_folder
+        if save_folder is None:
+            return
+        percent = self.simulation_class.getProgress(save_folder, self.process_log, self.simulation_configuration.version)
         if percent >= 0:
             self.run_progress.setValue(percent)
-            self.setProgressStatus(percent)
+            self.setProgressStatus(int(percent))
 
     def updateOutputFilesList(self):
         """Update list of output files"""
@@ -2103,7 +2102,7 @@ EOF
         selected_items = self.output_files_list.selectedItems()
         if selected_items:
             selected_output_file = selected_items[0].text()
-            self.previous_scroll_position = self.outputFilePreview.verticalScrollBar().value()
+            self.previous_scroll_position = notNone(self.outputFilePreview.verticalScrollBar()).value()
 
         self.output_files_list.clear()
 
@@ -2119,10 +2118,10 @@ EOF
                 continue
 
             self.output_files_list.addItem(file.name)
-            item = self.output_files_list.item(self.output_files_list.count() - 1)
+            item = notNone(self.output_files_list.item(self.output_files_list.count() - 1))
 
             tooltip = inFileDict(file.name, self.simulation_class.OutputTooltips)
-            if tooltip is not False:
+            if isinstance(tooltip, tuple):
                 item.setToolTip(tooltip[1])
 
             # Keep the previous selection
@@ -2163,7 +2162,7 @@ EOF
         self.outputFilePreview.updateOffset(0)
 
         line_limit = 0
-        if self.layout_output_preview_line_count.checkbox.isChecked():
+        if self.layout_output_preview_line_count.check.isChecked():
             line_limit = self.output_preview_line_count.value()
 
         if not file_content:
@@ -2171,20 +2170,18 @@ EOF
 
         # limit the maximum lines in the preview to the set number
         elif line_limit > 0:
-            file_content = file_content.split('\n')
-            file_content_length = len(file_content)
-            file_content = '\n'.join(file_content[:line_limit])
-            if file_content_length > line_limit:
+            content_lines = file_content.split('\n')
+            file_content = '\n'.join(content_lines[:line_limit])
+            if len(content_lines) > line_limit:
                 file_content += '\n\n(-- END OF PREVIEW --)'
 
         elif line_limit < 0:
-            file_content = file_content.split('\n')
-            file_content_length = len(file_content)
+            content_lines = file_content.split('\n')
             file_content_text = ''
-            if file_content_length > -line_limit:
+            if len(content_lines) > -line_limit:
                 file_content_text = '(-- START OF PREVIEW --)\n\n'
-                self.outputFilePreview.updateOffset(file_content_length + line_limit - 2)
-            file_content_text += '\n'.join(file_content[line_limit:])
+                self.outputFilePreview.updateOffset(len(content_lines) + line_limit - 2)
+            file_content_text += '\n'.join(content_lines[line_limit:])
             file_content = file_content_text
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -2195,7 +2192,7 @@ EOF
         QApplication.restoreOverrideCursor()
 
         if self.last_selected_output_file == selected_items[0].text():
-            self.outputFilePreview.verticalScrollBar().setValue(self.previous_scroll_position)
+            notNone(self.outputFilePreview.verticalScrollBar()).setValue(self.previous_scroll_position)
         self.last_selected_output_file = selected_items[0].text()
         self.open_output_file_button.setEnabled(True)
 
@@ -2265,11 +2262,12 @@ EOF
             self.main_window.writeStatusBar('No plot data provided - aborted')
             return
 
+        save_folder = self.simulation_configuration.save_folder or GlobalConf.save_path
         file_path = selectFileDialog(
             self,
             True,
             'Save plot data as...',
-            self.simulation_configuration.save_folder / f'{title}.csv',
+            save_folder / f'{title}.csv',
             'CSV files (*.csv);;Text files, tab separated (*.txt)'
         )
         if file_path is None:
@@ -2278,6 +2276,8 @@ EOF
 
         # CSV files are comma separated, other files tab separated
         plot_data = self.evaluation_class.getReturnData(separator=',' if file_path.suffix.lower() == '.csv' else '\t')
+        if plot_data is None:
+            return
         with open(file_path, 'w', encoding='utf-8', newline='') as file:
             file.write(plot_data)
 

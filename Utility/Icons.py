@@ -4,7 +4,7 @@ from PyQt6.QtCore import Qt, QByteArray, QRect, QRectF, QSize
 from PyQt6.QtGui import QColor, QGuiApplication, QIcon, QIconEngine, QPainter, QPalette, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
-from Styles import Styles
+from Utility.Styles import Styles
 
 
 # Icons are taken from Lucide (https://lucide.dev), ISC License

@@ -21,19 +21,41 @@ from platform import system
 import logging
 
 
-from PyQt6.QtCore import Qt, QSize, QRect, QPoint
+from PyQt6.QtCore import Qt, QSize, QRect, QPoint, QTimer
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QIcon, QColor, QGuiApplication
 
-import resources  # noqa: F401 (registers the resources of Qt)
+import assets.resources  # noqa: F401 (registers the resources of Qt)
 
-from GlobalConf import GlobalConf
-from MainWindow import MainWindow
+from Utility.GlobalConf import GlobalConf
+from Pages.MainWindow import MainWindow
 
 from Utility.Layouts import SplashPixmap
 from Utility.Logger import setupLogging
+from Utility.Typing import notNone
 
 # TODO: make tabs detachable -> open them in their own window, such that multiple simulations can be seen at the same time
+
+
+def selfTest() -> int:
+    """
+    Checks the started GUI (e.g. the executable of PyInstaller, see setup/pyinstaller.py): the simulation modules are loaded,
+    the images of the resources and the manual of the GUI are found. Returns the exit code (0: everything found)
+    """
+
+    from PyQt6.QtGui import QPixmap
+    from Simulations.SimulationsList import SimulationsList
+
+    problems = []
+    if not {'SDTrimSP', 'TRIDYN'} <= set(SimulationsList().simulation_program_names):
+        problems.append(f'simulation modules: {SimulationsList().simulation_program_names}')
+    if QPixmap(':/assets/tu_logo.png').isNull():
+        problems.append('resources')
+    if not (GlobalConf.assets_path / 'BCA-GUIDE_manual.pdf').is_file():
+        problems.append(f'manual in {GlobalConf.assets_path}')
+    for problem in problems:
+        logging.error(f'Self test failed: {problem}')
+    return 1 if problems else 0
 
 
 def main():
@@ -54,19 +76,19 @@ def main():
 
     # start application
     app = QApplication(argv)
-    app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
+    app.setWindowIcon(QIcon(':/assets/tu_logo.png'))
 
     # the splash screen is shown on the display of the main window (saved center of the window), otherwise on the primary one
     x, y = GlobalConf.getWindowCenter()
     display = QGuiApplication.screenAt(QPoint(x, y)) if (x, y) != (0, 0) else None
     if display is None:
         display = app.primaryScreen()
-    screen = display.availableGeometry()
+    screen = notNone(display).availableGeometry()
     splash_size = QSize(min(620, int(screen.width() * 0.5)), min(300, int(screen.height() * 0.5)))
 
     # show splashscreen on startup
     pixmap = SplashPixmap(
-        image=':/icons/splash.png',
+        image=':/assets/splash.png',
         text=f'v. {GlobalConf.version}',
         box=QRect(530, 65, 90, 25),
         align=Qt.AlignmentFlag.AlignLeft,
@@ -83,8 +105,12 @@ def main():
     main_window = MainWindow(app)
     main_window.show()
     splash.finish(main_window)
-    app.exec()
+
+    # --self-test: checks the GUI after it has started and quits with the result as exit code
+    if '--self-test' in argv:
+        QTimer.singleShot(1000, lambda: app.exit(selfTest()))
+    return app.exec()
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

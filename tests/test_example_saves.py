@@ -2,7 +2,7 @@
 
 import pytest
 
-from conftest import SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
+from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
@@ -33,8 +33,9 @@ def sdtrimspFolder(version: str):
     return SIMULATION_PROGRAMS / 'SDTrimSP' / folder_name
 
 
-CASES = [('SDTrimSP', save) for save in sorted((SAVES / 'SDTrimSP').iterdir()) if save.is_dir()]
-CASES += [('TRIDYN', save) for save in sorted((SAVES / 'TRIDYN').iterdir()) if save.is_dir()]
+# the examples of the GUI and the simulations of the tests (not the other simulations of the user in saves)
+CASES = [(program, save) for program in ('SDTrimSP', 'TRIDYN') for save in sorted((SAVES / program).glob('example_*')) if save.is_dir()]
+CASES += [(program, save) for program in ('SDTrimSP', 'TRIDYN') for save in sorted((TEST_SAVES / program).iterdir()) if save.is_dir()]
 
 
 @pytest.mark.parametrize('program, save', CASES, ids=lambda value: getattr(value, 'name', value))

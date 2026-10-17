@@ -14,8 +14,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy, QAbstractItemView, QApplication
 )
 
-from GlobalConf import GlobalConf
-from Styles import Styles
+from Utility.GlobalConf import GlobalConf
+from Utility.Styles import Styles
 
 from Utility.Layouts import TabWithToolbar, VBoxTitleLayout, InputHBoxLayout, LineEdit, FilePath, ComboBox
 from Utility.Dialogs import showMessageBox, selectFileDialog
@@ -32,7 +32,7 @@ from Simulations.SimulationsList import SimulationsList
 
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
-    from MainWindow import MainWindow
+    from Pages.MainWindow import MainWindow
 
 
 # folders that are not searched for installed simulations
@@ -131,25 +131,25 @@ class ConfigurationPage(TabWithToolbar):
         #
 
         # New
-        self.action_new = self.toolbar.addAction(getIcon('new'), 'New')
+        self.action_new = notNone(self.toolbar.addAction(getIcon('new'), 'New'))
         self.action_new.setToolTip('Reset all configured Simulations')
         self.action_new.setShortcut(QKeySequence.StandardKey.New)
         self.action_new.triggered.connect(lambda: self.clearAll())
 
         # Open
-        self.action_open = self.toolbar.addAction(getIcon('open'), 'Open')
+        self.action_open = notNone(self.toolbar.addAction(getIcon('open'), 'Open'))
         self.action_open.setToolTip('Open saved simulation configurations')
         self.action_open.setShortcut(QKeySequence.StandardKey.Open)
         self.action_open.triggered.connect(lambda: self.open())
 
         # Save
-        self.action_save = self.toolbar.addAction(getIcon('save'), 'Save')
+        self.action_save = notNone(self.toolbar.addAction(getIcon('save'), 'Save'))
         self.action_save.setToolTip('Save all listed simulation configurations')
         self.action_save.setShortcut(QKeySequence.StandardKey.Save)
         self.action_save.triggered.connect(lambda: self.save())
 
         # Search
-        self.action_search = self.toolbar.addAction(getIcon('search'), 'Search')
+        self.action_search = notNone(self.toolbar.addAction(getIcon('search'), 'Search'))
         self.action_search.setToolTip('Search a folder and all its subfolders for installed simulations\nand add them as configurations')
         self.action_search.triggered.connect(lambda: self.searchSimulations())
 
@@ -159,13 +159,13 @@ class ConfigurationPage(TabWithToolbar):
         self.toolbar.addWidget(self.empty_space)
 
         # Run
-        self.action_run = self.toolbar.addAction(getIcon('play'), 'Run')
+        self.action_run = notNone(self.toolbar.addAction(getIcon('play'), 'Run'))
         self.action_run.setToolTip('Run the selected simulation(s)')
         self.action_run.setShortcut(QKeySequence('Ctrl+R'))
         self.action_run.triggered.connect(lambda: self.runSelected())
 
         # Run detached
-        self.action_run_detached = self.toolbar.addAction(getIcon('play_detached'), 'Run detached')
+        self.action_run_detached = notNone(self.toolbar.addAction(getIcon('play_detached'), 'Run detached'))
         self.action_run_detached.setToolTip('Run the selected simulation(s) in detached mode.\nThe simulation(s) is(are) run in a separate window, and the GUI can be closed')
         self.action_run_detached.setShortcut(QKeySequence('Ctrl+Shift+R'))
         self.action_run_detached.triggered.connect(lambda: self.runSelected(detached=True))
@@ -676,12 +676,12 @@ class ConfigurationPage(TabWithToolbar):
 
         # the "Add new configuration" entry always stays on top
         for i in range(self.simulation_configuration_list.count()):
-            if self.simulation_configuration_list.item(i).text() == self.new_configuration_text:
+            if notNone(self.simulation_configuration_list.item(i)).text() == self.new_configuration_text:
                 if i != 0:
                     self.simulation_configuration_list.insertItem(0, self.simulation_configuration_list.takeItem(i))
                 break
 
-        titles = [self.simulation_configuration_list.item(i).text() for i in range(1, self.simulation_configuration_list.count())]
+        titles = [notNone(self.simulation_configuration_list.item(i)).text() for i in range(1, self.simulation_configuration_list.count())]
         configs_by_title = {sc.title: sc for sc in self.main_window.simulation_configs}
         if sorted(titles) != sorted(configs_by_title.keys()):
             return
@@ -1188,7 +1188,7 @@ class ConfigurationPage(TabWithToolbar):
 
         one_checked = False
         for i in range(self.simulation_configuration_list.count()):
-            if self.simulation_configuration_list.item(i).checkState() == Qt.CheckState.Checked:
+            if notNone(self.simulation_configuration_list.item(i)).checkState() == Qt.CheckState.Checked:
                 one_checked = True
                 break
         if not one_checked:
@@ -1213,6 +1213,6 @@ class ConfigurationPage(TabWithToolbar):
 
         configurations = []
         for i in range(self.simulation_configuration_list.count()):
-            if self.simulation_configuration_list.item(i).checkState() == Qt.CheckState.Checked and (i - 1) in range(len(self.main_window.simulation_configs)):
+            if notNone(self.simulation_configuration_list.item(i)).checkState() == Qt.CheckState.Checked and (i - 1) in range(len(self.main_window.simulation_configs)):
                 configurations.append(self.main_window.simulation_configs[i - 1])
         self.main_window.runSimulations(configurations, detached=detached)

@@ -17,10 +17,8 @@ Place the downloaded BCA-codes in the `Simulation Programs` folder
 
 ## Examples
 
-Basic examples are provided in the `saves` folder:
-
-- Argon beam on Tungsten target (`Ar_on_W`)
-- Hydrogen and Argon beam on layered Iron and Tungsten target under 60deg (`H_Ar_on_Fe_W_60deg`)
+Examples are provided in the `saves` folder (only the `example_*` folders are part of the repository, the other
+simulations in `saves` stay local; the simulations of the tests are in `tests/saves`).
 
 Further examples for SDTrimSP (created with SDTrimSP 7.07, they can be opened with every version) are in `saves/SDTrimSP`:
 
@@ -76,8 +74,11 @@ To execute the GUI, download all files from this repository and execute the `mai
 
 ### Alternative Installation
 If one wishes to execute the GUI without calling it from the console, [PyInstaller](https://pyinstaller.org/en/stable/) can be used to compile all needed python files into one executable.
-After executing the `setup\pyinstaller.py` file (same packages and package PyInstaller are needed), a `BCA-GUIDE.exe` will be created in the main folder.
-For further information read the description of the `setup\pyinstaller.py` file.
+After executing `python setup/pyinstaller.py` (same packages and package PyInstaller are needed), an executable
+(`BCA-GUIDE_windows.exe`, `BCA-GUIDE_linux` or `BCA-GUIDE_mac.app`) is created in the main folder. The script then
+starts it once with `--self-test` (without showing the window): it checks that the simulation modules, the images and
+the manual of the GUI are found. The simulation programs are not part of the executable.
+For further information read the description of the `setup/pyinstaller.py` file.
 
 ## Manual
 
@@ -123,20 +124,23 @@ Single simulations are configured manually as described below.
 - Parameter scan: the scan button (slider icon) in the toolbar of a simulation tab enables the scan. The input fields
   that can be scanned get a small mark in their upper left corner, a click on it opens a popup for several values (a
   linear or logarithmic range or entered directly), the field then shows its values. A scan is a series of simulations
-  in which any number of parameters are varied at once (all combinations): energy, angle and azimuthal angle of the beam
-  species, element parameters (surface binding, displacement, cutoff and bulk binding energy, heat of formation,
-  inelastic correction, density, mass), atomic fractions of the first layer, target thickness and the numeric
-  simulation settings (e.g. fluence, number of histories). The menu of the scan button adds other versions of the
-  program (other configurations, the menu stays open to select several), lists the scanned parameters (a click
-  removes the values of one, also of fields that are currently hidden) and resets the scan. *Run* writes each simulation into a subfolder of the folder of the simulation, the
-  scan is described in `scan.json`: *Open* also accepts `scan.json` and opens the scan again, each subfolder can be
-  opened as single simulation. With the scan, *Files preview* shows the files of a selected simulation of the scan,
-  *Run status* the state and output of each simulation, *Output files* the files of a selected simulation and
-  *Parameter scan results* compares the results of the scan.
+  in which any number of parameters are varied at once (all combinations): energy, angle, azimuthal angle, starting
+  depth and charge of the beam species, element parameters (surface binding, displacement, cutoff and bulk binding
+  energy, heat of formation, inelastic correction and loss model, density, mass), atomic fractions of the first layer,
+  target thickness and segments, the numeric simulation settings (e.g. fluence, number of histories) and the models of
+  the simulation settings (interaction potential, integration method, surface binding model; the popup of a combo box
+  selects its choices). The number of simulations includes the other versions. The menu of the scan button adds other
+  versions of the program (other configurations, the menu stays open to select several), lists the scanned parameters
+  (a click removes the values of one, also of fields that are currently hidden) and resets the scan. *Run* writes each
+  simulation into a subfolder of the folder of the simulation, the scan is described in `scan.json`: *Open* also
+  accepts `scan.json` and opens the scan again, each subfolder can be opened as single simulation. With the scan,
+  *Files preview* shows the files of a selected simulation of the scan, *Run status* the state and output of each
+  simulation, *Output files* the files of a selected simulation and *Parameter scan results* compares the results of
+  the scan.
 - *Simulation* > *Compare simulations...* shows the results of several simulations (or of a scan) in a table and plots:
   lines over one parameter (one line for each value of the other parameters or for fixed values) or 2D maps over two
   parameters. The plotted data can be exported as CSV.
-- The colors of the plots follow the palette in `Utility/Colors.py` (12 colors, then lighter and darker versions).
+- The colors of the plots follow the palette in `Utility/Styles.py` (12 colors, then lighter and darker versions).
 - The additional settings of SDTrimSP are checked against the parameters that the installed version reads (namelist
   `TRI_INP` in `src/work.F90` if the source code is installed, otherwise `doc/tri.inp.txt`, otherwise a built-in list);
   unknown parameters are underlined.
@@ -144,8 +148,19 @@ Single simulations are configured manually as described below.
 ## Development
 
 Linting with [ruff](https://docs.astral.sh/ruff/) (`ruff check .`) and type checking with [mypy](https://mypy-lang.org)
-(`mypy`, configured in `mypy.ini`) also run in the continuous integration (`.github/workflows/ci.yml`) together with the
-tests on Windows and Linux.
+(`mypy`, configured in `mypy.ini`, also the functions without type annotations) also run in the continuous integration
+(`.github/workflows/ci.yml`) together with the tests on Windows and Linux.
+
+Structure of the project:
+
+- `main.py`: starts the GUI
+- `Pages`: main window (`MainWindow.py`), configuration page, simulation tabs, parameter scan and comparison
+- `Simulations`: the simulation programs (SDTrimSP, TRIDYN), found at runtime by `SimulationsList.py`
+- `TableWidgets`, `Containers`: tables of the input and the data classes of the arguments
+- `Utility`: global configuration (`GlobalConf.py`), styles and colors (`Styles.py`), icons, layouts, dialogs, ...
+- `assets`: images of the window, the about dialog and the splash screen (compiled into `assets/resources.py` with
+  `python setup/build_resources.py`, sources in `assets/source`) and the manual of the GUI
+- `setup`: building the resources and the executable (PyInstaller)
 
 ## Tests
 

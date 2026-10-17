@@ -1,11 +1,10 @@
 from typing import List, Optional
-from pathlib import Path
 
-from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QDir, QPoint, QTimer, QElapsedTimer, QProcess
+from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QPoint, QTimer, QElapsedTimer, QProcess
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
-from GlobalConf import GlobalConf
+from Utility.GlobalConf import GlobalConf
 
 from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
 from Utility.Layouts import ProgressTabBar, TimeProgressBar
@@ -151,7 +150,7 @@ class MainWindow(QMainWindow):
         self.menu_help.setToolTipsVisible(True)
 
         # Manual
-        self.manual_path = Path(QDir.currentPath())
+        self.manual_path = GlobalConf.assets_path
         self.action_manual = notNone(self.menu_help.addAction(getIcon('book'), 'Manual'))
         self.action_manual.triggered.connect(lambda: self.openUserManual())
 
@@ -368,7 +367,8 @@ class MainWindow(QMainWindow):
 
         # save config for all simulation tabs
         for sc in self.simulation_configs:
-            sc.tab_widget.saveSettings()
+            if sc.tab_widget is not None:
+                sc.tab_widget.saveSettings()
 
     def menuOpen(self):
         """Open one configuration for all tabs"""
@@ -387,14 +387,16 @@ class MainWindow(QMainWindow):
 
         # load file in all simulation tabs
         for sc in self.simulation_configs:
-            sc.tab_widget.loadSettings(folder)
+            if sc.tab_widget is not None:
+                sc.tab_widget.loadSettings(folder)
 
     def menuReset(self):
         """Resets all configurations"""
 
         # reset (new) in all simulation tabs
         for sc in self.simulation_configs:
-            sc.tab_widget.resetSettings()
+            if sc.tab_widget is not None:
+                sc.tab_widget.resetSettings()
 
     def menuCloseAll(self):
         """Closes all tabs"""
@@ -728,14 +730,14 @@ class MainWindow(QMainWindow):
             'dark': Qt.ColorScheme.Dark,
             'srim': Qt.ColorScheme.Light,
         }
-        self.app.styleHints().setColorScheme(color_schemes.get(GlobalConf.theme, Qt.ColorScheme.Unknown))
+        notNone(self.app.styleHints()).setColorScheme(color_schemes.get(GlobalConf.theme, Qt.ColorScheme.Unknown))
 
         if GlobalConf.theme == 'srim':
-            self.app.setWindowIcon(QIcon(':/icons/tu_logo_loco.png'))
-            self.setStyleSheet('background: url(:/icons/clouds.png) repeat center center fixed; background-color: #2db9ff;')
+            self.app.setWindowIcon(QIcon(':/assets/tu_logo_loco.png'))
+            self.setStyleSheet('background: url(:/assets/clouds.png) repeat center center fixed; background-color: #2db9ff;')
             self.window_title = 'BCA-SRIM'
         else:
-            self.app.setWindowIcon(QIcon(':/icons/tu_logo.png'))
+            self.app.setWindowIcon(QIcon(':/assets/tu_logo.png'))
             self.setStyleSheet('')
             self.window_title = GlobalConf.title
 

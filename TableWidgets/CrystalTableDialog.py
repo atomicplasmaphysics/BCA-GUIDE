@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QTableWidget, QHeaderView, QDialogButtonBox, QFileDialog, QAbstractItemView
 )
 
-from Styles import Styles
+from Utility.Styles import Styles
 
 from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError
 
@@ -346,6 +346,8 @@ class NewCrystalDialog(QDialog):
                 self.created_crystal = self.table_file.addCrystal(crystal, positions, self.structure_name.text().strip())
             else:
                 structure = self.table_file.structure(crystal.structure)
+                if structure is None:
+                    raise CrystalTableError(f'Structure {crystal.structure} not found in table.crystal')
                 self.created_crystal = self.table_file.addCrystal(crystal, list(structure.positions))
         except CrystalTableError as error:
             self.validation.setText(str(error).replace('\n', '<br>'))

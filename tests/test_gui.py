@@ -6,9 +6,9 @@ import pytest
 
 from PyQt6.QtWidgets import QFileDialog, QGraphicsDropShadowEffect
 
-from conftest import SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
+from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
-from GlobalConf import GlobalConf
+from Utility.GlobalConf import GlobalConf
 from Containers.SimulationConfiguration import SimulationConfiguration
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions
 from Simulations.SimulationsList import SimulationsList
@@ -35,7 +35,7 @@ def highlighted(widget) -> bool:
 
 @pytest.mark.skipif(not TRIDYN.is_dir(), reason='TRIDYN not available')
 def test_program_page_dialogs(main_window, qapp, tmp_path, dialogs, errors):
-    source = copySave(SAVES / 'TRIDYN' / 'Ar_on_W', tmp_path / 'src')
+    source = copySave(TEST_SAVES / 'TRIDYN' / 'Ar_on_W', tmp_path / 'src')
     (tmp_path / 'target').mkdir()
     sc, page = addSimulationPage(main_window, 't', 1, TRIDYN, TRIDYN / 'tridyn2022w.exe', '2022')
 
@@ -279,6 +279,53 @@ def loadLayeredCrystalExample(main_window, qapp, tmp_path):
     assert page.loadSettings(save, from_json=False, unsaved_warning=False)
     pump(qapp)
     return sc, page
+
+
+@pytest.mark.skipif(not LAYERED_EXAMPLE.is_dir(), reason='layered crystal example not available')
+def test_polycrystal_without_layer_file(main_window, qapp, tmp_path, errors):
+    """(0 0 0) is a polycrystal: it is only marked if layer.inp is written (several layers, crystals or a partly crystalline layer)"""
+
+    sc, page = loadLayeredCrystalExample(main_window, qapp, tmp_path)
+    layers = page.target_layers
+    layers.setCrystals(['Cu_fcc'])
+    while len(layers.rows) > 1:
+        layers.removeCustomRow(len(layers.rows) - 1)
+    layers.rows[0].crystal_cells[0].setValue(1)
+    for cell in layers.rows[0].miller_cells:
+        cell.setValue(0)
+    layers.updateLayers()
+    assert all(cell.graphicsEffect() is None for cell in layers.rows[0].miller_cells)
+
+    # a second layer needs layer.inp, where (0 0 0) is not accepted
+    layers.addRow()
+    layers.updateLayers()
+    assert all(cell.graphicsEffect() is not None for cell in layers.rows[0].miller_cells)
+    assert not errors, '\n'.join(errors)
+
+
+def test_documentation_of_other_version(tmp_path, qapp, monkeypatch):
+    """SDTrimSP versions without pdf use the documentation of another installed version, a failed download is shown"""
+
+    from Utility.Dialogs import DownloadDialog
+    import Utility.Dialogs
+
+    old, new = tmp_path / 'SDTrimSP_7.02', tmp_path / 'SDTrimSP_7.07'
+    for folder in (old, new):
+        (folder / 'doc').mkdir(parents=True)
+        (folder / 'tables').mkdir()
+    (old / 'doc' / 'sdtrim702.pdf').write_bytes(b'%PDF')
+    assert SDTrimSPInput.getDoc(new, new / 'bin', Versions.V_707) == old / 'doc' / 'sdtrim702.pdf'
+    (new / 'doc' / 'manual.pdf').write_bytes(b'%PDF')
+    assert SDTrimSPInput.getDoc(new, new / 'bin', Versions.V_707) == new / 'doc' / 'manual.pdf'
+
+    # the server refuses the download: the dialog shows the error instead of crashing
+    def refuse(*args, **kwargs):
+        raise OSError('HTTP Error 403: Forbidden')
+
+    monkeypatch.setattr(Utility.Dialogs, 'urlretrieve', refuse)
+    dialog = DownloadDialog(None, 'https://example.org/manual.pdf', tmp_path / 'download', 'manual.pdf')
+    dialog.tryDownloadFile()
+    assert '403' in dialog.downloadStatus.text() and dialog.downloadProgress.value() == 0
 
 
 @pytest.mark.skipif(not LAYERED_EXAMPLE.is_dir(), reason='layered crystal example not available')

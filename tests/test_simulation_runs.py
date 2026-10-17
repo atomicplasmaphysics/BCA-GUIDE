@@ -28,7 +28,7 @@ import pytest
 
 from PyQt6.QtCore import QProcess
 
-from conftest import SAVES, SIMULATION_PROGRAMS, addSimulationPage, pump
+from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, pump
 
 from Containers.CrystalTableFile import CrystalTableFile, TableCrystal
 from Pages.ProgramPage import SimulationPage
@@ -48,8 +48,8 @@ AU_LATTICE_CONSTANT = 4.078
 # example inputs (input.json) that are varied
 BASES = {
     'Ar_Au': SAVES / 'SDTrimSP' / 'example_01_Ar_on_Au',  # Ar on Au, 2 keV, 60 degree
-    'Ar_W': SAVES / 'SDTrimSP' / 'Ar_on_W',  # Ar on W
-    'H_Ar_FeW': SAVES / 'SDTrimSP' / 'H_Ar_on_Fe_W_60deg',  # two projectiles, two layers
+    'Ar_W': TEST_SAVES / 'SDTrimSP' / 'Ar_on_W',  # Ar on W
+    'H_Ar_FeW': TEST_SAVES / 'SDTrimSP' / 'H_Ar_on_Fe_W_60deg',  # two projectiles, two layers
 }
 
 # distributions of energies and angles for the file modes (energy.inp, angle.inp, ene_ang.inp), keyed by projectile
@@ -394,7 +394,7 @@ def test_tridyn(main_window, qapp, run_folder, tmp_path, monkeypatch, errors):
     if binary is None:
         pytest.skip('no TRIDYN binary for this operating system')
 
-    prepareInput(SAVES / 'TRIDYN' / 'Ar_on_W', run_folder)
+    prepareInput(TEST_SAVES / 'TRIDYN' / 'Ar_on_W', run_folder)
 
     sc, page = addSimulationPage(main_window, 'TRIDYN', 1, folder, binary, '2022')
     pump(qapp)

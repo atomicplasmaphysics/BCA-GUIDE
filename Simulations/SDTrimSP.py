@@ -18,7 +18,7 @@ from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QMainWindow
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QMainWindow, QHBoxLayout, QVBoxLayout
 
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, InputHBoxLayouts, VBoxTitleLayout,
@@ -28,7 +28,7 @@ from Utility.Layouts import (
 from Utility.Indexing import RunningIndex, DefaultAssumed, DeleteDict, ElementList
 from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt, readlines, pathToStr
 from Utility.Dialogs import DownloadDialog, selectFileDialog
-from Utility.Colors import layerHex, paletteColormap
+from Utility.Styles import layerHex, paletteColormap
 
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
@@ -1556,8 +1556,8 @@ class HlTargetSettings(HlGeneralTargetSettings):
     def changedGlobDens(self):
         """Detects when global density is changed"""
 
-        global_density_state = self.layout_global_density.checkbox.isChecked()
-        global_density = False
+        global_density_state = self.layout_global_density.check.isChecked()
+        global_density: Union[bool, float] = False
         if global_density_state:
             global_density = self.global_density.value()
 
@@ -1957,6 +1957,13 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         self.addSpacing(10)
         self.addWidget(QLabel('<b>Additional output options</b>'))
 
+        # two columns: particle distributions and matrices, trajectories
+        output_columns = QHBoxLayout()
+        output_left = QVBoxLayout()
+        output_right = QVBoxLayout()
+        output_columns.addLayout(output_left, 1)
+        output_columns.addLayout(output_right, 1)
+
         # reflected projectiles
         self.layout_reflected = InputHBoxLayout(
             'Reflected projectiles',
@@ -1965,7 +1972,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>lparticle_p</i><br>Compute the angle and energy distributions of reflected projectiles and write them to output files'
         )
         self.layout_reflected.check.clicked.connect(lambda _: self.edited())
-        self.addLayout(self.layout_reflected)
+        output_left.addLayout(self.layout_reflected)
 
         # sputtered recoil atoms
         self.layout_sputtered = InputHBoxLayout(
@@ -1975,7 +1982,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             tooltip='<i>lparticle_r</i><br>Compute the angle and energy distributions of sputtered recoil atoms and write them to output files'
         )
         self.layout_sputtered.check.clicked.connect(lambda _: self.edited())
-        self.addLayout(self.layout_sputtered)
+        output_left.addLayout(self.layout_sputtered)
 
         # matrix files
         self.layout_matrix_files = InputHBoxLayout(
@@ -1986,7 +1993,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         )
 
         self.layout_matrix_files.check.clicked.connect(lambda _: self.edited())
-        self.addLayout(self.layout_matrix_files)
+        output_left.addLayout(self.layout_matrix_files)
 
         # trajectories
         self.layout_trajectories_p = InputHBoxLayout(
@@ -2009,7 +2016,9 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         )
         for layout in (self.layout_trajectories_p, self.layout_trajectories_r):
             layout.check.clicked.connect(lambda _: self.changedOutputs())
-            self.addLayout(layout)
+            output_right.addLayout(layout)
+        output_right.addStretch(1)
+        self.addLayout(output_columns)
         self.trajectories_number.valueChanged.connect(lambda _: self.edited())
         self.addLayout(self.layout_trajectories_number)
 
@@ -2065,23 +2074,24 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             )
         self.addLayout(self.layout_inelastic_outside)
 
-        # file of tabulated stopping power (since 7.07)
-        self.tbsp_format = None
-        self.layout_tbsp_format = None
-        if self.default_values.tbsp_file_selection:
-            self.tbsp_format = ComboBox(
-                default=0,
-                entries=['tbsp.db (binary)', 'tbsp.ascii (text)'],
-                entries_save=['binary', 'ascii'],
-                label_default=True
-            )
-            self.layout_tbsp_format = InputHBoxLayout(
-                'Tabulated stopping power file:',
-                self.tbsp_format,
-                tooltip='<i>tbsp_binary, tbsp_ascii</i><br>File in the tables-directory that is used for the tabulated stopping power (inelastic loss model 8)'
-            )
-            self.tbsp_format.currentIndexChanged.connect(lambda _: self.edited())
-            self.addLayout(self.layout_tbsp_format)
+        # file of tabulated stopping power (since 7.07): tbsp.db (binary) and tbsp.ascii contain the same data, so the
+        # selection is not shown and the binary file is always used (tbsp_binary = .true.)
+        self.tbsp_format: Optional[ComboBox] = None
+        self.layout_tbsp_format: Optional[InputHBoxLayout] = None
+        # if self.default_values.tbsp_file_selection:
+        #     self.tbsp_format = ComboBox(
+        #         default=0,
+        #         entries=['tbsp.db (binary)', 'tbsp.ascii (text)'],
+        #         entries_save=['binary', 'ascii'],
+        #         label_default=True
+        #     )
+        #     self.layout_tbsp_format = InputHBoxLayout(
+        #         'Tabulated stopping power file:',
+        #         self.tbsp_format,
+        #         tooltip='<i>tbsp_binary, tbsp_ascii</i><br>File in the tables-directory that is used for the tabulated stopping power (inelastic loss model 8)'
+        #     )
+        #     self.tbsp_format.currentIndexChanged.connect(lambda _: self.edited())
+        #     self.addLayout(self.layout_tbsp_format)
 
         self.changedPotential()
         self.changedMode()
@@ -2112,7 +2122,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             ArgumentValues.InteractionPotential.SI_SI,
             ArgumentValues.InteractionPotential.POWER
         ]:
-            disabled_list = [self.integration.entries_save.index(ArgumentValues.IntegrationMethod.MAGIC)]
+            disabled_list = [notNone(self.integration.entries_save).index(ArgumentValues.IntegrationMethod.MAGIC)]
             if self.integration.getValue(save=True) == ArgumentValues.IntegrationMethod.MAGIC:
                 self.integration.reset()
         self.integration.updateDisabledList(disabled_list)
@@ -2128,7 +2138,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             dynamic = False
         self.layout_matrix_files.setEnabled(not dynamic)
         if dynamic:
-            self.layout_matrix_files.checkbox.setChecked(False)
+            self.layout_matrix_files.check.setChecked(False)
         self.fluence.setEnabled(dynamic)
         self.emit({
             'max_concentration': dynamic
@@ -2138,7 +2148,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         """Grouping of elements has changed"""
 
         self.emit({
-            'group_elements': self.layout_group_elements.checkbox.isChecked()
+            'group_elements': self.layout_group_elements.check.isChecked()
         })
 
     def reset(self):
@@ -2147,7 +2157,7 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         self.title.default = f'SDTrimSP - {dateStr()}'
         self.layout_title.reset()
         self.layout_calculation_method.reset()
-        self.layout_histories_limit.checkbox.setChecked(False)
+        self.layout_histories_limit.check.setChecked(False)
         self.layout_histories_total.reset()
         self.layout_histories_between.reset()
         self.layout_projectiles.reset()
@@ -2173,9 +2183,9 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         """Enables the number of trajectories and the grid of the energy distribution if they are used"""
 
         self.layout_trajectories_number.setEnabled(
-            self.layout_trajectories_p.checkbox.isChecked() or self.layout_trajectories_r.checkbox.isChecked()
+            self.layout_trajectories_p.check.isChecked() or self.layout_trajectories_r.check.isChecked()
         )
-        self.layout_distribution_grid.setEnabled(self.layout_energy_distribution.checkbox.isChecked())
+        self.layout_distribution_grid.setEnabled(self.layout_energy_distribution.check.isChecked())
         self.edited()
 
     def getArguments(self) -> GeneralArguments:
@@ -2631,8 +2641,7 @@ class CompRowBeamSettings(CompRow):
             self.inelastic_loss_model_entries.append('tabulated')
             self.inelastic_loss_model_entries_save.append(ArgumentValues.InelasticLossModel.TABULATED)
             self.inelastic_loss_model_tooltips.append(
-                'Manually tabulated stopping power from database "tbsp.db" in the tables-directory.\n'
-                'Since SDTrimSP 7.07 the file (tbsp.db or tbsp.ascii) is selected in the simulation settings'
+                'Manually tabulated stopping power from database "tbsp.db" in the tables-directory'
             )
 
         self.inelastic_loss_model = ComboBox(
@@ -3073,7 +3082,7 @@ class HlPlot(HlGeneralPlot):
         self.emit({
             'energy_distribution': {
                 'view': self.energy_distribution_view.getValue(save=True),
-                'log': self.energy_distribution_log.checkbox.isChecked()
+                'log': self.energy_distribution_log.check.isChecked()
             }
         })
 
@@ -3228,6 +3237,8 @@ class SimulationInput(SimulationsInput):
     Class for SDTrimSP specific parameters
     """
 
+    default_values: 'DefaultValues'
+
     # parameters should be different for each simulation class
     Name = 'SDTrimSP'
     Versions = [
@@ -3251,7 +3262,7 @@ needed for input, and different integration schemes for several interaction
 potentials are provided. Several examples are given to show the wide range
 of possible applications.
 '''
-    Logo = ':icons/aboutlogo_ipp.png'
+    Logo = ':/assets/aboutlogo_ipp.png'
     About = '''
 Andreas Mutzke
 
@@ -3365,17 +3376,27 @@ Andreas Mutzke
         if folder is None or not folder.is_dir():
             return False
 
-        # check for pdf file in doc folder
-        doc_folder = folder / 'doc'
-        if doc_folder.is_dir():
-            files = [file for file in doc_folder.iterdir() if file.is_file() and file.suffix.lower() == '.pdf']
-            if files:
-                return files[0]
+        def pdfFiles(directory: Path) -> List[Path]:
+            try:
+                return sorted(file for file in directory.iterdir() if file.is_file() and file.suffix.lower() == '.pdf')
+            except OSError:
+                return []
 
-        # check for pdf files in main folder
-        files = [file for file in folder.iterdir() if file.is_file() and file.suffix.lower() == '.pdf']
+        # check for pdf file in doc folder, then in main folder
+        files = pdfFiles(folder / 'doc') + pdfFiles(folder)
         if files:
             return files[0]
+
+        # newer versions (e.g. 7.05, 7.07) come without the pdf: the documentation of another installed version next to
+        # this folder (the newest one, the folder names contain the version)
+        try:
+            siblings = sorted((path for path in folder.parent.iterdir() if path.is_dir() and path != folder), key=lambda path: path.name, reverse=True)
+        except OSError:
+            siblings = []
+        for sibling in siblings:
+            files = pdfFiles(sibling / 'doc') + pdfFiles(sibling)
+            if files and (sibling / 'tables').is_dir():
+                return files[0]
 
         # no pdf documentation found, but downloadDoc method is implemented
         return True

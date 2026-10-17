@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 
-from Utility.Colors import paletteQColor
+from Utility.Styles import paletteQColor
 
 
 

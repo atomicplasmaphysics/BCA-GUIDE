@@ -3,7 +3,7 @@ from typing import Union, Optional, Tuple, List, Callable, Dict, Sequence, Any, 
 from pathlib import Path
 import warnings
 
-from Styles import Styles
+from Utility.Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QElapsedTimer, QEvent, QTimer
 from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat, QWheelEvent, QStandardItemModel
@@ -278,7 +278,7 @@ class InputHBoxLayouts(QHBoxLayout):
                     widget.reset()
 
         if self.checkbox is not None:
-            self.checkbox.setChecked(self.default_checkbox)
+            self.checkbox.setChecked(bool(self.default_checkbox))
 
 
 class InputHBoxLayout(InputHBoxLayouts):
@@ -621,7 +621,7 @@ class ComboBox(QComboBox):
 
     def getDefaultSave(self):
         """Returns default from entry_save"""
-        if self.default in range(len(self.entries_save)):
+        if self.entries_save is not None and self.default in range(len(self.entries_save)):
             return self.entries_save[self.default]
         return None
 
@@ -746,7 +746,7 @@ class FilePath(QWidget):
 
     def select_path_loc(self):
         """Sets a new local path"""
-        path = self.function_loc()
+        path = self.function_loc() if self.function_loc is not None else None
         if path is not None:
             self.path = path
             self.ssh = False
@@ -754,7 +754,7 @@ class FilePath(QWidget):
 
     def select_path_ssh(self):
         """Sets a new ssh path"""
-        path = self.function_ssh()
+        path = self.function_ssh() if self.function_ssh is not None else None
         if path is not None:
             self.path = path
             self.ssh = True
@@ -776,7 +776,7 @@ class TabWithToolbar(QWidget):
         self.toolbar.setFloatable(False)
         self.toolbar.setMovable(False)
         self.toolbar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # Disable the context menu of the toolbar itself
-        self.toolbar.toggleViewAction().setEnabled(False)  # Disable the action in the context menus of the main window
+        notNone(self.toolbar.toggleViewAction()).setEnabled(False)  # Disable the action in the context menus of the main window
         self.super_layout.addWidget(self.toolbar)
 
         # self.page as main layout
@@ -1251,7 +1251,7 @@ class FileEditor(QPlainTextEdit):
         """Shows the message of a marked line as tooltip"""
 
         if event.type() == QEvent.Type.ToolTip and self.marked_lines:
-            block = self.cursorForPosition(self.viewport().mapFromGlobal(event.globalPos())).block()
+            block = self.cursorForPosition(notNone(self.viewport()).mapFromGlobal(event.globalPos())).block()
             message = self.marked_lines.get(block.blockNumber())
             if message:
                 QToolTip.showText(event.globalPos(), message, self)
@@ -1284,7 +1284,7 @@ class FileEditor(QPlainTextEdit):
         else:
             self.line_number_area.update(0, rect.y(), self.line_number_area.width(), rect.height())
 
-        if rect.contains(self.viewport().rect()):
+        if rect.contains(notNone(self.viewport()).rect()):
             self.updateLineNumberAreaWidth()
 
     def resizeEvent(self, event):
@@ -1528,7 +1528,7 @@ class PlotToolbar(NavigationToolbar2QT):
         """Creates the icons again in the colors of the current palette"""
         try:
             for text, _, image_file, callback in self.toolitems:
-                if text is not None and callback in self._actions:
+                if text is not None and image_file is not None and callback in self._actions:
                     self._actions[callback].setIcon(self._icon(image_file + '.png'))
         except RuntimeError:
             # toolbar was already deleted
@@ -1572,8 +1572,9 @@ class TargetPreview(QWidget):
         self.setBackgroundRole(QPalette.ColorRole.Base)
         self.setAutoFillBackground(True)
 
-        self.font = QFont()
-        self.font_metrics = QFontMetrics(self.font)
+        # (not self.font, which would hide QWidget.font())
+        self.preview_font = QFont()
+        self.font_metrics = QFontMetrics(self.preview_font)
 
         self.layers = []
         self.elements = []
@@ -1585,9 +1586,9 @@ class TargetPreview(QWidget):
         self.legend_spacing_x = 7
         self.legend_spacing_y = 5
 
-        self.target_width = 120
-        self.x_margin = 15
-        self.y_margin = 15
+        self.target_width: float = 120
+        self.x_margin: float = 15
+        self.y_margin: float = 15
 
     def minimumSizeHint(self):
         """Returns minimum size"""
