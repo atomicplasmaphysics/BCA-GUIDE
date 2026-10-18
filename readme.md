@@ -79,7 +79,9 @@ For further information read the description of the `setup/pyinstaller.py` file.
 
 Releases: pushing a version tag (e.g. `git tag v1.6.01 && git push origin v1.6.01`) starts the workflow
 `.github/workflows/release.yml`, which builds the programs on Windows, Linux and macOS, tests them with `--self-test` and
-attaches the archives to a GitHub release of the tag. *Run workflow* of the workflow *Release* (tab *Actions*) only
+attaches the archives to a GitHub release of the tag (text from the section of the version in `CHANGELOG.md`). A release
+created on the website (*Releases* > *Draft a new release* with a new tag) also starts it, the archives are then added
+to that release after about 5 minutes. *Run workflow* of the workflow *Release* (tab *Actions*) only
 builds and tests them, the archives are then downloads of the run.
 
 ## Examples

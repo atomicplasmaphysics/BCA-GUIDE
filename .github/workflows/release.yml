@@ -56,10 +56,15 @@ jobs:
         with:
           path: archives
           merge-multiple: true
-      # release notes: the section "## <tag> (date)" of CHANGELOG.md, followed by the list of commits of GitHub
+      # release notes: the section "## <tag> (date)" of CHANGELOG.md, followed by the list of commits of GitHub;
+      # a release that was already created on the website (with the tag) only gets the archives
       - name: GitHub release with the archives
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          awk -v tag="$GITHUB_REF_NAME" '$0 ~ "^## " tag "( |$)" {found=1; next} found && /^## / {exit} found' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" archives/* --repo "$GITHUB_REPOSITORY" --title "BCA-GUIDE $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" archives/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            awk -v tag="$GITHUB_REF_NAME" '$0 ~ "^## " tag "( |$)" {found=1; next} found && /^## / {exit} found' CHANGELOG.md > notes.md
+            gh release create "$GITHUB_REF_NAME" archives/* --repo "$GITHUB_REPOSITORY" --title "BCA-GUIDE $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
+          fi
