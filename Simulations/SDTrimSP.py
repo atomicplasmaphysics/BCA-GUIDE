@@ -6210,7 +6210,18 @@ class SimulationAnalysis(SimulationsAnalysis):
         for element in elements:
             self.elements.append(element)
 
-        self.masses = np.array([notNone(self.element_data.elementFromSymbol(element)).atomic_mass for element in elements])
+        self.masses = np.array([self.elementMass(element) for element in elements])
+
+    # masses of the isotopes of hydrogen [amu], which are not in the default elements (without the tables of SDTrimSP)
+    ISOTOPE_MASSES = {'D': 2.014102, 'T': 3.016049}
+
+    def elementMass(self, symbol: str) -> float:
+        """Returns the atomic mass of an element (NaN if unknown, e.g. without the tables of SDTrimSP)"""
+
+        element = self.element_data.elementFromSymbol(symbol)
+        if element is not None:
+            return element.atomic_mass
+        return self.ISOTOPE_MASSES.get(symbol, float('nan'))
 
     def getElementIndex(self, element: str) -> int:
         """Returns index of element"""

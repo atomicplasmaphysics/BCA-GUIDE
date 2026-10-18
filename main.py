@@ -16,8 +16,8 @@
 # https://www.gnu.org/licenses/.
 
 
+import sys
 from sys import argv
-from platform import system
 import logging
 
 
@@ -66,8 +66,8 @@ def main():
     # set up logging level
     setupLogging(logging.WARNING)
 
-    # ctypes.windll only works in Windows
-    if system() == 'Windows':
+    # ctypes.windll only works in Windows (sys.platform is understood by mypy, which checks for Linux in the CI)
+    if sys.platform == 'win32':
         import ctypes
         # create unique app-id to show taskbar icon (Windows only)
         # in Linux this is not needed, the taskbar icon is set correctly
