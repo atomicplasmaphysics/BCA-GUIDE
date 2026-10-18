@@ -51,7 +51,8 @@ class SimulationsList:
         error = ''
 
         # loop over all simulation modules
-        for module in listdir(path.dirname(__file__)):
+        # sorted: the order of listdir depends on the file system (e.g. Linux), the index of a program must not change
+        for module in sorted(listdir(path.dirname(__file__))):
             if module[-3:] != '.py' or module in ['Simulations.py', 'SimulationsList.py']:
                 continue
             module = module[:-3]
