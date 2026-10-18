@@ -4,12 +4,14 @@
 /tools/
 
 # dont include simulation programs
-/Simulation Programs/
+/Simulation Programs/*
+!/Simulation Programs/folder_for_simulation_programs.txt
 !/Simulation Programs/SDTrimSP/
 !/Simulation Programs/TRIDYN/
 /Simulation Programs/SDTrimSP/*
 /Simulation Programs/TRIDYN/*
-!/Simulation Programs/folder_for_simulation_programs.txt
+!/Simulation Programs/SDTrimSP/folder_for_SDTrimSP_programs.txt
+!/Simulation Programs/TRIDYN/folder_for_TRIDYN_programs.txt
 
 # saves: only the examples of the GUI are part of the repository (the simulations of the user stay local)
 /saves/*
