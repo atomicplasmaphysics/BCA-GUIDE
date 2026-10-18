@@ -15,49 +15,7 @@ As a condition of free usage, the manuscript of the GUI for SDTrimSP by Szabo, e
 
 Place the downloaded BCA-codes in the `Simulation Programs` folder
 
-## Examples
-
-Examples are provided in the `saves` folder (only the `example_*` folders are part of the repository, the other
-simulations in `saves` stay local; the simulations of the tests are in `tests/saves`).
-
-Further examples for SDTrimSP (created with SDTrimSP 7.07, they can be opened with every version) are in `saves/SDTrimSP`:
-
-- `example_01_Ar_on_Au`: 2 keV Ar on Au at 60deg, sputter yields, distributions of reflected and sputtered particles and
-  the energy distribution in the target
-- `example_02_D_on_W_dynamic`: 1 keV D on W, dynamic simulation (concentrations and surface level over the fluence)
-- `example_03_Ar_on_SiO2_Si_trajectories`: 1 keV Ar on a SiO2 layer on Si, trajectories of projectiles and recoils
-  (2D, 3D and animated, also as GIF, which is saved in the background while the GUI stays usable)
-- `example_04_He_on_W_energy_distribution`: He on W with an energy distribution from `energy.inp`
-- `example_05_Ar_on_Si_angle_sweep`: 500 eV Ar on Si, angles of incidence from 0deg to 80deg
-- `example_06_Ar_on_W_crystal` and `example_07_Ar_on_W_amorphous`: 2 keV Ar on crystalline (bcc, 100) and amorphous W
-
-The same systems for TRIDYN 2022 are in `saves/TRIDYN` (`example_01_Ar_on_Au`, `example_02_D_on_W_dynamic` with D as H
-of mass 2.014, `example_03_Ar_on_SiO2_Si`, `example_07_Ar_on_W_amorphous`; TRIDYN has no energy distributions from files,
-angle sweeps and crystals).
-
-Open them with the *Open* button of a simulation tab and select the `input.json` of the example.
-The results of several examples (also of SDTrimSP versions or parameter scans) can be compared with
-*Simulation* > *Compare simulations...*.
-
 ## Installation
-
-### Download (without Python)
-
-The GUI is available as program that runs without Python on the
-[releases page](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases/latest) (*Assets*, the changes of each version are
-listed in [CHANGELOG.md](CHANGELOG.md)), the programs are not part
-of the code of the repository:
-
-| System                      | File                     | Start                                                          |
-|-----------------------------|--------------------------|----------------------------------------------------------------|
-| Windows 10/11 (64 bit)      | `BCA-GUIDE_windows.zip`  | unpack, `BCA-GUIDE_windows/BCA-GUIDE.exe`                      |
-| Linux (x86-64, glibc 2.35+) | `BCA-GUIDE_linux.tar.gz` | `tar -xzf BCA-GUIDE_linux.tar.gz`, `BCA-GUIDE_linux/BCA-GUIDE` |
-| macOS (Apple silicon)       | `BCA-GUIDE_mac.zip`      | unpack, `BCA-GUIDE_mac/BCA-GUIDE.app`                          |
-
-Keep the folder together (the program needs the folder `_internal` next to it). The programs are not signed: Windows
-may show a SmartScreen warning (*More info* > *Run anyway*), macOS refuses to open the app the first time (right click >
-*Open*, or `xattr -cr BCA-GUIDE.app`). The simulation programs (SDTrimSP, TRIDYN) are not included, they are configured
-in the GUI as described in the [manual](#manual).
 
 ### Installation with Python
 
@@ -92,6 +50,24 @@ To execute the GUI, download all files from this repository and execute the `mai
 >> python3 main.py
 ```
 
+### Download (without Python)
+
+The GUI is available as program that runs without Python on the
+[releases page](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases/latest) (*Assets*, the changes of each version are
+listed in [CHANGELOG.md](CHANGELOG.md)), the programs are not part
+of the code of the repository:
+
+| System                      | File                     | Start                                                          |
+|-----------------------------|--------------------------|----------------------------------------------------------------|
+| Windows 10/11 (64 bit)      | `BCA-GUIDE_windows.zip`  | unpack, `BCA-GUIDE_windows/BCA-GUIDE.exe`                      |
+| Linux (x86-64, glibc 2.35+) | `BCA-GUIDE_linux.tar.gz` | `tar -xzf BCA-GUIDE_linux.tar.gz`, `BCA-GUIDE_linux/BCA-GUIDE` |
+| macOS (Apple silicon)       | `BCA-GUIDE_mac.zip`      | unpack, `BCA-GUIDE_mac/BCA-GUIDE.app`                          |
+
+Keep the folder together (the program needs the folder `_internal` next to it). The programs are not signed: Windows
+may show a SmartScreen warning (*More info* > *Run anyway*), macOS refuses to open the app the first time (right click >
+*Open*, or `xattr -cr BCA-GUIDE.app`). The simulation programs (SDTrimSP, TRIDYN) are not included, they are configured
+in the GUI as described in the [manual](#manual).
+
 ### Building the program without Python
 The programs of the releases are built with [PyInstaller](https://pyinstaller.org/en/stable/). After executing
 `python setup/pyinstaller.py` (needs the packages in `requirements-dev.txt`), the folder `BCA-GUIDE_windows`,
@@ -105,6 +81,30 @@ Releases: pushing a version tag (e.g. `git tag v1.6.01 && git push origin v1.6.0
 `.github/workflows/release.yml`, which builds the programs on Windows, Linux and macOS, tests them with `--self-test` and
 attaches the archives to a GitHub release of the tag. *Run workflow* of the workflow *Release* (tab *Actions*) only
 builds and tests them, the archives are then downloads of the run.
+
+## Examples
+
+Examples are provided in the `saves` folder (only the `example_*` folders are part of the repository, the other
+simulations in `saves` stay local; the simulations of the tests are in `tests/saves`).
+
+Further examples for SDTrimSP (created with SDTrimSP 7.07, they can be opened with every version) are in `saves/SDTrimSP`:
+
+- `example_01_Ar_on_Au`: 2 keV Ar on Au at 60deg, sputter yields, distributions of reflected and sputtered particles and
+  the energy distribution in the target
+- `example_02_D_on_W_dynamic`: 1 keV D on W, dynamic simulation (concentrations and surface level over the fluence)
+- `example_03_Ar_on_SiO2_Si_trajectories`: 1 keV Ar on a SiO2 layer on Si, trajectories of projectiles and recoils
+  (2D, 3D and animated, also as GIF, which is saved in the background while the GUI stays usable)
+- `example_04_He_on_W_energy_distribution`: He on W with an energy distribution from `energy.inp`
+- `example_05_Ar_on_Si_angle_sweep`: 500 eV Ar on Si, angles of incidence from 0deg to 80deg
+- `example_06_Ar_on_W_crystal` and `example_07_Ar_on_W_amorphous`: 2 keV Ar on crystalline (bcc, 100) and amorphous W
+
+The same systems for TRIDYN 2022 are in `saves/TRIDYN` (`example_01_Ar_on_Au`, `example_02_D_on_W_dynamic` with D as H
+of mass 2.014, `example_03_Ar_on_SiO2_Si`, `example_07_Ar_on_W_amorphous`; TRIDYN has no energy distributions from files,
+angle sweeps and crystals).
+
+Open them with the *Open* button of a simulation tab and select the `input.json` of the example.
+The results of several examples (also of SDTrimSP versions or parameter scans) can be compared with
+*Simulation* > *Compare simulations...*.
 
 ## Manual
 

@@ -2,8 +2,14 @@
 /venv/
 /testcode/
 /tools/
+
+# dont include simulation programs
 /Simulation Programs/
-/save/
+!/Simulation Programs/SDTrimSP/
+!/Simulation Programs/TRIDYN/
+/Simulation Programs/SDTrimSP/*
+/Simulation Programs/TRIDYN/*
+!/Simulation Programs/folder_for_simulation_programs.txt
 
 # saves: only the examples of the GUI are part of the repository (the simulations of the user stay local)
 /saves/*
