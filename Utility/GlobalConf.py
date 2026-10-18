@@ -14,7 +14,7 @@ class GlobalConf:
     title = 'BCA-GUIDE'
 
     # version, update with every release (also used in the commit messages "BCA-GUIDE vX.Y.ZZ")
-    version = '1.6.00'
+    version = '1.6.01'
 
     # folder of the program with the manual of the GUI (for the executable of PyInstaller the folder of its extracted files)
     # and of its assets (images)

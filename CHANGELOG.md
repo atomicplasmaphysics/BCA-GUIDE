@@ -4,6 +4,11 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.6.01 (2026-10-18)
+
+- Splash screen with the current website of the institute (www.tuwien.at/phy/iap/app), taken over from v1.4.20 of the
+  former branch PyQt6
+
 ## v1.6.00 (2026-10-18)
 
 First release with downloads of the program for Windows, Linux and macOS (no Python needed).
@@ -108,6 +113,10 @@ First release with downloads of the program for Windows, Linux and macOS (no Pyt
 - Refactored code, copyright information only in `main.py`
 
 ## v1.4 (2023-05 to 2024-01)
+
+### v1.4.20 (2025-03-05, branch PyQt6, not part of v1.5)
+- Current website of the institute on the splash screen (taken over in v1.6.01)
+- No warnings for values of the SDTrimSP tables that cannot be converted (also in v1.5)
 
 ### v1.4.19 (2024-01-31)
 - Inelastic loss model LZ7 of SDTrimSP 6.09+, selectable in the beam and target rows
