@@ -15,9 +15,9 @@
 !/saves/TRIDYN/example_*/
 
 # executables of setup/pyinstaller.py and their build folders
-/BCA-GUIDE_windows.exe
-/BCA-GUIDE_linux
-/BCA-GUIDE_mac.app
+/BCA-GUIDE_windows*
+/BCA-GUIDE_linux*
+/BCA-GUIDE_mac*
 /setup/build/
 /setup/dist/
 /setup/*.spec

@@ -41,6 +41,25 @@ The results of several examples (also of SDTrimSP versions or parameter scans) c
 
 ## Installation
 
+### Download (without Python)
+
+The GUI is available as program that runs without Python on the
+[releases page](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases/latest) (*Assets*), the programs are not part
+of the code of the repository:
+
+| System                      | File                     | Start                                                          |
+|-----------------------------|--------------------------|----------------------------------------------------------------|
+| Windows 10/11 (64 bit)      | `BCA-GUIDE_windows.zip`  | unpack, `BCA-GUIDE_windows/BCA-GUIDE.exe`                      |
+| Linux (x86-64, glibc 2.35+) | `BCA-GUIDE_linux.tar.gz` | `tar -xzf BCA-GUIDE_linux.tar.gz`, `BCA-GUIDE_linux/BCA-GUIDE` |
+| macOS (Apple silicon)       | `BCA-GUIDE_mac.zip`      | unpack, `BCA-GUIDE_mac/BCA-GUIDE.app`                          |
+
+Keep the folder together (the program needs the folder `_internal` next to it). The programs are not signed: Windows
+may show a SmartScreen warning (*More info* > *Run anyway*), macOS refuses to open the app the first time (right click >
+*Open*, or `xattr -cr BCA-GUIDE.app`). The simulation programs (SDTrimSP, TRIDYN) are not included, they are configured
+in the GUI as described in the [manual](#manual).
+
+### Installation with Python
+
 The GUI needs [Python](https://www.python.org/downloads/) 3.10 or newer with following packages installed:
 
 ```
@@ -72,13 +91,19 @@ To execute the GUI, download all files from this repository and execute the `mai
 >> python3 main.py
 ```
 
-### Alternative Installation
-If one wishes to execute the GUI without calling it from the console, [PyInstaller](https://pyinstaller.org/en/stable/) can be used to compile all needed python files into one executable.
-After executing `python setup/pyinstaller.py` (needs the packages in `requirements-dev.txt`), an executable
-(`BCA-GUIDE_windows.exe`, `BCA-GUIDE_linux` or `BCA-GUIDE_mac.app`) is created in the main folder. The script then
-starts it once with `--self-test` (without showing the window): it checks that the simulation modules, the images and
-the manual of the GUI are found. The simulation programs are not part of the executable.
+### Building the program without Python
+The programs of the releases are built with [PyInstaller](https://pyinstaller.org/en/stable/). After executing
+`python setup/pyinstaller.py` (needs the packages in `requirements-dev.txt`), the folder `BCA-GUIDE_windows`,
+`BCA-GUIDE_linux` or `BCA-GUIDE_mac` with the program is created in the main folder (`--archive` also packs it as on the
+releases page, `--onefile` creates a single file instead, which starts about 2 s slower because it unpacks itself at
+every start). The script then starts the program once with `--self-test` (without showing the window): it checks that
+the simulation modules, the images and the manual of the GUI are found. The simulation programs are not part of it.
 For further information read the description of the `setup/pyinstaller.py` file.
+
+Releases: pushing a version tag (`git tag v1.5.17 && git push origin v1.5.17`) starts the workflow
+`.github/workflows/release.yml`, which builds the programs on Windows, Linux and macOS, tests them with `--self-test` and
+attaches the archives to a GitHub release of the tag. *Run workflow* of the workflow *Release* (tab *Actions*) only
+builds and tests them, the archives are then downloads of the run.
 
 ## Manual
 
@@ -151,7 +176,8 @@ Single simulations are configured manually as described below.
 
 Linting with [ruff](https://docs.astral.sh/ruff/) (`ruff check .`) and type checking with [mypy](https://mypy-lang.org)
 (`mypy`, configured in `mypy.ini`, also the functions without type annotations) also run in the continuous integration
-(`.github/workflows/ci.yml`) together with the tests on Windows and Linux.
+(`.github/workflows/ci.yml`) together with the tests on Windows and Linux. Failed tests are shown as annotations on the
+summary page of a run (`setup/junit_annotations.py`).
 
 Structure of the project:
 
@@ -162,7 +188,7 @@ Structure of the project:
 - `Utility`: global configuration (`GlobalConf.py`), styles and colors (`Styles.py`), icons, layouts, dialogs, ...
 - `assets`: images of the window, the about dialog and the splash screen (compiled into `assets/resources.py` with
   `python setup/build_resources.py`, sources in `assets/source`); the manual of the GUI is `BCA-GUIDE_manual.pdf`
-- `setup`: building the resources and the executable (PyInstaller)
+- `setup`: building the resources and the program without Python (PyInstaller), annotations of failed tests in the CI
 
 ## Tests
 

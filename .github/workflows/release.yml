@@ -1,0 +1,62 @@
+# Builds the GUI as program that runs without Python (setup/pyinstaller.py) for Windows, Linux and macOS.
+# - pushed version tag (e.g. git tag v1.5.17 && git push origin v1.5.17): the archives are attached to a GitHub release
+#   of the tag (download page of the repository, not part of the code that is cloned)
+# - "Run workflow" (Actions tab): only builds and tests, the archives are downloads of the run (kept for 30 days)
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            archive: BCA-GUIDE_windows.zip
+          # the oldest available Ubuntu: the program runs on Linux systems with the same or a newer glibc
+          - os: ubuntu-22.04
+            archive: BCA-GUIDE_linux.tar.gz
+          # Apple silicon (arm64)
+          - os: macos-latest
+            archive: BCA-GUIDE_mac.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Libraries of Qt (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+      - run: pip install -r requirements.txt "pyinstaller>=6.0"
+      # builds the folder of the program, starts it with --self-test and packs it
+      - run: python setup/pyinstaller.py --archive
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+          retention-days: 30
+          if-no-files-found: error
+          # the archives are already compressed
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: archives
+          merge-multiple: true
+      - name: GitHub release with the archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" archives/* --repo "$GITHUB_REPOSITORY" --title "BCA-GUIDE $GITHUB_REF_NAME" --generate-notes

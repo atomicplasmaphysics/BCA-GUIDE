@@ -34,10 +34,12 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 
 ## Build
 
-- [ ] Build the executables with PyInstaller in the continuous integration (Windows, Linux, macOS) and attach them to
-      releases, including the self test (`--self-test`).
-- [ ] The executable is about 100 MB (one file): a folder build (`--onedir`) starts faster, as nothing is unpacked at
-      each start.
+- [ ] Signing of the programs of the releases (Windows: code signing certificate against the SmartScreen warning,
+      macOS: Developer ID and notarization, otherwise the app has to be opened with right click > Open).
+- [ ] macOS with Intel processors: the release only contains an Apple silicon (arm64) build (macos-latest), an
+      additional build on an Intel runner (or a universal2 build) would be needed.
+- [ ] Start time: the simulation tabs are created at the start (about 0.5 s per tab), they could be created when they
+      are opened for the first time.
 
 ## Simulation results
 
@@ -88,5 +90,3 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
       run warnings, automatic search of simulations, crystals from `table.crystal`, examples.
 - [ ] Stricter type checking: `check_untyped_defs` and annotations of the remaining functions (mypy only checks
       annotated functions), then `disallow_untyped_defs` for new modules.
-- [ ] Check the continuous integration (`.github/workflows/ci.yml`) on GitHub after the first push, add a PyInstaller
-      build.
