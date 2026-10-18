@@ -534,7 +534,16 @@ def test_crystal_preview_not_clipped(qapp):
 
     from Utility.Layouts import CrystalPreview
     preview = CrystalPreview(None, show_beam=True, show_basis_vecs=True, show_surface=True, disable_interaction=False)
-    assert preview.axes.get_children()
+    # a hidden preview is drawn when it is shown
+    assert preview.plot_outdated
+    preview.show()
+    assert not preview.plot_outdated and preview.axes.get_children()
     assert all(not artist.get_clip_on() for artist in preview.axes.get_children())
     preview.updateParams(show_coordinate_system=True)
     assert all(not artist.get_clip_on() for artist in preview.axes.get_children())
+    preview.hide()
+    preview.updateParams(show_coordinate_system=False)
+    assert preview.plot_outdated
+    preview.show()
+    assert not preview.plot_outdated
+    preview.deleteLater()

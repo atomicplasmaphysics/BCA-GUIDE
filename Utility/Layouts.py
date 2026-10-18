@@ -6,7 +6,7 @@ import warnings
 from Utility.Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QElapsedTimer, QEvent, QTimer
-from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat, QWheelEvent, QStandardItemModel
+from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat, QWheelEvent, QStandardItemModel, QShowEvent
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
@@ -1778,6 +1778,9 @@ class CrystalPreview(MplCanvas):
         self.roll = roll
 
         self.size_hint = size_hint
+        # the plot is only drawn while the preview is visible, changes of a hidden preview are drawn when it is shown
+        # (drawing the previews of all simulation tabs took most of the start time of the GUI)
+        self.plot_outdated = False
 
         self.surf_xx, self.surf_yy = np.meshgrid(range(-2, 2), range(-1, 3))
         self.surf_z = 0 * (self.surf_xx + self.surf_yy)
@@ -1969,8 +1972,22 @@ class CrystalPreview(MplCanvas):
         ])
 
     def _updatePlot(self):
-        """Update the plot"""
+        """Updates the plot, if the preview is hidden it is updated when it is shown"""
 
+        if not self.isVisible():
+            self.plot_outdated = True
+            return
+        self._drawPlot()
+
+    def showEvent(self, event: Optional[QShowEvent]):
+        if self.plot_outdated:
+            self._drawPlot()
+        super().showEvent(event)
+
+    def _drawPlot(self):
+        """Draws the plot"""
+
+        self.plot_outdated = False
         azim = self.axes.azim
         elev = self.axes.elev
         roll = self.axes.roll

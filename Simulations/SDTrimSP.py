@@ -7,7 +7,6 @@ from re import findall, sub, split
 import logging
 
 import numpy as np
-from scipy.optimize import curve_fit
 from matplotlib.artist import Artist
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -7651,6 +7650,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             for i in range(last_index - 1):
                 angle_distance_weights[i] = 1. / (angles[i + 1] - angles[i])
 
+            from scipy.optimize import curve_fit  # imported when needed (slow import, start time of the GUI)
             popt, pcov = curve_fit(self.ecksteinAngleFit,
                                    angles[:last_index],
                                    total_yield[:last_index],
@@ -7753,6 +7753,7 @@ class SimulationAnalysis(SimulationsAnalysis):
             for i in range(last_index - 1):
                 angle_distance_weights[i] = 1. / (angles[i + 1] - angles[i])
 
+            from scipy.optimize import curve_fit  # imported when needed (slow import, start time of the GUI)
             popt, pcov = curve_fit(self.ecksteinAngleFit,
                                    angles[:last_index],
                                    amu_yield[:last_index],
