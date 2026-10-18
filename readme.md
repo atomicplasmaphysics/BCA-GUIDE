@@ -44,7 +44,8 @@ The results of several examples (also of SDTrimSP versions or parameter scans) c
 ### Download (without Python)
 
 The GUI is available as program that runs without Python on the
-[releases page](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases/latest) (*Assets*), the programs are not part
+[releases page](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases/latest) (*Assets*, the changes of each version are
+listed in [CHANGELOG.md](CHANGELOG.md)), the programs are not part
 of the code of the repository:
 
 | System                      | File                     | Start                                                          |

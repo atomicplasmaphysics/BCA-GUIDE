@@ -51,12 +51,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v8
         with:
           path: archives
           merge-multiple: true
+      # release notes: the section "## <tag> (date)" of CHANGELOG.md, followed by the list of commits of GitHub
       - name: GitHub release with the archives
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" archives/* --repo "$GITHUB_REPOSITORY" --title "BCA-GUIDE $GITHUB_REF_NAME" --generate-notes
+          awk -v tag="$GITHUB_REF_NAME" '$0 ~ "^## " tag "( |$)" {found=1; next} found && /^## / {exit} found' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" archives/* --repo "$GITHUB_REPOSITORY" --title "BCA-GUIDE $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
