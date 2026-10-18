@@ -62,6 +62,9 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 
 ## Simulation setup
 
+- [ ] TRIDYN: isotopes in the periodic table (issue #1). TRIDYN has no isotope table, the mass of an element can be
+      changed in the composition tables (written as `mass <n> <mass>`); a list of the stable isotopes (masses and
+      natural abundances) in the GUI would allow to select them like for SDTrimSP.
 - [ ] Frozen first columns also for the target structure table.
 - [ ] Undo/redo for the tables.
 

@@ -131,6 +131,41 @@ def speciesAbundances(arguments: SimulationArguments, species: List[dict], struc
     return abundances
 
 
+# columns of an irradiation condition in *_indat.dat (Fortran format of TRIDYN: ircp, ie0, e0, ef0, alpha0, qubeam,
+# iadis and the parameters of the angular distribution)
+IRRADIATION_COLUMNS = [3, 3, 10, 10, 10, 7, 4]
+IRRADIATION_PARAMETER_COLUMN = 8
+
+
+def fortranFloat(text: str) -> float:
+    """Returns the value of a Fortran number, NaN for a value that did not fit into its column ("*****")"""
+
+    text = text.strip()
+    return float('nan') if '*' in text else float(text)
+
+
+def irradiationFields(line: str) -> List[str]:
+    """
+    Returns the fields of an irradiation condition of *_indat.dat. TRIDYN writes values that do not fit into their
+    column as "*****" (e.g. energies above 10^7 eV), which are then joined with the neighboring value: such lines are
+    divided by the columns of the format
+    """
+
+    line = line.rstrip('\r\n')
+    fields = line.split()
+    if '*' not in line and len(fields) >= len(IRRADIATION_COLUMNS):
+        return fields
+    fields = []
+    start = 0
+    for width in IRRADIATION_COLUMNS:
+        fields.append(line[start:start + width])
+        start += width
+    while start < len(line.rstrip()):
+        fields.append(line[start:start + IRRADIATION_PARAMETER_COLUMN])
+        start += IRRADIATION_PARAMETER_COLUMN
+    return fields
+
+
 class DictLookup:
     """
     Class to store lookup dictionaries that link simulation values to meaningful values
@@ -5101,15 +5136,15 @@ class SimulationAnalysis(SimulationsAnalysis):
                     ir_result: Dict[str, Any] = {}
 
                     # 'ircp', 'ie0', 'e0', 'ef0', 'alpha0', 'qubeam', 'iadis', 'adpar'
-                    contents = file.readline().strip().split()
+                    contents = irradiationFields(file.readline())
                     ir_result['ircp'] = int(contents[0])
                     ir_result['ie0'] = int(contents[1])
-                    ir_result['e0'] = float(contents[2])
-                    ir_result['ef0'] = float(contents[3])
-                    ir_result['alpha0'] = float(contents[4])
-                    ir_result['qubeam'] = float(contents[5])
+                    ir_result['e0'] = fortranFloat(contents[2])
+                    ir_result['ef0'] = fortranFloat(contents[3])
+                    ir_result['alpha0'] = fortranFloat(contents[4])
+                    ir_result['qubeam'] = fortranFloat(contents[5])
                     ir_result['iadis'] = int(contents[6])
-                    ir_result['adpar'] = [float(val) for val in contents[7:]]
+                    ir_result['adpar'] = [fortranFloat(val) for val in contents[7:]]
 
                     ir.append(ir_result)
                 result['ir'] = ir
@@ -5801,12 +5836,15 @@ class SimulationAnalysis(SimulationsAnalysis):
          vacancies,
          atomic_fractions) = depth_data
 
-        depth_delta = layer_depth[0, 0]
-        if layer_depth.size > 1:
-            depth_delta = layer_depth[0, 1] - layer_depth[0, 0]
+        # the vacancies of a static simulation are given in dpa per fluence (dpa Å²): vacancies per ion and depth are
+        # vacancies * atomic density, the total per ion is their sum over the segments (thickness of the segments),
+        # which equals "total nr. of vacancies per unit area" of *_out.dat at the fluence 1 Å⁻²
+        depth = layer_depth[0, :]
+        depth_delta = np.gradient(depth) if depth.size > 1 else 2 * depth
+        vacancies_depth = vacancies[0, :] * atomic_density[0, :]
 
-        mpl_settings.axes.plot(layer_depth[0, :],
-                               vacancies[0, :] / depth_delta,
+        mpl_settings.axes.plot(depth,
+                               vacancies_depth,
                                label='Total',
                                linewidth=self.line_width,
                                color=self.first_color)
@@ -5816,9 +5854,9 @@ class SimulationAnalysis(SimulationsAnalysis):
         mpl_settings.axes.legend()
         mpl_settings.axes.set_ylabel('Vacancies [1/Å/ion]')
         mpl_settings.axes.set_xlabel('Depth [Å]')
-        mpl_settings.axes.set_title(f'Total Vacancies: {np.round(np.sum(vacancies[0, :]) / len(self.initial_protocol["ir"]), 2)} / Ion')
+        mpl_settings.axes.set_title(f'Total Vacancies: {np.sum(vacancies_depth * depth_delta):.2f} / Ion')
 
-        return ([layer_depth[0, :], vacancies[0, :]], ['Depth (Total) [Angs]', 'Vacancies (Total) [1/Angs/ion]']), mpl_settings
+        return ([depth, vacancies_depth], ['Depth (Total) [Angs]', 'Vacancies (Total) [1/Angs/ion]']), mpl_settings
 
     def plotSputterYields(self) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return sputter yields"""

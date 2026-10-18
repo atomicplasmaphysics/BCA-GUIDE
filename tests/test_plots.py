@@ -12,6 +12,8 @@ from Simulations.SDTrimSP import (
 )
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
 
+from Utility.Typing import notNone
+
 
 EXAMPLES = ROOT / 'saves' / 'SDTrimSP'
 TRIDYN_EXAMPLES = ROOT / 'saves' / 'TRIDYN'
@@ -222,3 +224,54 @@ def test_failing_plot_does_not_crash(main_window, qapp, tmp_path, errors):
     waitForPlot(qapp, page)
     assert any('ZeroDivisionError' in error for error in errors)
     errors.clear()
+
+
+def test_tridyn_energy_too_large_for_output_columns(main_window, qapp, tmp_path, errors):
+    """
+    TRIDYN writes energies above 10^7 eV as "**********" into *_indat.dat (issue #2, "Corrupted input files"): the
+    results of a run with 2 GeV Ar are listed and plotted (works without TRIDYN, stand-in program folder)
+    """
+
+    from Simulations.TRIDYN2022 import irradiationFields
+
+    assert irradiationFields('  1  0**********      0.00      0.00  1.000   0   0.000   0.000   0.000')[:4] == \
+        ['  1', '  0', '**********', '      0.00']
+    save = copySave(ROOT / 'tests' / 'saves' / 'TRIDYN' / 'Ar_on_W_2GeV', tmp_path / 'Ar_on_W_2GeV')
+    folder = tmp_path / 'Tridyn2022'
+    folder.mkdir()
+    (folder / 'tridyn.exe').write_bytes(b'')
+    sc, page = addSimulationPage(main_window, 'Ar_on_W_2GeV', 1, folder, folder / 'tridyn.exe', '2022', save)
+    pump(qapp)
+
+    exports = showAllPlots(qapp, page)
+    items = [page.output_parameters_list.item(i).text() for i in range(page.output_parameters_list.count())]
+    assert not any('Corrupted' in item for item in items), items
+    assert exports, 'no plots listed'
+    assert not errors, '\n'.join(errors)
+
+
+def test_tridyn_vacancies_per_ion():
+    """
+    Total vacancies per ion of a static TRIDYN simulation: vacancies (dpa Å²) * atomic density * segment thickness,
+    equal to "total nr. of vacancies per unit area" of *_out.dat at the fluence 1 Å⁻² (was the sum of the column, which
+    depends on the segment thickness)
+    """
+
+    from re import search
+    from Simulations.Simulations import GeneralElementData
+    from Simulations.TRIDYN2022 import SimulationAnalysis
+
+    folder = ROOT / 'tests' / 'saves' / 'TRIDYN' / 'Ar_on_W'
+    analysis = SimulationAnalysis(GeneralElementData())
+    assert analysis.updateData(folder) and not analysis.is_dynamic
+    data, settings = analysis.plotVacanciesDepth()
+    depth, vacancies = notNone(data)[0]
+    # the settings record the calls of the plot
+    title = next(call[2][0] for call in settings.axes.get_calls() if call[:2] == ('func', 'set_title'))
+    total = float(title.split(':')[1].split('/')[0])
+
+    out = next(folder.glob('*_out.dat')).read_text(encoding='utf-8', errors='replace')
+    fluence = float(notNone(search(r'total fluence: *([0-9.E+-]+)', out)).group(1))
+    expected = float(notNone(search(r'total nr\. of vacancies per unit area= *([0-9.E+-]+)', out)).group(1)) / fluence
+    assert total == pytest.approx(expected, rel=1e-3)
+    assert np.sum(vacancies * np.gradient(depth)) == pytest.approx(expected, rel=1e-3)

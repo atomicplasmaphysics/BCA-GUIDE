@@ -4,6 +4,19 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.6.03 (2026-10-18)
+
+- TRIDYN: results of simulations with energies above 10^7 eV are shown again (issue #2): TRIDYN writes the energy as
+  "**********" into *_indat.dat when it does not fit into its column, the GUI reported "Corrupted input files"
+- TRIDYN: vacancies of the plot "Ion-induced damages" are calculated with the atomic density and the thickness of the
+  segments (the column is given in dpa per fluence): the total per ion equals the number of TRIDYN (*_out.dat) and no
+  longer depends on the segment thickness (before e.g. 46.8 instead of 29.6 vacancies per ion; comment of issue #3)
+
+## v1.6.02 (2026-10-18)
+
+- readme: download of the programs as first part of the installation, examples after it
+- .gitignore: the simulation programs are not part of the repository
+
 ## v1.6.01 (2026-10-18)
 
 - Splash screen with the current website of the institute (www.tuwien.at/phy/iap/app), taken over from v1.4.20 of the
