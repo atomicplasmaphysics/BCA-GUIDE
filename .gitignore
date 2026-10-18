@@ -25,3 +25,4 @@ __pycache__/
 .pytest_cache/
 /tests/simulation_data/
 junit.xml
+/tests/startup_profile.txt

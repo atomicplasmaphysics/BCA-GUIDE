@@ -1,5 +1,5 @@
 # Builds the GUI as program that runs without Python (setup/pyinstaller.py) for Windows, Linux and macOS.
-# - pushed version tag (e.g. git tag v1.5.17 && git push origin v1.5.17): the archives are attached to a GitHub release
+# - pushed version tag (e.g. git tag v1.6.01 && git push origin v1.6.01): the archives are attached to a GitHub release
 #   of the tag (download page of the repository, not part of the code that is cloned)
 # - "Run workflow" (Actions tab): only builds and tests, the archives are downloads of the run (kept for 30 days)
 name: Release

@@ -50,3 +50,11 @@ jobs:
       - name: Failed tests
         if: failure()
         run: python setup/junit_annotations.py junit.xml
+      # times of the start of the GUI and its slowest functions (tests/test_startup.py)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: startup_profile_${{ matrix.os }}_${{ matrix.python-version }}
+          path: tests/startup_profile.txt
+          if-no-files-found: ignore
+          retention-days: 30

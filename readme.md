@@ -100,7 +100,7 @@ every start). The script then starts the program once with `--self-test` (withou
 the simulation modules, the images and the manual of the GUI are found. The simulation programs are not part of it.
 For further information read the description of the `setup/pyinstaller.py` file.
 
-Releases: pushing a version tag (`git tag v1.5.17 && git push origin v1.5.17`) starts the workflow
+Releases: pushing a version tag (e.g. `git tag v1.6.01 && git push origin v1.6.01`) starts the workflow
 `.github/workflows/release.yml`, which builds the programs on Windows, Linux and macOS, tests them with `--self-test` and
 attaches the archives to a GitHub release of the tag. *Run workflow* of the workflow *Release* (tab *Actions*) only
 builds and tests them, the archives are then downloads of the run.
@@ -206,6 +206,15 @@ python -m pytest --simulations -n 20 --test-dir=D:/BCA-GUIDE/tests   # all files
 
 With `--test-dir=DIR` (with `=`, otherwise pytest treats DIR as test folder; or the environment variable `BCA_TEST_DIR`) the temporary files of the tests are created in
 `DIR/tmp` and the simulation runs are kept in `DIR/simulation_data` (instead of the temporary folder of the system drive).
+
+Start time: `tests/test_startup.py` starts the GUI with a simulation tab for every example and writes the times of the
+phases (imports, main window, showing the window) and the slowest functions (cProfile) to `tests/startup_profile.txt`
+(also a download of each test job of the continuous integration). The profile can also be created without the tests:
+
+```
+python tests/startup_profile.py                     # report in tests/startup_profile.txt
+python tests/startup_profile.py --top 80 --output profile.txt
+```
 
 `tests/test_case_comparison.py` runs the test cases that come with SDTrimSP (folder `case`) directly with their version
 and through the GUI (the GUI loads the input files of the case, writes its own input files and runs them) and checks
