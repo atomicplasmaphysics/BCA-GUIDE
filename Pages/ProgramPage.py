@@ -31,7 +31,7 @@ from Utility.Layouts import (
 )
 from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
-from Utility.Functions import alphanumeric, inFileList, inFileDict, pathToStr, lowerProcessPriority
+from Utility.Functions import alphanumeric, inFileList, inFileDict, pathToStr, lowerProcessPriority, ensureExecutable
 from Utility.ModifyWidget import setWidgetHighlight
 from Utility.Icons import getIcon
 from Utility.Typing import notNone
@@ -368,7 +368,7 @@ class SimulationPage(TabWithToolbar):
         self.target_preview_groupbox = QGroupBox(self)
         self.target_preview_vbox.addWidget(self.target_preview_groupbox)
 
-        self.target_preview_groupbox_vbox = QVBoxLayout(self)
+        self.target_preview_groupbox_vbox = QVBoxLayout()
         self.target_preview_groupbox_vbox.setContentsMargins(2, 2, 2, 2)
         self.target_preview_groupbox.setLayout(self.target_preview_groupbox_vbox)
 
@@ -414,7 +414,7 @@ class SimulationPage(TabWithToolbar):
         self.crystal_editor_groupbox = QGroupBox(self)
         self.crystal_editor_vbox.addWidget(self.crystal_editor_groupbox)
 
-        self.crystal_editor_groupbox_vbox = QVBoxLayout(self)
+        self.crystal_editor_groupbox_vbox = QVBoxLayout()
         self.crystal_editor_groupbox.setLayout(self.crystal_editor_groupbox_vbox)
 
         self.crystal_editor_button = QPushButton('Edit Crystal')
@@ -1259,6 +1259,7 @@ class SimulationPage(TabWithToolbar):
         self.output_parameters_list.clear()
         self.evaluation_class.reset()
 
+        ensureExecutable(self.simulation_configuration.binary)
         qcmd, qpipe, cmd = self.simulation_class.cmd(
             self.simulation_configuration.binary,
             self.simulation_configuration.save_folder,

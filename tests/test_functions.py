@@ -1,7 +1,12 @@
+import os
+import sys
 from pathlib import Path
 
+import pytest
+
 from Utility.Functions import (
-    fileMatches, inFileList, inFileDict, getFileNameFromFileList, getFilesNameFromFileList, pathToStr, fileName
+    fileMatches, inFileList, inFileDict, getFileNameFromFileList, getFilesNameFromFileList, pathToStr, fileName,
+    ensureExecutable
 )
 
 
@@ -37,3 +42,17 @@ def test_path_helpers():
     assert pathToStr(Path('a') / 'b') == str(Path('a') / 'b')
     assert fileName(Path('a/b.txt')) == 'b.txt'
     assert fileName('b.txt') == 'b.txt'
+
+
+@pytest.mark.skipif(sys.platform == 'win32', reason='no executable flag on Windows')
+def test_ensure_executable(tmp_path):
+    """Binaries without executable flag (e.g. unpacked from an archive) are made executable before a run"""
+
+    binary = tmp_path / 'SDTrimSP.exe'
+    binary.write_bytes(b'\x7fELF')
+    binary.chmod(0o640)
+    assert not os.access(binary, os.X_OK)
+    assert ensureExecutable(binary)
+    assert os.access(binary, os.X_OK) and binary.stat().st_mode & 0o777 == 0o750
+    assert ensureExecutable(binary)
+    assert not ensureExecutable(tmp_path / 'missing') and not ensureExecutable(None)

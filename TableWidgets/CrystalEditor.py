@@ -141,7 +141,7 @@ class CrystalEditorDialog(QDialog):
         self.basis_vectors_group_box = QGroupBox(self)
         self.basis_vectors_vbox.addWidget(self.basis_vectors_group_box)
 
-        self.basis_vectors_group_box_vbox = QVBoxLayout(self)
+        self.basis_vectors_group_box_vbox = QVBoxLayout()
         self.basis_vectors_group_box.setLayout(self.basis_vectors_group_box_vbox)
 
         self.basis_vecs = [[DoubleSpinBox(0, input_range=SpinBoxRange.INF_INF, decimals=7) for _ in range(3)] for _ in range(3)]

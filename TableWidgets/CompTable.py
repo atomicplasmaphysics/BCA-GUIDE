@@ -466,7 +466,8 @@ class CompTable(CustomTable[CompRow]):
             rows.append(self.addRow(connect=False))
         for argument, row in zip(arguments, rows):
             old_element = argument.element
-            if row is False:
+            # addRow returns None if the maximum number of components is reached
+            if not row:
                 not_loadable.append(f'Element "{old_element.symbol}" ({old_element}) not loaded, too many elements')
                 continue
             updated_element = elements.elementFromSymbol(old_element.symbol)

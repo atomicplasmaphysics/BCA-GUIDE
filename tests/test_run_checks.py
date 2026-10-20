@@ -10,7 +10,7 @@ from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
 
 from Containers.CrystalTableFile import layerMillerError, layerMillerSuggestion
 from Containers.SimulationConfiguration import SimulationConfiguration
-from Simulations.SDTrimSP import SimulationInput, Versions, estimateRange, namelistParameters
+from Simulations.SDTrimSP import SimulationInput, Versions, estimateRange, maxElements, namelistParameters, stoppingTableSymbols
 
 
 SDTRIMSP = SIMULATION_PROGRAMS / 'SDTrimSP'
@@ -85,6 +85,44 @@ def test_warning_transmission_700(tmp_path):
     # a thick target
     simulation, arguments = load(tmp_path, tri('"Ar", "Si"', '1e3', '', ttarget=500.), Versions.V_700, folder)
     assert simulation.checkWarnings(arguments, Versions.V_700) == []
+
+
+def test_warning_max_elements(tmp_path):
+    # SDTrimSP 6.01 is compiled for 3 elements (ncpm = 3 in src/param.F90), 4 elements stop it while reading tri.inp
+    installation = tmp_path / 'installation'
+    (installation / 'src').mkdir(parents=True)
+    (installation / 'src' / 'param.F90').write_text('module param\n   integer, parameter :: ncpm = 1   ! elements\nend module\n')
+    assert maxElements(installation) == 1
+    assert maxElements(tmp_path / 'missing') is None and maxElements(None) is None
+    if (FOLDER / 'src').is_dir():
+        assert (maxElements(FOLDER) or 0) >= 2
+
+    simulation, arguments = load(tmp_path, tri('"Ar", "Si"', '1e3'))
+    assert not any('ncpm' in warning for warning in simulation.checkWarnings(arguments, Versions.V_707))
+    simulation.simulation_folder = installation
+    warnings = simulation.checkWarnings(arguments, Versions.V_707)
+    assert any('2 elements' in warning and 'at most 1' in warning for warning in warnings), warnings
+
+
+def test_warning_stopping_table(tmp_path):
+    # inel0 = 4 (H, D, T) reads tables/table3 for all species, SDTrimSP 7.01 has no C_a there (here: no Cu)
+    installation = tmp_path / 'installation'
+    (installation / 'tables').mkdir(parents=True)
+    (installation / 'tables' / 'table3').write_text('table3\nc symbol  a1  a2\nH      1  1.262  1.44\nSi    14  2.1  3.2\n')
+    assert stoppingTableSymbols(installation, 'table3') == {'H', 'Si'}
+    assert stoppingTableSymbols(installation, 'table4') is None
+
+    simulation, arguments = load(tmp_path, tri('"H", "Si"', '1e4', '4, 7'))
+    simulation.simulation_folder = installation
+    assert not any('table3' in warning for warning in simulation.checkWarnings(arguments, Versions.V_707))
+    simulation, arguments = load(tmp_path, tri('"H", "Cu"', '1e4', '4, 7'))
+    simulation.simulation_folder = installation
+    warnings = simulation.checkWarnings(arguments, Versions.V_707)
+    assert any('tables/table3, Cu is missing' in warning for warning in warnings), warnings
+    # without inel0 = 4 the table is not read
+    simulation, arguments = load(tmp_path, tri('"H", "Cu"', '1e4', '7, 7'))
+    simulation.simulation_folder = installation
+    assert not any('table3' in warning for warning in simulation.checkWarnings(arguments, Versions.V_707))
 
 
 def test_warning_large_files(tmp_path):

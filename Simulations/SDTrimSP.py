@@ -709,6 +709,66 @@ def readEnergyAngleMatrix(path: Path) -> List[dict]:
     return matrices
 
 
+MAX_ELEMENTS_CACHE: Dict[str, Optional[int]] = {}
+
+
+def maxElements(folder: Optional[Path]) -> Optional[int]:
+    """
+    Returns the maximum number of elements (ncp) that an installation of SDTrimSP is compiled for or None if unknown.
+    The number is taken from the parameter ncpm in the source code (src/param.F90), e.g. 3 for SDTrimSP 6.01 and 12 for
+    7.00. More elements stop SDTrimSP with the error 'Cannot match namelist object name ...' while reading tri.inp
+
+    :param folder: folder of the installation
+    """
+
+    if folder is None:
+        return None
+    key = str(folder)
+    if key not in MAX_ELEMENTS_CACHE:
+        value = None
+        for source in sorted((folder / 'src').glob('*.[fF]90')) if (folder / 'src').is_dir() else []:
+            try:
+                text = source.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            numbers = findall(r'(?im)^\s*integer\s*,\s*parameter\s*::.*?\bncpm\s*=\s*(\d+)', text)
+            if numbers:
+                value = int(numbers[0])
+                break
+        MAX_ELEMENTS_CACHE[key] = value
+    return MAX_ELEMENTS_CACHE[key]
+
+
+STOPPING_TABLE_CACHE: Dict[str, Optional[set]] = {}
+
+
+def stoppingTableSymbols(folder: Optional[Path], table: str) -> Optional[set]:
+    """
+    Returns the symbols of a table of an installation of SDTrimSP (e.g. "table3" with the coefficients of H, D and T
+    stopping, "table4" of He stopping) or None if the table can not be read. Lines of a symbol start with the symbol and
+    the atomic number, comment lines with "c"
+
+    :param folder: folder of the installation
+    :param table: name of the table in the folder "tables"
+    """
+
+    if folder is None:
+        return None
+    key = str(folder / 'tables' / table)
+    if key not in STOPPING_TABLE_CACHE:
+        symbols: Optional[set] = None
+        try:
+            symbols = set()
+            for line in (folder / 'tables' / table).read_text(encoding='utf-8', errors='replace').splitlines():
+                values = line.split()
+                if len(values) > 2 and values[1].isdigit():
+                    symbols.add(values[0])
+        except OSError:
+            symbols = None
+        STOPPING_TABLE_CACHE[key] = symbols
+    return STOPPING_TABLE_CACHE[key]
+
+
 NAMELIST_CACHE: Dict[str, Optional[set]] = {}
 
 
@@ -3468,9 +3528,9 @@ Andreas Mutzke
             except FileNotFoundError:
                 logging.info(f'Could not open compound table (3 elements) "{compound_table3}"!')
 
-        # update number of components
-        if Versions.atLeast(version, Versions.V_609):
-            self.MaxComponents = 11
+        # update number of components: the installation is compiled for ncpm species (src/param.F90, e.g. 3 for 6.01,
+        # 12 for 7.00), otherwise the documented number of the version
+        self.MaxComponents = maxElements(folder) or (11 if Versions.atLeast(version, Versions.V_609) else 8)
 
         # update OutputTooltips
         # -> could be used, but is not: formatting in this file is bad for reading and there are spelling mistakes
@@ -4024,12 +4084,14 @@ Andreas Mutzke
         qu = normalizeList(qu)
 
         if group_elements:
+            # synced field: defined in the target table if the element is in the beam and the target (the beam row can
+            # have qumax = 0 from a tri.inp with separate projectile and target species, SDTrimSP stops then)
             qumax = []
             for beam_row, target_row in grouped_rows:
-                if beam_row is None:
-                    qumax.append(target_row.max_atomic_fraction)
-                else:
+                if target_row is None:
                     qumax.append(beam_row.max_atomic_fraction)
+                else:
+                    qumax.append(target_row.max_atomic_fraction)
         else:
             qumax = [row.max_atomic_fraction for row in rows]
 
@@ -4717,7 +4779,8 @@ text = "--- extra ---"
             if not table_crystal['name']:
                 assumed.assumed('name')
 
-        elif l_crystal:
+        # 7.00 and 7.01: the GUI also writes miller_ind without crystal, it is no additional setting then
+        elif l_crystal or (default_values.enable_crystal and not default_values.crystal_table and 'miller_ind' in contents):
             miller_ind = MillerIndex(getValueList(contents.get('miller_ind'), SafeInt, 0, 'miller_indices_list', assumed_cls=assumed))
 
         # tables of the simulation (needed for the crystals in the layer file), 'tableinp' is not loaded otherwise
@@ -4920,8 +4983,11 @@ text = "--- extra ---"
         target_symbols = [row.symbol for row in target_rows]
         file_symbols = [symbol_i for symbol_i, qu_i, qubeam_i in zip(symbol, qu, qubeam) if qu_i or qubeam_i]
         shared = bool(set(beam_symbols) & set(target_symbols))
+        # a species that is projectile and target atom at the same time is only possible with grouped elements, the same
+        # element as separate projectile and target species (e.g. "Cu", "Cu" in case Cu_Cu_crystal) is kept separate
+        shared_species = any(qu_i and qubeam_i for qu_i, qubeam_i in zip(qu, qubeam))
         grouped_symbols = target_symbols + [symbol_i for symbol_i in beam_symbols if symbol_i not in target_symbols]
-        if not shared and file_symbols == beam_symbols + target_symbols:
+        if not shared_species and file_symbols == beam_symbols + target_symbols:
             group_elements = False
         elif file_symbols == grouped_symbols:
             group_elements = True
@@ -5248,6 +5314,36 @@ text = "--- extra ---"
                 warnings.append(
                     f'{row.symbol} (target): the recoils can get up to {transfer / 1e3:.4g} keV, the inelastic loss model {model} '
                     f'({names[model]}) is only valid below {validityLimit(row) / 1e3:.4g} keV'
+                )
+
+        # 0) the installation is compiled for a maximum number of elements (ncpm in src/param.F90)
+        max_elements = maxElements(getattr(self, 'simulation_folder', None))
+        group_elements = arguments.settings.get('group_elements')
+        if group_elements is None:
+            group_elements = default_values.group_elements
+        elements = len(speciesList(arguments, group_elements))
+        if max_elements is not None and elements > max_elements:
+            warnings.append(
+                f'The simulation has {elements} elements, but this installation of SDTrimSP is compiled for at most '
+                f'{max_elements} (ncpm in src/param.F90). SDTrimSP stops with "Cannot match namelist object name" while '
+                f'reading tri.inp: use fewer elements, a newer version or compile SDTrimSP with a larger ncpm'
+            )
+
+        # 0b) the high energy models of H, D, T (4, table3) and He (5, table4) read the coefficients of all species, SDTrimSP
+        # stops with "Bad real number" in tableread.F90 if one is missing (e.g. C_a before 7.02, B10 in 6.09)
+        all_rows = [row for row in arguments.beam_rows + arguments.target_rows if row.symbol]
+        for model, table, projectiles in ((4, 'table3', 'H, D, T'), (5, 'table4', 'He')):
+            if not any(inelasticModel(row) == model for row in all_rows):
+                continue
+            table_symbols = stoppingTableSymbols(getattr(self, 'simulation_folder', None), table)
+            if table_symbols is None:
+                continue
+            missing = sorted({row.symbol for row in all_rows if row.symbol not in table_symbols})
+            if missing:
+                warnings.append(
+                    f'The inelastic loss model {model} ({projectiles}) needs the coefficients of all elements in tables/{table}, '
+                    f'{", ".join(missing)} {"is" if len(missing) == 1 else "are"} missing in this installation: SDTrimSP stops '
+                    f'with "Bad real number" while reading the table. Use another inelastic loss model or a newer version'
                 )
 
         # mean target composition (first layer)
@@ -6486,14 +6582,19 @@ class SimulationAnalysis(SimulationsAnalysis):
                 ncp = int(line_content[0])
                 ncp_proj = int(line_content[1])
 
-                file.readline()
+                # line 4: elements (wrapped to the next lines for many elements, e.g. 11), up to the header "CPT A-Z A-MASS ..."
+                # (with "#" since 7.00)
+                element_text = ''
+                line = file.readline()
+                while line and not line.strip().lstrip('#').strip().upper().startswith('CPT'):
+                    if 'elements:' in line:
+                        element_text = line.split('elements:', 1)[1]
+                    elif element_text:
+                        element_text += ' ' + line.strip('#')
+                    line = file.readline()
+                elements = element_text.split()[-ncp:]
 
-                # line 4: elements
-                elements = file.readline().strip('#').split()[-ncp:]
-
-                file.readline()
-
-                # line 6 - 6+ncp: element data
+                # ncp lines of element data
                 masses = np.zeros(ncp)
                 for i in range(ncp):
                     masses[i] = float(file.readline().split()[2])

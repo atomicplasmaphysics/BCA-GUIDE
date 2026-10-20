@@ -2179,10 +2179,10 @@ def writeInputFiles(simulation: 'SimulationsInput', arguments: SimulationArgumen
     write(simulation.nameLayerFile(arguments, version), simulation.makeLayerFile(arguments, simulation_folder, version) or None)
     for name, text in simulation.makeDistributionFiles(arguments, version).items():
         write(name, text)
-    crystal_text = None
+    # without crystals in the GUI (e.g. SDTrimSP before 7.00) a crystal file of the user is kept (l_crystal in the
+    # additional settings), SDTrimSP 6.09 stops with "End of file" if it is removed
     if simulation.default_values.enable_crystal:
-        crystal_text = simulation.makeCrystalFile(arguments, simulation_folder, version) or None
-    write(simulation.nameCrystalFile(arguments, version), crystal_text)
+        write(simulation.nameCrystalFile(arguments, version), simulation.makeCrystalFile(arguments, simulation_folder, version) or None)
     return files
 
 

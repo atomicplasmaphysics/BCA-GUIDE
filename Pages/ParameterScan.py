@@ -39,7 +39,7 @@ from TableWidgets.CompTable import setSpinboxValue
 
 from Utility.Styles import paletteQColor
 from Utility.Dialogs import showMessageBox
-from Utility.Functions import pathToStr, lowerProcessPriority
+from Utility.Functions import pathToStr, lowerProcessPriority, ensureExecutable
 from Utility.Icons import getIcon
 from Utility.Layouts import InputHBoxLayouts
 from Utility.Typing import notNone
@@ -1216,6 +1216,7 @@ class ParameterScan(QObject):
         while self.queue and self.main_window.freeRunSlots() > 0:
             job = self.queue.pop(0)
             sc = job['configuration']
+            ensureExecutable(sc.binary)
             qcmd, qpipe, _ = job['simulation'].cmd(sc.binary, job['folder'], job['files'][1], sc.version)
             process = QProcess(self)
             process.setWorkingDirectory(pathToStr(job['folder']))

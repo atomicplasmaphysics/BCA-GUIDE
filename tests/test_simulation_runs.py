@@ -32,7 +32,7 @@ from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, 
 
 from Containers.CrystalTableFile import CrystalTableFile, TableCrystal
 from Pages.ProgramPage import SimulationPage
-from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, DefaultValues, CrystalTableLimits
+from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, DefaultValues, CrystalTableLimits, maxElements
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
 
 
@@ -110,6 +110,11 @@ VARIANTS = {
     'all_outputs': {'settings.optional.log_reflected': True, 'settings.optional.log_sputtered': True, 'settings.optional.log_matrix': True},
 }
 
+# variants where SDTrimSP needs a lot of memory (about 2 GB for the trajectories of the recoils, up to 4 GB in older
+# versions): they run one after the other in one process of pytest-xdist (--dist loadgroup in pytest.ini), several at
+# the same time exhaust the memory of computers with 16 GB
+LARGE_MEMORY_VARIANTS = {'extra_parameters'}
+
 # reduced set of variants for older versions
 CORE_VARIANTS = ['default', 'dynamic', 'energy_1GeV', 'energy_sweep', 'all_outputs', 'extra_parameters', 'maxwell_energy',
                  'energy_file', 'angle_file', 'energy_angle_file']
@@ -120,6 +125,9 @@ KNOWN_PROBLEMS = {
     ('SDTrimSP_7.01', None, 'energy_1GeV'): 'SDTrimSP 7.01 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
     ('SDTrimSP_7.00', None, 'energy_1MeV'): 'SDTrimSP 7.00 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
     ('SDTrimSP_7.01', None, 'energy_1MeV'): 'SDTrimSP 7.01 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
+    ('SDTrimSP_7.07', 'H_Ar_FeW', 'energy_1MeV'): 'SDTrimSP 7.07 stops with "Expected REAL for item 203 in formatted transfer, got '
+                                                 'INTEGER" while writing morigin_ex_bs.dat (output.F90: the format has nqx + 1 '
+                                                 'columns, the depth intervals of the layers are more)',
     ('SDTrimSP_6.06', 'H_Ar_FeW', None): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) for this target with two layers',
     ('SDTrimSP_6.06', None, 'all_outputs'): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
     ('SDTrimSP_7.00', None, 'all_outputs'): 'SDTrimSP 7.00 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
@@ -129,7 +137,11 @@ KNOWN_PROBLEMS = {
 
 # known problems where the simulation does not terminate (not run, they would block a process until the timeout)
 KNOWN_HANGS = {
+    ('SDTrimSP_6.01', None, 'extra_parameters'): 'SDTrimSP 6.01 enlarges the memory of recoil trajectories (ltraj_r) to more than 5 GB until '
+                                                 'the size overflows and crashes (with less memory: "not enough memory space for allocate(trajek)")',
     ('SDTrimSP_6.06', None, 'extra_parameters'): 'SDTrimSP 6.06 enlarges the memory of recoil trajectories (ltraj_r) until the size overflows and does not finish',
+    ('SDTrimSP_6.09', None, 'extra_parameters'): 'SDTrimSP 6.09 enlarges the memory of recoil trajectories (ltraj_r) to more than 5 GB until '
+                                                 'the size overflows and crashes (with less memory: "not enough memory space for allocate(trajek)")',
     ('SDTrimSP_7.00', None, 'extra_parameters'): 'SDTrimSP 7.00 enlarges the memory of trajectories (ltraj_p/r) to more than 20 GB and does not finish',
 }
 
@@ -179,18 +191,32 @@ def supportsEnergyAngleFile(folder: Path, version: str) -> bool:
     return simulation.supportsEnergyAngleFile(version)
 
 
+def baseElements(base: str) -> int:
+    """Returns the number of elements of an example input (symbols of the beam and the target)"""
+
+    data = json.loads((BASES[base] / 'input.json').read_text(encoding='utf-8'))
+    return len({row['symbol'] for row in data['beam_rows'] + data['target_rows'] if row.get('symbol')})
+
+
 def sdtrimspCases():
     """All combinations of installation, example input and variant"""
 
     cases = []
     for folder, binary, version in INSTALLATIONS:
         variants = VARIANTS if (folder.name == NEWEST or ALL_VARIANTS) else CORE_VARIANTS
+        max_elements = maxElements(folder)
         for base in BASES:
+            elements = baseElements(base)
             for variant in variants:
                 reason = knownProblem(folder.name, base, variant)
                 marks = [pytest.mark.xfail(reason=reason, strict=False, run=reason not in KNOWN_HANGS.values())] if reason else []
                 if variant == 'energy_angle_file' and not supportsEnergyAngleFile(folder, version):
                     marks = [pytest.mark.skip(reason='case_e0 = 6 (ene_ang.inp) is not implemented in this version')]
+                if max_elements is not None and elements > max_elements:
+                    # the GUI warns before the run (checkWarnings)
+                    marks = [pytest.mark.skip(reason=f'{elements} elements, the installation is compiled for at most {max_elements} (ncpm)')]
+                if variant in LARGE_MEMORY_VARIANTS:
+                    marks = marks + [pytest.mark.xdist_group('large_memory')]
                 cases.append(pytest.param(folder, version, base, variant, id=f'{folder.name}-{base}-{variant}', marks=marks))
     return cases
 

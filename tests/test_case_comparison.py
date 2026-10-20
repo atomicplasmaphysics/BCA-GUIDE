@@ -25,7 +25,7 @@ import pytest
 
 from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
-from Utility.Functions import inFileList
+from Utility.Functions import ensureExecutable, inFileList
 from test_simulation_runs import INSTALLATIONS, TIMEOUT, runAndCheckOutputs
 
 
@@ -103,8 +103,12 @@ def resultLines(path: Path) -> List[str]:
     """Lines of a result file without the lines that depend on the run (dates, times, paths), whitespace normalized"""
 
     lines = []
-    for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
-        if findall(IGNORED_LINE, line, flags=IGNORECASE):
+    # split only at line feeds: splitlines() also splits at the control characters of uninitialized strings
+    for line in path.read_text(encoding='utf-8', errors='replace').split('\n'):
+        line = line.rstrip('\r')
+        # control characters: uninitialized strings of the program, random content (e.g. the name of the inelastic loss
+        # model in output.dat of SDTrimSP 6.06)
+        if findall(IGNORED_LINE, line, flags=IGNORECASE) or any(ord(char) < 32 and char != '\t' for char in line):
             continue
         # the title of the original input is not encoded in UTF-8 (TRIDYN samples), the GUI writes UTF-8
         line = ' '.join(''.join(char if ord(char) < 128 else '?' for char in line).split())
@@ -177,6 +181,7 @@ def test_case_native_and_gui(main_window, qapp, case_folder, tmp_path, monkeypat
     # native run: only the path of the tables is added to tri.inp
     tri = native / 'tri.inp'
     tri.write_text(withTables(tri.read_text(encoding='utf-8', errors='replace'), folder / 'tables'), encoding='utf-8')
+    ensureExecutable(binary)
     try:
         result = subprocess.run([str(binary)], cwd=native, capture_output=True, text=True, errors='replace', timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -245,6 +250,7 @@ def test_tridyn_sample_native_and_gui(main_window, qapp, case_folder, tmp_path, 
             path.write_text(reducedFluence(path.read_text(encoding='latin-1')), encoding='latin-1')
 
     # native run: the input file is read from stdin
+    ensureExecutable(binary)
     with open(native / f'{sample}.in', 'rb') as input_file:
         try:
             result = subprocess.run([str(binary)], cwd=native, stdin=input_file, capture_output=True, text=True, errors='replace', timeout=TIMEOUT)

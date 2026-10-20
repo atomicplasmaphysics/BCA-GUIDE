@@ -4,6 +4,8 @@ from platform import system
 from pathlib import Path
 from re import sub, findall
 import logging
+import os
+import stat
 
 import numpy as np
 
@@ -472,6 +474,31 @@ def isNativeExecutable(file: Path) -> bool:
         return False
 
     return any(header.startswith(magic) for magic in magic_numbers)
+
+
+def ensureExecutable(file: Path | None) -> bool:
+    """
+    Makes file executable (for everybody who may read it) if it is not, e.g. after unpacking an archive or copying from
+    a drive without permissions, where binaries lose their executable flag ("execve: Permission denied").
+    Not needed on Windows.
+
+    :param file: path to binary
+
+    :return: True if file is executable afterwards
+    """
+
+    if file is None or not file.is_file():
+        return False
+    if system() == 'Windows' or os.access(file, os.X_OK):
+        return True
+    try:
+        mode = file.stat().st_mode
+        # executable for user, group and others where they have read permission
+        file.chmod(mode | ((mode & (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)) >> 2))
+    except OSError as error:
+        logging.warning(f'Could not make "{file}" executable: {error}')
+        return False
+    return os.access(file, os.X_OK)
 
 
 def findExecutables(folder: Path, max_depth: int = 3, skip_folders: Iterable[str] = ()) -> List[Path]:

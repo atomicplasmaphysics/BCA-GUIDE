@@ -4,6 +4,39 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.6.04 (2026-10-20)
+
+- No more "QLayout: Attempting to add QLayout ... which already has a layout" messages at the start (layouts of the
+  target preview, the crystal editor and its basis vectors were created with the page as parent)
+- Simulation programs without executable flag (e.g. after unpacking or copying) are made executable before a run, before
+  the run failed with "execve: Permission denied" (Linux, macOS)
+- SDTrimSP: the same element as separate projectile and target species in a loaded tri.inp (e.g. "Cu", "Cu" of the case
+  Cu_Cu_crystal) is kept separate, before it was grouped into one species (ncp changed, crystal.inp with two species
+  did not fit anymore)
+- SDTrimSP: an element in beam and target gets the maximum concentration (qumax) of the target table, before the value of
+  the beam row was written (e.g. 0, SDTrimSP stopped with "qumax, to many limit for qumax")
+- SDTrimSP before 7.00 (no crystals in the GUI): the crystal.inp of the user is kept (l_crystal in the additional
+  settings), before it was removed when the input files were written and SDTrimSP 6.09 stopped with "End of file"
+- SDTrimSP: warning before the run if the simulation has more elements than the installation is compiled for (ncpm in
+  src/param.F90, e.g. 3 for SDTrimSP 6.01), SDTrimSP stops with "Cannot match namelist object name" then
+- SDTrimSP: the tables take as many elements as the installation is compiled for (ncpm: 12 since 7.00, before 11), a
+  tri.inp with more elements is loaded without them and a message (before the GUI crashed with "unexpected None")
+- SDTrimSP: warning before the run if the inelastic loss model 4 (H, D, T) or 5 (He) is used and an element is missing in
+  tables/table3 or table4 of the installation (e.g. C_a before 7.02, B10 and B11 in 6.09), SDTrimSP stops with "Bad real
+  number" then
+- SDTrimSP: serie.dat of sweeps with many elements (the list of elements continues in the next line) is read, before the
+  results of a sweep with 11 elements could not be shown
+- SDTrimSP 7.00 and 7.01: a tri.inp saved by the GUI without crystal (miller_ind = 0, 0, 0) is loaded without an
+  additional setting miller_ind (before it was written twice after saving again)
+- Tests: inputs of colleagues (tests/test-inputs/*.inp, not in the repository) are loaded, saved with the same values and
+  run with all SDTrimSP versions (tests/test_test_inputs.py); --simulation-data is used as absolute path (the runs change
+  the working directory, the folders of later runs were created inside earlier ones)
+- Tests: test_simulation_data.py is skipped with --simulations (it checked folders that the parallel runs were
+  replacing); simulations that need a lot of memory (trajectories of recoils) run one after the other (--dist loadgroup);
+  the search test no longer expects SDTrimSP 6.09 without linux binaries; uninitialized output of SDTrimSP 6.06 is not
+  compared; known problems of the linux builds (SDTrimSP 6.01/6.09 trajectory memory, 7.07 morigin_ex_bs.dat); the
+  start checks for Qt layout warnings
+
 ## v1.6.03 (2026-10-18)
 
 - TRIDYN: results of simulations with energies above 10^7 eV are shown again (issue #2): TRIDYN writes the energy as

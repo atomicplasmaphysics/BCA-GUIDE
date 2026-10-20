@@ -5,7 +5,7 @@ import pytest
 from conftest import SIMULATION_PROGRAMS
 
 from Containers.Arguments import ArgumentValues
-from Simulations.SDTrimSP import SimulationInput, Versions, speciesList
+from Simulations.SDTrimSP import DefaultValues, SimulationInput, Versions, speciesList
 
 
 FOLDER = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
@@ -135,3 +135,41 @@ def test_layers_shorter_than_target(tmp_path):
     layer = layer.replace('2  5.0', '4  5.0')
     arguments, errors = load(tmp_path, text, layer)
     assert [(layer.name, layer.segments) for layer in arguments.structure] == [('W', 3), ('Si', 4), ('W', 3)]
+
+
+def test_same_element_in_beam_and_target(tmp_path):
+    # the same element as separate projectile and target species (case Cu_Cu_crystal of SDTrimSP, its crystal.inp has
+    # two species): kept separate
+    arguments, errors = load(tmp_path, tri('"Cu", "Cu"', '1.0, 0.0', '0.0, 1.0', '     qumax = 0.0, 1.0'))
+    assert arguments.settings.get('group_elements') is False
+    assert [row.max_atomic_fraction for row in arguments.beam_rows + arguments.target_rows] == [0.0, 1.0]
+    simulation = SimulationInput()
+    simulation.simulation_folder = FOLDER
+    simulation.updateElements(FOLDER, Versions.V_707)
+    lines = simulation.makeInputFile(arguments, tmp_path, Versions.V_707).splitlines()
+    assert '    ncp = 2' in lines and '    qumax = 0.0, 1.0' in lines
+
+    # grouped: qumax of the target row is written (synced field), with qumax = 0 of the projectile SDTrimSP stops
+    # ("qumax, to many limit for qumax")
+    arguments.settings.optional['group_elements'] = True
+    lines = simulation.makeInputFile(arguments, tmp_path, Versions.V_707).splitlines()
+    assert '    ncp = 1' in lines and '    qumax = 1.0' in lines
+
+
+def test_crystal_file_of_older_versions_is_kept(tmp_path):
+    # SDTrimSP 6.09 reads crystal.inp with l_crystal = .true. (additional setting), the GUI has crystals only since 7.00
+    from Simulations.Simulations import writeInputFiles
+
+    arguments, errors = load(tmp_path, tri('"Cu", "Cu"', '1.0, 0.0', '0.0, 1.0', '     l_crystal = .true.'))
+    crystal = tmp_path / 'crystal.inp'
+    crystal.write_text('Cu  name\n')
+    simulation = SimulationInput()
+    simulation.simulation_folder = FOLDER
+    for version in (Versions.V_606, Versions.V_609):
+        simulation.default_values = DefaultValues(version)
+        files = writeInputFiles(simulation, arguments, tmp_path, FOLDER, version)
+        assert 'crystal.inp' not in files and crystal.read_text() == 'Cu  name\n'
+    # with crystals in the GUI the file is written by the GUI (or removed without crystal)
+    simulation.default_values = DefaultValues(Versions.V_707)
+    writeInputFiles(simulation, arguments, tmp_path, FOLDER, Versions.V_707)
+    assert not crystal.exists()

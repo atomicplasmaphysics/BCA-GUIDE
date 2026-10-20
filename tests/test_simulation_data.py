@@ -19,6 +19,13 @@ def pytest_generate_tests(metafunc):
     if 'data_folder' not in metafunc.fixturenames:
         return
     data_dir = metafunc.config.getoption('--simulation-data')
+    if metafunc.config.getoption('--simulations'):
+        # the runs of this session are checked by test_simulation_runs.py and replace the folders of DIR while the tests
+        # run in parallel (the folders found at the collection would be deleted or incomplete)
+        metafunc.parametrize('data_folder', [pytest.param(None, marks=pytest.mark.skip(
+            reason='checked by test_simulation_runs.py with --simulations, run test_simulation_data.py without it afterwards'
+        ))])
+        return
     folders = []
     if data_dir and Path(data_dir).is_dir():
         folders = sorted(meta.parent for meta in Path(data_dir).glob('*/bca_test.json'))

@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QFileDialog, QGraphicsDropShadowEffect
 
 from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
+from Utility.Functions import findExecutables
 from Utility.GlobalConf import GlobalConf
 from Containers.SimulationConfiguration import SimulationConfiguration
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions
@@ -474,8 +475,11 @@ def test_search_simulations(main_window, qapp, tmp_path, dialogs, errors):
         assert sc.version == Versions.V_707
     if (SDTRIMSP / 'SDTrimSP_7.05').is_dir():
         assert main_window.simulation_configs[titles.index('SDTrimSP 7.05')].version == Versions.V_702
-    # installations without a binary for this operating system are not added
-    assert 'SDTrimSP 6.09' not in titles
+    # installations without a binary for this operating system are not added (e.g. SDTrimSP 6.09 has only linux
+    # binaries, they are added on Linux)
+    for installation in SDTRIMSP.glob('SDTrimSP_*'):
+        if not findExecutables(installation, max_depth=6):
+            assert all(sc.folder != installation for sc in main_window.simulation_configs), installation
 
     # a second search does not add the same installations again
     assert page.searchSimulations() == 0

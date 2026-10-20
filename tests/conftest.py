@@ -59,6 +59,9 @@ def pytest_configure(config):
             config.option.basetemp = str(test_dir / 'tmp')
         if not config.getoption('--simulation-data'):
             config.option.simulation_data = str(test_dir / 'simulation_data')
+    # absolute: the GUI changes the working directory to the folder of a simulation when it runs
+    if config.getoption('--simulation-data'):
+        config.option.simulation_data = str(Path(config.getoption('--simulation-data')).resolve())
 
 
 def pytest_collection_modifyitems(config, items):

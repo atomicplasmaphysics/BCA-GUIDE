@@ -22,6 +22,9 @@ def test_startup_profile(request):
         capture_output=True, text=True, timeout=600
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    # e.g. "QLayout: Attempting to add QLayout ... which already has a layout" (layout created with the wrong parent)
+    qt_warnings = [line for line in result.stderr.splitlines() if line.startswith('QLayout')]
+    assert not qt_warnings, '\n'.join(qt_warnings)
 
     text = output.read_text(encoding='utf-8')
     tabs = len(list(SAVES.glob('*/example_*')))
