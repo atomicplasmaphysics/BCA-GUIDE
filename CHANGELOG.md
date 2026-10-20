@@ -4,6 +4,18 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.6.05 (2026-10-20)
+
+- SDTrimSP 6.09 and newer: inelastic loss model "auto" of each element (new default), SDTrimSP chooses the model itself
+  (inel0 = -1: 4 for H, D, T, 5 for He, He3 and 7 (LZ7) for all other elements). inel0 is not written to tri.inp if all
+  elements use it, otherwise -1 for these elements. Results are the same as with the models selected before
+- SDTrimSP: a tri.inp without inel0 (e.g. the example He_Ni of SDTrimSP) or with inel0 = -1 is loaded with the
+  automatic model and saved again without inel0, before the GUI added the models that SDTrimSP would choose
+- The warnings before a run (validity of Lindhard-Scharff/Oen-Robinson, missing elements in tables/table3 and table4)
+  use the model that SDTrimSP chooses for "auto"
+- Tests: the case He_Ni of SDTrimSP 6.06 (12 GB of trajectory memory) runs one after the other with the other simulations
+  that need a lot of memory, beside other runs it did not finish within the timeout
+
 ## v1.6.04 (2026-10-20)
 
 - No more "QLayout: Attempting to add QLayout ... which already has a layout" messages at the start (layouts of the

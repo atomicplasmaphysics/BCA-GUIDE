@@ -37,10 +37,10 @@ def test_surface_binding_models(version, isbv):
 @pytest.mark.parametrize('version, inel0', [
     (Versions.V_601, {1, 2, 3, 4, 5, 6, 7}),
     (Versions.V_606, {1, 2, 3, 4, 5, 6, 7}),
-    (Versions.V_609, {1, 2, 3, 4, 5, 6, 7}),
-    (Versions.V_700, {1, 2, 3, 4, 5, 6, 7, 8}),  # tabulated stopping power since 7.00
-    (Versions.V_702, {1, 2, 3, 4, 5, 6, 7, 8}),
-    (Versions.V_707, {1, 2, 3, 4, 5, 6, 7, 8}),
+    (Versions.V_609, {-1, 1, 2, 3, 4, 5, 6, 7}),  # -1: chosen by SDTrimSP for each element since 6.09
+    (Versions.V_700, {-1, 1, 2, 3, 4, 5, 6, 7, 8}),  # tabulated stopping power since 7.00
+    (Versions.V_702, {-1, 1, 2, 3, 4, 5, 6, 7, 8}),
+    (Versions.V_707, {-1, 1, 2, 3, 4, 5, 6, 7, 8}),
 ])
 def test_inelastic_loss_models(version, inel0):
     assert set(DictLookup(version).inel0.values()) == inel0
@@ -60,8 +60,16 @@ def test_gui_entries_match_lookup(qapp, version):
         assert lookup.isbv[entry] == i + 1, f'{entry} is shown as {i + 1}, but written as {lookup.isbv[entry]}'
 
     row = CompRowBeamSettings(CompRowBeamSettings.rowFields, version=version)
-    for entry in row.inelastic_loss_model_entries_save:
+    for i, entry in enumerate(row.inelastic_loss_model_entries_save):
         assert entry in lookup.inel0, f'{entry} can be selected, but is not valid for {version}'
+        text = row.inelastic_loss_model.itemText(i)
+        number = lookup.inel0[entry]
+        assert text.startswith('auto') if number == -1 else text.startswith(f'{number}: '), f'{entry} is shown as "{text}", but written as {number}'
+    # the default is the automatic model of SDTrimSP since 6.09
+    automatic = ArgumentValues.InelasticLossModel.AUTOMATIC
+    assert (row.inelastic_loss_model.getValue(save=True) == automatic) == Versions.atLeast(version, Versions.V_609)
+    assert row.inelastic_loss_model.getDefaultSave() == (automatic if Versions.atLeast(version, Versions.V_609) else
+                                                         next(k for k, v in lookup.inel0.items() if v == DefaultValues(version).inel0))
 
 
 @pytest.mark.parametrize('version, crystal, table', [

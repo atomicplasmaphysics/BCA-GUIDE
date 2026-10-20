@@ -43,6 +43,11 @@ IGNORED_LINE = r'(\d\d:\d\d:\d\d|\d\d\.\d\d\.\d{4}|\d\d-[a-z]{3}-\d{4}|\btime\b|
 # known differences that are not caused by the GUI: (folder name or None, case or None) -> reason
 KNOWN_DIFFERENCES: Dict[Tuple[Optional[str], Optional[str]], str] = {}
 
+# cases that need a lot of memory run one after the other (xdist_group, --dist loadgroup): (folder name, case)
+# SDTrimSP 6.06 enlarges the memory of the trajectories (ltraj_p/r) of He_Ni to 12 GB (90 s alone, beside other runs it did
+# not finish within the timeout)
+LARGE_MEMORY_CASES = {('SDTrimSP_6.06', 'He_Ni')}
+
 
 def triValue(text: str, name: str) -> Optional[str]:
     """Returns the (first) value of a parameter in tri.inp or None"""
@@ -85,6 +90,8 @@ def comparisonCases():
             for (problem_folder, problem_case), reason in KNOWN_DIFFERENCES.items():
                 if problem_folder in (None, folder.name) and problem_case in (None, case.name):
                     marks = marks or [pytest.mark.xfail(reason=reason, strict=False)]
+            if (folder.name, case.name) in LARGE_MEMORY_CASES:
+                marks = marks + [pytest.mark.xdist_group('large_memory')]
             cases.append(pytest.param(folder, binary, version, case, id=f'{folder.name}-{case.name}', marks=marks))
     return cases
 

@@ -209,14 +209,13 @@ def distributionFileNames(arguments: SimulationArguments, version: str, group_el
     return result
 
 
-def defaultInelasticLossModel(symbol: str, version: str, dict_lookup, default_values) -> str:
+def automaticInelasticLossModel(symbol: str, version: str, default_values) -> int:
     """
-    Returns the inelastic loss model that SDTrimSP uses if inel0 is not given in tri.inp:
-    since 6.09 model 4 for H, D, T, model 5 for He, He3 and model 7 otherwise (tableread.F90), before the default of the version
+    Returns the inelastic loss model (inel0) that SDTrimSP uses if inel0 is not given in tri.inp or -1: since 6.09 model 4
+    for H, D, T, model 5 for He, He3 and model 7 otherwise (tableread.F90), before the default of the version for all elements
 
     :param symbol: symbol of the element
     :param version: version of simulation
-    :param dict_lookup: <DictLookup> of the version
     :param default_values: <DefaultValues> of the version
     """
 
@@ -226,6 +225,23 @@ def defaultInelasticLossModel(symbol: str, version: str, dict_lookup, default_va
             inel0 = 4
         elif symbol in ('He', 'He3'):
             inel0 = 5
+    return inel0
+
+
+def defaultInelasticLossModel(symbol: str, version: str, dict_lookup, default_values) -> ArgumentValues.InelasticLossModel:
+    """
+    Returns the inelastic loss model of the GUI for an element without inel0 in tri.inp: automatic since 6.09, before the
+    default of the version
+
+    :param symbol: symbol of the element
+    :param version: version of simulation
+    :param dict_lookup: <DictLookup> of the version
+    :param default_values: <DefaultValues> of the version
+    """
+
+    if default_values.inel0_automatic:
+        return ArgumentValues.InelasticLossModel.AUTOMATIC
+    inel0 = automaticInelasticLossModel(symbol, version, default_values)
     return next(key for key, value in dict_lookup.inel0.items() if value == inel0)
 
 
@@ -1019,6 +1035,10 @@ class DefaultValues(GeneralDefaultValues):
         if Versions.atLeast(version, Versions.V_609):
             self.isbv = 8
 
+        # since 6.09 SDTrimSP chooses the inelastic loss model of each element if inel0 is not given or -1 (4 for H, D, T,
+        # 5 for He, He3, otherwise 7), before inel0 is the same for all elements (3, since 6.06: 7)
+        self.inel0_automatic = Versions.atLeast(version, Versions.V_609)
+
         # crystal input
         if Versions.atLeast(version, Versions.V_700):
             self.enable_crystal = True
@@ -1107,6 +1127,13 @@ class DictLookup:
     }
 
     def __init__(self, version: str):
+        # since 6.09: SDTrimSP chooses the inelastic loss model for inel0 = -1 (default), since 7.00: tabulated stopping power (inel0=8)
+        if Versions.atLeast(version, Versions.V_609):
+            self.inel0 = dict(DictLookup.inel0)
+            if Versions.atLeast(version, Versions.V_700):
+                self.inel0[ArgumentValues.InelasticLossModel.TABULATED] = 8
+            self.inel0[ArgumentValues.InelasticLossModel.AUTOMATIC] = -1
+
         # since 6.09: isbv=5 and isbv=7 do not work anymore, isbv=4 is used for compounds, isbv=8 is new
         if Versions.atLeast(version, Versions.V_609):
             self.isbv = {
@@ -1117,11 +1144,6 @@ class DictLookup:
                 ArgumentValues.SurfaceBindingModel.FILE: 6,
                 ArgumentValues.SurfaceBindingModel.TABLE: 8
             }
-
-        # since 7.00: tabulated stopping power (inel0=8)
-        if Versions.atLeast(version, Versions.V_700):
-            self.inel0 = dict(DictLookup.inel0)
-            self.inel0[ArgumentValues.InelasticLossModel.TABULATED] = 8
 
 
 class HlBeamSettings(HlGeneralBeamSettings):
@@ -2703,14 +2725,28 @@ class CompRowBeamSettings(CompRow):
                 'Manually tabulated stopping power from database "tbsp.db" in the tables-directory'
             )
 
+        # numbers of the entries are the values of inel0
+        inelastic_loss_model_labels = [f'{i + 1}: {entry}' for i, entry in enumerate(self.inelastic_loss_model_entries)]
+        inelastic_loss_model_default = self.default_values.inel0 - 1
+
+        # since 6.09: SDTrimSP chooses the model of each element (inel0 = -1, default)
+        if self.default_values.inel0_automatic:
+            self.inelastic_loss_model_entries.insert(0, 'auto')
+            inelastic_loss_model_labels.insert(0, 'auto')
+            self.inelastic_loss_model_entries_save.insert(0, ArgumentValues.InelasticLossModel.AUTOMATIC)
+            self.inelastic_loss_model_tooltips.insert(
+                0, 'Chosen by SDTrimSP for each element (inel0 = -1): 4 for H, D, T, 5 for He3, He and 7 (LZ7) for all other elements'
+            )
+            inelastic_loss_model_default = 0
+
         self.inelastic_loss_model = ComboBox(
-            default=self.default_values.inel0,
-            entries=self.inelastic_loss_model_entries,
+            default=inelastic_loss_model_default,
+            entries=inelastic_loss_model_labels,
             entries_save=self.inelastic_loss_model_entries_save,
-            numbering=1,
             label_default=True,
             tooltips=self.inelastic_loss_model_tooltips
         )
+        self.inelastic_loss_model.entries = self.inelastic_loss_model_entries
 
         self.inelastic_loss_model.currentIndexChanged.connect(self.contentChanged.emit)
         self.inelastic_loss_model.mouseReleaseEvent = lambda _: setWidgetBackground(self.inelastic_loss_model, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
@@ -2781,8 +2817,10 @@ class CompRowBeamSettings(CompRow):
             displacement_energy = 0
         self.displacement_energy.setValue(round(displacement_energy, self.element_precision))
 
-        # set inelastic model if H,D,T or He3,He4 is set
-        if self.element.symbol in ['H', 'H2', 'D', 'T']:
+        # set inelastic model if H,D,T or He3,He4 is set (the automatic model of SDTrimSP chooses them itself)
+        if self.inelastic_loss_model.getValue(save=True) == ArgumentValues.InelasticLossModel.AUTOMATIC:
+            pass
+        elif self.element.symbol in ['H', 'H2', 'D', 'T']:
             self.inelastic_loss_model.setValue(ArgumentValues.InelasticLossModel.HYDROGEN, from_entries_save=True)
         elif self.element.symbol in ['He', 'He3']:
             self.inelastic_loss_model.setValue(ArgumentValues.InelasticLossModel.HELIUM, from_entries_save=True)
@@ -3893,6 +3931,8 @@ Andreas Mutzke
             inel0 = [dict_lookup.inel0.get(i) for i in inel0]
             inel0 = [str(i) if i is not None else str(default_values.inel0) for i in inel0]
             inel0 = ', '.join(inel0)
+        # automatic model of SDTrimSP for all elements (inel0 = -1): inel0 is not written
+        inel0_line = '' if set(inel0.split(', ')) == {'-1'} else f'\n    inel0 = {inel0}'
 
         e_surfb = []
         e_surfb_modified = False
@@ -4225,8 +4265,7 @@ text = "--- compound ---"
 text = "--- elements ---"
     ncp = {ncp}
     symbol = {symbol}
-    !globaldensity = {global_density}
-    inel0 = {inel0}
+    !globaldensity = {global_density}{inel0_line}
 {modifications}{species_settings}
 text = "--- general ---"
     idrel = {idrel}
@@ -4859,8 +4898,10 @@ text = "--- extra ---"
                     qumax_i = default_values.qumax
                     assumed_row.assumed('max_atomic_fraction')
                 if inel0_i is None:
+                    # since 6.09 the automatic model of SDTrimSP, as without inel0
                     inel0_i = defaultInelasticLossModel(symbol_i, version, dict_lookup, default_values)
-                    assumed_row.assumed('inelastic_loss_model_row')
+                    if inel0_i != ArgumentValues.InelasticLossModel.AUTOMATIC:
+                        assumed_row.assumed('inelastic_loss_model_row')
 
                 row_parameters = {
                     'index': row_index.get(),
@@ -5284,8 +5325,12 @@ text = "--- extra ---"
         }
 
         def inelasticModel(row) -> int:
+            """inel0 of the row, the automatic model as chosen by SDTrimSP"""
             model = row.get('inelastic_loss_model')
-            return dict_lookup.inel0.get(model, default_values.inel0) if model is not None else default_values.inel0
+            inel0 = dict_lookup.inel0.get(model, default_values.inel0) if model is not None else default_values.inel0
+            if inel0 == -1:
+                inel0 = automaticInelasticLossModel(row.symbol, version, default_values)
+            return inel0
 
         def validityLimit(row) -> float:
             """Upper energy limit (in eV) of the models of Lindhard-Scharff and Oen-Robinson: E < 25 Z^(4/3) M keV"""

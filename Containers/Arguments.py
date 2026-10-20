@@ -56,6 +56,7 @@ class ArgumentValues:
         ZIEGLER = auto()
         LINDHARD_SCHARFF_AND_ZIEGLER = auto()
         TABULATED = auto()
+        AUTOMATIC = auto()  # chosen by SDTrimSP for each element (inel0 not given or -1)
 
     class InteractionPotential(Enum):
         """Interaction potential"""

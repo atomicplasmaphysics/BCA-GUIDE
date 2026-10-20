@@ -123,6 +123,12 @@ def test_warning_stopping_table(tmp_path):
     simulation, arguments = load(tmp_path, tri('"H", "Cu"', '1e4', '7, 7'))
     simulation.simulation_folder = installation
     assert not any('table3' in warning for warning in simulation.checkWarnings(arguments, Versions.V_707))
+    # the automatic model of SDTrimSP (inel0 not given or -1) is 4 for H
+    for inel0 in ('', '-1, 7'):
+        simulation, arguments = load(tmp_path, tri('"H", "Cu"', '1e4', inel0))
+        simulation.simulation_folder = installation
+        warnings = simulation.checkWarnings(arguments, Versions.V_707)
+        assert any('tables/table3, Cu is missing' in warning for warning in warnings), (inel0, warnings)
 
 
 def test_warning_large_files(tmp_path):

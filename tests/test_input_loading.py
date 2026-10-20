@@ -1,5 +1,7 @@
 """Loading of tri.inp and layer.inp of SDTrimSP: the input written by the GUI must describe the same simulation"""
 
+from re import search
+
 import pytest
 
 from conftest import SIMULATION_PROGRAMS
@@ -67,15 +69,29 @@ def test_species_order_is_kept(tmp_path):
 
 
 def test_default_inelastic_loss_model(tmp_path):
-    """Since 6.09 SDTrimSP uses model 4 for H, D, T and model 5 for He if inel0 is not given"""
+    """
+    Since 6.09 SDTrimSP chooses the model of each element if inel0 is not given or -1 (4 for H, D, T, 5 for He, 7 otherwise):
+    the automatic model of the GUI, inel0 is only written if a model is selected. Before, inel0 is the default of the version
+    """
 
+    model = ArgumentValues.InelasticLossModel
     arguments, _ = load(tmp_path, tri('"He", "H", "Ni"', '0.5, 0.5, 0.0', '0.0, 0.0, 1.0'))
     models = {row.symbol: row.get('inelastic_loss_model') for row in arguments.beam_rows + arguments.target_rows}
-    assert models == {
-        'He': ArgumentValues.InelasticLossModel.HELIUM,
-        'H': ArgumentValues.InelasticLossModel.HYDROGEN,
-        'Ni': ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_ZIEGLER
-    }
+    assert models == {'He': model.AUTOMATIC, 'H': model.AUTOMATIC, 'Ni': model.AUTOMATIC}
+    written = SimulationInput().makeInputFile(arguments, tmp_path, Versions.V_707)
+    assert 'inel0' not in written
+
+    # -1 (automatic) and selected models
+    arguments, _ = load(tmp_path, tri('"He", "H", "Ni"', '0.5, 0.5, 0.0', '0.0, 0.0, 1.0', extra='     inel0 = -1, 4, 1'))
+    models = {row.symbol: row.get('inelastic_loss_model') for row in arguments.beam_rows + arguments.target_rows}
+    assert models == {'He': model.AUTOMATIC, 'H': model.HYDROGEN, 'Ni': model.LINDHARD_SCHARFF}
+    written = SimulationInput().makeInputFile(arguments, tmp_path, Versions.V_707)
+    assert search(r'inel0 = -1, 4, 1\b', written), written
+
+    # 6.06: the same model for all elements
+    arguments, _ = load(tmp_path, tri('"He", "H", "Ni"', '0.5, 0.5, 0.0', '0.0, 0.0, 1.0'), version=Versions.V_606)
+    models = {row.symbol: row.get('inelastic_loss_model') for row in arguments.beam_rows + arguments.target_rows}
+    assert set(models.values()) == {model.LINDHARD_SCHARFF_AND_ZIEGLER}
 
 
 def test_number_of_sweeps(tmp_path):
