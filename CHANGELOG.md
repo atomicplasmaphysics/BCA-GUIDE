@@ -4,6 +4,16 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.6.06 (2026-10-20)
+
+- Tests: the test of the private inputs of colleagues is removed from the repository (the inputs stay local, outside of
+  the repository)
+- Tests: the known problems of the linux builds (SDTrimSP 7.07 morigin_ex_bs.dat, trajectory memory of 6.01 and 6.09)
+  only apply on Linux, the Windows binaries run these simulations (they were expected failures or not run on Windows)
+- Full test run with all simulations on Windows (SDTrimSP 6.01 to 7.07 without 6.09, which has only linux binaries, and
+  TRIDYN): 526 passed, 1 timeout of a parallel run (passes alone); the inputs of the colleagues load, save and run with
+  all versions
+
 ## v1.6.05 (2026-10-20)
 
 - SDTrimSP 6.09 and newer: inelastic loss model "auto" of each element (new default), SDTrimSP chooses the model itself
@@ -40,9 +50,9 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
   results of a sweep with 11 elements could not be shown
 - SDTrimSP 7.00 and 7.01: a tri.inp saved by the GUI without crystal (miller_ind = 0, 0, 0) is loaded without an
   additional setting miller_ind (before it was written twice after saving again)
-- Tests: inputs of colleagues (tests/test-inputs/*.inp, not in the repository) are loaded, saved with the same values and
-  run with all SDTrimSP versions (tests/test_test_inputs.py); --simulation-data is used as absolute path (the runs change
-  the working directory, the folders of later runs were created inside earlier ones)
+- Tests: private inputs of colleagues were loaded, saved with the same values and run with all SDTrimSP versions (test
+  removed again in v1.6.06); --simulation-data is used as absolute path (the runs change the working directory, the
+  folders of later runs were created inside earlier ones)
 - Tests: test_simulation_data.py is skipped with --simulations (it checked folders that the parallel runs were
   replacing); simulations that need a lot of memory (trajectories of recoils) run one after the other (--dist loadgroup);
   the search test no longer expects SDTrimSP 6.09 without linux binaries; uninitialized output of SDTrimSP 6.06 is not

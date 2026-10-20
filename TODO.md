@@ -76,9 +76,9 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
   - the depth of origin of sputtered atoms (`morigin_ex_bs.dat`, `morigin_ex_ts.dat`) is only summed over the projectile
     species (`gsum_stat.F90`: `mor_ex_bs(..., 1:ncp_proj)`), so it is always 0 for target atoms in 7.07;
   - `E_distr_*.dat` write `dist_ny` instead of `dist_nz` as third dimension in the header;
-  - 7.07 stops with "Expected REAL for item 203 in formatted transfer, got INTEGER" while writing `morigin_ex_bs.dat`
-    (`output.F90`: `fmt32 = vfmt('(e12.4,#####i12)', nqx+1)`, but `imc + 1` values are written per row, e.g. 1 MeV H and Ar
-    on two layers of Fe and W with `layer.inp`);
+  - 7.07 (linux build, the Windows binary runs it) stops with "Expected REAL for item 203 in formatted transfer, got
+    INTEGER" while writing `morigin_ex_bs.dat` (`output.F90`: `fmt32 = vfmt('(e12.4,#####i12)', nqx+1)`, but `imc + 1`
+    values are written per row, e.g. 1 MeV H and Ar on two layers of Fe and W with `layer.inp`);
   - the energy distribution in the target (`lenergy_distr`) crashes energy and angle sweeps ("allocatable array is
     already allocated"), the GUI warns before the run;
   - in sweeps the energy or angle is appended to the title (`write(title, ...)` with A80), titles with more than about

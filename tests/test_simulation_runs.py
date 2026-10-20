@@ -20,6 +20,7 @@ import copy
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 from re import findall
 from typing import Optional
@@ -125,9 +126,6 @@ KNOWN_PROBLEMS = {
     ('SDTrimSP_7.01', None, 'energy_1GeV'): 'SDTrimSP 7.01 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
     ('SDTrimSP_7.00', None, 'energy_1MeV'): 'SDTrimSP 7.00 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
     ('SDTrimSP_7.01', None, 'energy_1MeV'): 'SDTrimSP 7.01 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
-    ('SDTrimSP_7.07', 'H_Ar_FeW', 'energy_1MeV'): 'SDTrimSP 7.07 stops with "Expected REAL for item 203 in formatted transfer, got '
-                                                 'INTEGER" while writing morigin_ex_bs.dat (output.F90: the format has nqx + 1 '
-                                                 'columns, the depth intervals of the layers are more)',
     ('SDTrimSP_6.06', 'H_Ar_FeW', None): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) for this target with two layers',
     ('SDTrimSP_6.06', None, 'all_outputs'): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
     ('SDTrimSP_7.00', None, 'all_outputs'): 'SDTrimSP 7.00 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
@@ -137,13 +135,24 @@ KNOWN_PROBLEMS = {
 
 # known problems where the simulation does not terminate (not run, they would block a process until the timeout)
 KNOWN_HANGS = {
-    ('SDTrimSP_6.01', None, 'extra_parameters'): 'SDTrimSP 6.01 enlarges the memory of recoil trajectories (ltraj_r) to more than 5 GB until '
-                                                 'the size overflows and crashes (with less memory: "not enough memory space for allocate(trajek)")',
     ('SDTrimSP_6.06', None, 'extra_parameters'): 'SDTrimSP 6.06 enlarges the memory of recoil trajectories (ltraj_r) until the size overflows and does not finish',
-    ('SDTrimSP_6.09', None, 'extra_parameters'): 'SDTrimSP 6.09 enlarges the memory of recoil trajectories (ltraj_r) to more than 5 GB until '
-                                                 'the size overflows and crashes (with less memory: "not enough memory space for allocate(trajek)")',
     ('SDTrimSP_7.00', None, 'extra_parameters'): 'SDTrimSP 7.00 enlarges the memory of trajectories (ltraj_p/r) to more than 20 GB and does not finish',
 }
+
+# known problems of the linux builds only (the Windows binaries run these combinations, checked 2026-10-20)
+if sys.platform.startswith('linux'):
+    KNOWN_PROBLEMS[('SDTrimSP_7.07', 'H_Ar_FeW', 'energy_1MeV')] = (
+        'SDTrimSP 7.07 (linux build) stops with "Expected REAL for item 203 in formatted transfer, got INTEGER" while writing '
+        'morigin_ex_bs.dat (output.F90: the format has nqx + 1 columns, the depth intervals of the layers are more)'
+    )
+    KNOWN_HANGS[('SDTrimSP_6.01', None, 'extra_parameters')] = (
+        'SDTrimSP 6.01 (linux build) enlarges the memory of recoil trajectories (ltraj_r) to more than 5 GB until the size '
+        'overflows and crashes (with less memory: "not enough memory space for allocate(trajek)")'
+    )
+    KNOWN_HANGS[('SDTrimSP_6.09', None, 'extra_parameters')] = (
+        'SDTrimSP 6.09 (linux build) enlarges the memory of recoil trajectories (ltraj_r) to more than 5 GB until the size '
+        'overflows and crashes (with less memory: "not enough memory space for allocate(trajek)")'
+    )
 
 
 def knownProblem(folder_name: str, base: str, variant: str) -> Optional[str]:
