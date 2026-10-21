@@ -193,7 +193,13 @@ def test_theme_switch(main_window, qapp):
     canvas.axes.plot([0, 1], [0, 1])
     canvas.axes.set_xlabel('x')
 
+    def updated() -> bool:
+        palette = qapp.palette()
+        return to_hex(canvas.fig.get_facecolor()) == palette.color(QPalette.ColorRole.Window).name()             and canvas.axes.xaxis.label.get_color() == palette.color(QPalette.ColorRole.WindowText).name()
+
     def check():
+        # the canvases update after the palette change event (slower with many canvases of earlier tests in the process)
+        pump(qapp, 10, until=updated)
         palette = qapp.palette()
         assert to_hex(canvas.fig.get_facecolor()) == palette.color(QPalette.ColorRole.Window).name()
         assert canvas.axes.xaxis.label.get_color() == palette.color(QPalette.ColorRole.WindowText).name()
