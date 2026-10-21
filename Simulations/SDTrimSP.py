@@ -34,7 +34,7 @@ from TableWidgets.CompTable import CompRow
 from Utility.Icons import getIcon
 from Utility.Typing import notNone
 from TableWidgets.DistributionEditor import (
-    DistributionDialog, readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile
+    DistributionDialog, readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile, validDistributions
 )
 
 from Containers.MplCanvasSettings import MplCanvasSettings, OffscreenCanvas, AnimationExport
@@ -114,7 +114,8 @@ def tableCrystals(crystal_args: Optional[GeneralCrystalArguments]) -> List[dict]
     crystals = crystal_args.get('crystals')
     if isinstance(crystals, list) and crystals:
         return [
-            {'name': str(crystal.get('name', '')), 'miller': list(crystal.get('miller', [0, 0, 0]))}
+            {'name': str(crystal.get('name', '')),
+             'miller': list(crystal['miller'])[:3] if isinstance(crystal.get('miller'), (list, tuple)) else [0, 0, 0]}
             for crystal in crystals[:CrystalTableLimits.max_crystals] if isinstance(crystal, dict)
         ]
     return [{'name': crystal_args.name, 'miller': list(crystal_args.miller_ind.vec)}]
@@ -1523,8 +1524,7 @@ class HlBeamSettings(HlGeneralBeamSettings):
         self.sweep.setValue(number_calc)
 
         # distributions of energies and angles
-        distributions = beam_args.get('distributions')
-        self.distributions = distributions if isinstance(distributions, dict) else {}
+        self.distributions = validDistributions(beam_args.get('distributions'))
 
         # sheath potential
         shth = beam_args.get('sheath_potential')
@@ -3705,6 +3705,9 @@ Andreas Mutzke
                 if divisions[i] - 1 == divisions[i - 1]:
                     divisions.pop(i)
             divisions = [d + 1 for d in divisions]
+            # a damaged table without columns
+            if not divisions:
+                raise ValueError('no columns')
 
             for t_str in table_str:
                 columns = [t_str[:divisions[0]].strip()]
@@ -3719,6 +3722,9 @@ Andreas Mutzke
             period_increase = [3, 11, 19, 37, 55, 87]
             for element in table:
 
+                # rows of a damaged table without the columns up to the displacement energy
+                if len(element) < 7:
+                    continue
                 symbol = element[0]
                 atomic_nr = intSafe(element[1])
 
@@ -3814,7 +3820,9 @@ Andreas Mutzke
 
         except FileNotFoundError:
             logging.info(f'Could not open file "{table_path}"!')
-            pass
+        except (OSError, ValueError, IndexError):
+            logging.warning(f'Could not read the elements of "{table_path}", the default elements are used!')
+            element_list = []
 
         if not element_list:
             super().loadDefaultElements(version)
@@ -4352,9 +4360,7 @@ text = "--- extra ---"
         group_elements = arguments.settings.get('group_elements')
         if not isinstance(group_elements, bool):
             group_elements = DefaultValues(version).group_elements
-        distributions = arguments.beam_args.get('distributions')
-        if not isinstance(distributions, dict):
-            distributions = {}
+        distributions = validDistributions(arguments.beam_args.get('distributions'))
 
         files = {}
         names = distributionFileNames(arguments, version, group_elements)
@@ -5496,9 +5502,7 @@ text = "--- extra ---"
         if not isinstance(group_elements, bool):
             group_elements = DefaultValues(version).group_elements
         names = distributionFileNames(arguments, version, group_elements)
-        distributions = arguments.beam_args.get('distributions')
-        if not isinstance(distributions, dict):
-            distributions = {}
+        distributions = validDistributions(arguments.beam_args.get('distributions'))
         for symbol, name in names['energy']:
             if not distributions.get('energy', {}).get(symbol):
                 errors.append(f'The energy distribution of {symbol} ({name}) is not defined, use the "Distributions..." button')
@@ -6311,7 +6315,20 @@ class SimulationAnalysis(SimulationsAnalysis):
         
     def updateData(self, save_folder: Path, file: str):
         """
-        Update evaluation data from file
+        Update evaluation data from file, a damaged file (e.g. of an aborted run) gives no data
+
+        :param save_folder: path to save folder
+        :param file: target file
+        """
+
+        try:
+            self.readData(save_folder, file)
+        except (ValueError, IndexError):
+            logging.warning(f'Could not process "{save_folder / file}"!')
+
+    def readData(self, save_folder: Path, file: str):
+        """
+        Reads the evaluation data from file
 
         :param save_folder: path to save folder
         :param file: target file
@@ -6370,6 +6387,15 @@ class SimulationAnalysis(SimulationsAnalysis):
         return self.elements.index(element)
     
     def getOutputFileData(self) -> Optional[tuple]:
+        """Returns the data of output.dat or None, also for a damaged file (e.g. of an aborted run)"""
+
+        try:
+            return self.readOutputFileData()
+        except (ValueError, IndexError, ZeroDivisionError):
+            logging.warning('Could not process output.dat!')
+            return None
+
+    def readOutputFileData(self) -> Optional[tuple]:
         """
         Return the output.dat file data
 
@@ -6587,6 +6613,15 @@ class SimulationAnalysis(SimulationsAnalysis):
         )
 
     def getSerieFileData(self) -> Optional[Tuple[int, int, List[str], List[str], np.ndarray, int, int, int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]]:
+        """Returns the data of serie.dat or None, also for a damaged file (e.g. of an aborted run)"""
+
+        try:
+            return self.readSerieFileData()
+        except (ValueError, IndexError, ZeroDivisionError):
+            logging.warning('Could not process serie.dat!')
+            return None
+
+    def readSerieFileData(self) -> Optional[Tuple[int, int, List[str], List[str], np.ndarray, int, int, int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]]:
         """
         Return the serie.dat file data
 

@@ -126,9 +126,6 @@ KNOWN_PROBLEMS = {
     ('SDTrimSP_7.01', None, 'energy_1GeV'): 'SDTrimSP 7.01 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
     ('SDTrimSP_7.00', None, 'energy_1MeV'): 'SDTrimSP 7.00 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
     ('SDTrimSP_7.01', None, 'energy_1MeV'): 'SDTrimSP 7.01 terminates with "ERROR: invalid case for flag" if projectiles leave the target at the bottom',
-    ('SDTrimSP_6.06', 'H_Ar_FeW', None): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) for this target with two layers',
-    ('SDTrimSP_6.06', None, 'all_outputs'): 'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
-    ('SDTrimSP_7.00', None, 'all_outputs'): 'SDTrimSP 7.00 (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written',
     ('SDTrimSP_6.06', 'Ar_Au', 'dynamic'): 'SDTrimSP 6.06 stops ("DEPTH INTERVAL COMPLETELY DEPLETED", "DECREASE FLC OR INCREASE NH") or '
                                            'crashes, the few projectiles of the test deplete the surface interval of Au at 60 degree',
 }
@@ -138,6 +135,16 @@ KNOWN_HANGS = {
     ('SDTrimSP_6.06', None, 'extra_parameters'): 'SDTrimSP 6.06 enlarges the memory of recoil trajectories (ltraj_r) until the size overflows and does not finish',
     ('SDTrimSP_7.00', None, 'extra_parameters'): 'SDTrimSP 7.00 enlarges the memory of trajectories (ltraj_p/r) to more than 20 GB and does not finish',
 }
+
+# known problems of the Windows binaries only (the linux builds run these combinations, checked 2026-10-20)
+if sys.platform == 'win32':
+    KNOWN_PROBLEMS[('SDTrimSP_6.06', 'H_Ar_FeW', None)] = (
+        'SDTrimSP 6.06 (Windows binary) crashes with a stack overflow (exit code 170) for this target with two layers'
+    )
+    for windows_folder in ('SDTrimSP_6.06', 'SDTrimSP_7.00'):
+        KNOWN_PROBLEMS[(windows_folder, None, 'all_outputs')] = (
+            f'{windows_folder.replace("_", " ")} (Windows binary) crashes with a stack overflow (exit code 170) when matrices are written'
+        )
 
 # known problems of the linux builds only (the Windows binaries run these combinations, checked 2026-10-20)
 if sys.platform.startswith('linux'):

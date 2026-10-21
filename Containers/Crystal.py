@@ -1,9 +1,18 @@
 from __future__ import annotations
 from typing import Iterator, List, Optional, Union
+from math import isfinite
 import logging
 
 
 from Containers.Element import Element
+
+
+def vectorNumber(value, integer: bool = False) -> Union[int, float]:
+    """Returns a component of a vector as finite number (0 for other values, e.g. of a damaged input.json)"""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+        return 0
+    return int(value) if integer else value
 
 
 class Vec3:
@@ -58,7 +67,7 @@ class Coordinate(Vec3):
                 logging.warning(f'Coordinate "{coord}" must have length 3, will only take first 3 elements. Missing elements will be filled with zeros')
 
             for i in range(min(len(coord), 3)):
-                self.vec[i] = coord[i]
+                self.vec[i] = vectorNumber(coord[i])
 
     def crystal_inp_str(self, delimiter: str = '') -> str:
         """Returns string of vector to use in crystal input file"""
@@ -86,7 +95,7 @@ class BasisVector(Vec3):
                 logging.warning(f'Basis vector "{basis_vec}" must have length 3, will only take first 3 elements. Missing elements will be filled with zeros')
 
             for i in range(min(len(basis_vec), 3)):
-                self.vec[i] = basis_vec[i]
+                self.vec[i] = vectorNumber(basis_vec[i])
 
 
 class MillerIndex(Vec3):
@@ -107,9 +116,9 @@ class MillerIndex(Vec3):
 
             conversion_error = False
             for i in range(min(len(miller_index), 3)):
-                if int(miller_index[i]) != miller_index[i]:
+                if vectorNumber(miller_index[i], integer=True) != miller_index[i]:
                     conversion_error = True
-                self.vec[i] = int(miller_index[i])
+                self.vec[i] = vectorNumber(miller_index[i], integer=True)
 
             if conversion_error:
                 logging.warning(f'Miller index "{miller_index}" is not purely integers, will convert to int()')

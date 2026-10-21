@@ -4,6 +4,7 @@ from enum import Enum, auto
 from json import dump as json_dump, JSONEncoder, load as json_load
 from json.decoder import JSONDecodeError
 import logging
+from math import isfinite
 
 from Utility.Indexing import RunningIndex, DefaultAssumed
 
@@ -484,6 +485,10 @@ def saveSimulationArguments(arguments: SimulationArguments, file: Path):
         json_dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
 
 
+# parameters of <RowArguments> that are checked when input.json is loaded (optional values of a row can not replace them)
+ROW_PARAMETERS = {'index', 'symbol', 'element', 'abundance', 'max_atomic_fraction', 'energy', 'angle', 'assumed'}
+
+
 def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArguments]:
     """
     Load all simulation arguments from file
@@ -510,11 +515,20 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
         return possible_list
 
     def getValue(value, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
-        """Returns value if value has type value_type, otherwise return default_value"""
+        """
+        Returns value if value has type value_type, otherwise return default_value. Integers are also accepted for floats
+        (e.g. "energy": 1000 of a file written by hand), booleans are no numbers and NaN or infinite values are not accepted
+        """
 
         if assumed_cls is None:
             assumed_cls = DefaultAssumed()
-        if not isinstance(value, value_type):
+        if value_type is float and isinstance(value, int) and not isinstance(value, bool):
+            try:
+                value = float(value)
+            except OverflowError:
+                value = None
+        invalid_number = (isinstance(value, bool) and value_type is not bool) or (isinstance(value, float) and not isfinite(value))
+        if invalid_number or not isinstance(value, value_type):
             if item is not None:
                 assumed_cls.assumed(item)
             return default_value
@@ -539,8 +553,11 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
     try:
         with open(file, 'r', encoding='utf-8', errors='replace') as conf_file:
             data = json_load(conf_file)
-    except (FileNotFoundError, JSONDecodeError):
+    except (OSError, JSONDecodeError, RecursionError, UnicodeError):
         logging.info(f'Could not open json input file "{file}"!')
+        return False
+    if not isinstance(data, dict):
+        logging.info(f'The json input file "{file}" does not contain the arguments of a simulation!')
         return False
 
     # general data
@@ -594,7 +611,7 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
                 continue
             assumed_row = DefaultAssumed()
             row_index = row_dict.get('index')
-            if row_index is None:
+            if not isinstance(row_index, int) or isinstance(row_index, bool):
                 row_index = 999
             row_parameters = {
                 'index': row_index,
@@ -611,7 +628,7 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
             optional = getDict(row_dict.get('optional'))
             if optional.get('inelastic_loss_model') is not None:
                 optional['inelastic_loss_model'] = getValueCls(optional.get('inelastic_loss_model'), ArgumentValues.InelasticLossModel, ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON, 'inelastic_loss_model_row', assumed_cls=assumed)
-            row_parameters.update(optional)
+            row_parameters.update({key: value for key, value in optional.items() if key not in ROW_PARAMETERS})
             row_parameters.update({
                 'assumed': assumed_row
             })
@@ -630,7 +647,7 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
                 continue
             assumed_row = DefaultAssumed()
             row_index = row_dict.get('index')
-            if row_index is None:
+            if not isinstance(row_index, int) or isinstance(row_index, bool):
                 row_index = 999
             row_parameters: Dict[str, Any] = {
                 'index': row_index,
@@ -638,7 +655,7 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
                 'coord': Coordinate(getValue(row_dict.get('coord'), dict, {}, 'coord', assumed_cls=assumed).get('vec'))
             }
             optional = getDict(row_dict.get('optional'))
-            row_parameters.update(optional)
+            row_parameters.update({key: value for key, value in optional.items() if key not in row_parameters and key != 'assumed'})
             row_parameters.update({
                 'assumed': assumed_row
             })
@@ -693,7 +710,12 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
         'mode': getValueCls(data_settings.get('mode'), ArgumentValues.Mode, ArgumentValues.Mode.STATIC, 'mode', assumed_cls=assumed),
         'fluence': getValue(data_settings.get('fluence'), float, 1.0, 'fluence', assumed_cls=assumed),
         'threads': getValue(data_settings.get('threads'), int, 0, 'threads', assumed_cls=assumed),
-        'compounds': [Compound(**getDict(compound)) for compound in getList(data_settings.get('compounds'))]
+        'compounds': [
+            Compound(name=compound.get('name'), elements=compound.get('elements'), name_save=compound.get('name_save'))
+            for compound in [getDict(compound) for compound in getList(data_settings.get('compounds'))]
+            if isinstance(compound.get('name'), (str, type(None))) and isinstance(compound.get('name_save'), (str, type(None)))
+            and isinstance(compound.get('elements'), (dict, type(None)))
+        ]
     }
     optional_settings = data_settings.get('optional')
     if isinstance(optional_settings, dict):
@@ -709,7 +731,7 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
     settings = GeneralArguments(**settings_parameters)
 
     # additional data (List)
-    additional = getList(data.get('additional'))
+    additional = [line for line in getList(data.get('additional')) if isinstance(line, str)]
 
     return SimulationArguments(
         simulation=general_simulation,

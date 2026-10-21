@@ -184,7 +184,8 @@ class MainWindow(QMainWindow):
 
         # apply the theme from the preferences, also react to theme changes of the operating system
         self.applyTheme()
-        notNone(self.app.styleHints()).colorSchemeChanged.connect(lambda _: QTimer.singleShot(0, self.refreshStyleSheets))
+        # a method, not a lambda: a lambda connected to the application (which lives longer) would keep the window alive
+        notNone(self.app.styleHints()).colorSchemeChanged.connect(self.colorSchemeChanged)
 
         #
         # STATUS BAR
@@ -742,6 +743,11 @@ class MainWindow(QMainWindow):
             self.window_title = GlobalConf.title
 
         self.writeWindowTitleTab(self.tab_simulations.currentIndex())
+        QTimer.singleShot(0, self.refreshStyleSheets)
+
+    def colorSchemeChanged(self, *_):
+        """The color scheme of the operating system changed: the style sheets are refreshed (after the change)"""
+
         QTimer.singleShot(0, self.refreshStyleSheets)
 
     def refreshStyleSheets(self):

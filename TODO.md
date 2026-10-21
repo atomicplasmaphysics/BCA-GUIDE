@@ -94,3 +94,8 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
       run warnings, automatic search of simulations, crystals from `table.crystal`, examples.
 - [ ] Stricter type checking: `check_untyped_defs` and annotations of the remaining functions (mypy only checks
       annotated functions), then `disallow_untyped_defs` for new modules.
+- [ ] Tests: the main windows of the tests are never deleted (about 18 MB per test, long runs with many tests per worker
+      need GBs; run the fuzz test in batches). `deleteLater` is only executed with
+      `QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)`, but then a later test aborts the process
+      (0xC0000409): some object of the first window (cached dialog, timer, ...) is still used. With the deleted windows
+      the tests would need far less memory.

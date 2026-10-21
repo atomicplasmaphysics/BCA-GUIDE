@@ -67,10 +67,16 @@ def importCrystal(path: Path) -> ImportedCrystal:
     """
 
     name = path.name.lower()
-    if name.endswith('.cif'):
-        return importCif(path)
-    if name.endswith('.vasp') or name.startswith('poscar') or name.startswith('contcar'):
-        return importPoscar(path)
+    try:
+        if name.endswith('.cif'):
+            return importCif(path)
+        if name.endswith('.vasp') or name.startswith('poscar') or name.startswith('contcar'):
+            return importPoscar(path)
+    except CrystalImportError:
+        raise
+    except (OSError, ValueError, IndexError, KeyError, TypeError, ZeroDivisionError, OverflowError) as error:
+        # damaged or incomplete files (e.g. a column of the atom sites is missing): shown as import error by the GUI
+        raise CrystalImportError(f'Could not read "{path.name}": {error}') from error
     raise CrystalImportError(f'Unknown file format of "{path.name}". Supported are CIF (*.cif) and VASP (POSCAR, CONTCAR, *.vasp) files')
 
 
@@ -175,7 +181,9 @@ def importCif(path: Path) -> ImportedCrystal:
                 headers.append(tokens[i].lower())
                 i += 1
             rows = []
-            while i < len(tokens) and not tokens[i].startswith('_') and tokens[i].lower() not in ('loop_',) and not tokens[i].lower().startswith('data_'):
+            # a loop without headers (damaged file) has no rows: without this check the loop below never advanced and
+            # filled the memory with empty rows
+            while headers and i < len(tokens) and not tokens[i].startswith('_') and tokens[i].lower() not in ('loop_',) and not tokens[i].lower().startswith('data_'):
                 rows.append(tokens[i:i + len(headers)])
                 i += len(headers)
             loops.append((headers, [row for row in rows if len(row) == len(headers)]))

@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+from math import isfinite
 
 from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtCore import pyqtSignal, QRegularExpression
@@ -213,13 +214,16 @@ class TargetLayersRow(CustomRow):
         """Sets the fractions of the crystals and the miller index of the layer"""
 
         if isinstance(fractions, list):
-            self.crystal_values = [float(f) for f in fractions]
+            # finite numbers only (e.g. of a damaged input.json)
+            fractions = [float(f) for f in fractions if isinstance(f, (int, float)) and not isinstance(f, bool) and isfinite(f)]
+            self.crystal_values = fractions
             for cell, value in zip(self.crystal_cells, fractions):
-                cell.setValue(float(value))
-        if isinstance(miller, list) and len(miller) == 3:
+                cell.setValue(value)
+        if isinstance(miller, list) and len(miller) == 3 \
+                and all(isinstance(m, (int, float)) and not isinstance(m, bool) and isfinite(m) for m in miller):
             self.miller_values = [float(m) for m in miller]
-            for cell, value in zip(self.miller_cells, miller):
-                cell.setValue(float(value))
+            for cell, value in zip(self.miller_cells, self.miller_values):
+                cell.setValue(value)
 
     def getRowData(self):
         """Returns data of row (CompEntry)"""

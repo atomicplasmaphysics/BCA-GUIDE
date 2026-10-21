@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Union, Optional
+from math import isfinite
 
 
 class Element:
@@ -66,9 +67,31 @@ class Element:
             atomic_mass = 0
             atomic_density = 0
 
+        try:
+            atomic_nr, period, group = int(atomic_nr), int(period), int(group)  # type: ignore[arg-type]
+            atomic_mass, atomic_density = float(atomic_mass), float(atomic_density)  # type: ignore[arg-type]
+            if not (isfinite(atomic_mass) and isfinite(atomic_density)):
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            # damaged data (e.g. of an input.json): an empty element
+            symbol, name, atomic_nr, period, group, atomic_mass, atomic_density = '', {'en': ''}, 0, 0, 0, 0., 0.
+
+        def optionalNumber(value):
+            """Optional values are finite numbers or None"""
+            return value if isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value) else None
+
+        mass_density = optionalNumber(mass_density)
+        surface_binding_energy = optionalNumber(surface_binding_energy)
+        displacement_energy = optionalNumber(displacement_energy)
+        cutoff_energy = optionalNumber(cutoff_energy)
+        dissociation_heat = optionalNumber(dissociation_heat)
+        melt_enthalpy = optionalNumber(melt_enthalpy)
+        vaporization_energy = optionalNumber(vaporization_energy)
+        formation_enthalpy = optionalNumber(formation_enthalpy)
+
         self.symbol = str(symbol)
         # names in different languages, e.g. {'en': 'Gold', 'de': 'Gold'}
-        self.name: dict = {'en': name} if isinstance(name, str) else name
+        self.name: dict = {'en': name} if isinstance(name, str) else name if isinstance(name, dict) else {'en': str(name)}
         self.atomic_nr = int(atomic_nr)
         self.period = int(period)
         self.group = int(group)
@@ -88,7 +111,7 @@ class Element:
         self.vaporization_energy = vaporization_energy
         self.formation_enthalpy = formation_enthalpy
 
-        self.modified = modified
+        self.modified = bool(modified)
 
         self.original = None
         if copy_original:

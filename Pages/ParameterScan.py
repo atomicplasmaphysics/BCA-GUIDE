@@ -18,6 +18,7 @@ from typing import List, Optional, Callable, Any, Dict, Tuple, Iterator, TYPE_CH
 from itertools import product
 from json import dump, load
 from locale import getpreferredencoding
+from math import isfinite
 from pathlib import Path
 from re import sub
 
@@ -160,10 +161,17 @@ def parseValues(text: str, integer: bool = False) -> list:
     """Returns the values of a comma separated text (integer values are rounded, duplicates removed)"""
 
     values: list = []
+    # a list or a number of a damaged scan.json
+    if isinstance(text, (list, tuple)):
+        text = ', '.join(str(value) for value in text)
+    elif not isinstance(text, str):
+        text = str(text) if isinstance(text, (int, float)) and not isinstance(text, bool) else ''
     for part in text.replace(';', ',').split(','):
         try:
             value = float(part)
         except ValueError:
+            continue
+        if not isfinite(value):
             continue
         if integer:
             value = int(round(value))
@@ -1032,14 +1040,15 @@ class ParameterScan(QObject):
 
         self.values = {}
         labels = {parameter.label: key for key, parameter in self.safeParameters().items()}
-        for row in state.get('rows', []):
+        rows = state.get('rows') if isinstance(state, dict) else None
+        for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
                 continue
             # scans of older versions only store the label of the parameter
             key = row.get('key') or labels.get(str(row.get('label')))
             if isinstance(key, str) and key:
                 self.values[key] = {name: row[name] for name in ('start', 'stop', 'number', 'scale', 'values') if name in row}
-        versions = state.get('versions')
+        versions = state.get('versions') if isinstance(state, dict) else None
         self.versions = [str(title) for title in versions] if isinstance(versions, list) else []
         if self.enabled:
             self.refreshFields()
@@ -1087,7 +1096,9 @@ class ParameterScan(QObject):
             if log or any(job_folder.glob('output*')):
                 problem = self.simulation_class.runFailed(job_folder, log, 0, self.configuration.version)
                 status = 'finished' if problem is None else f'failed ({problem})'
-            jobs.append({'values': list(run.get('values', [])), 'label': str(run['folder']), 'folder': job_folder, 'log': log,
+            values = run.get('values')
+            values = [value for value in values if isinstance(value, (str, int, float)) and not isinstance(value, bool)] if isinstance(values, list) else []
+            jobs.append({'values': values, 'label': str(run['folder']), 'folder': job_folder, 'log': log,
                          'status': status, 'process': None, 'configuration': self.configuration, 'simulation': self.simulation_class})
         self.showJobs(jobs)
 
@@ -1170,7 +1181,7 @@ class ParameterScan(QObject):
             job['item'].setToolTip(pathToStr(job['folder']))
             table.setItem(i, 0, job['item'])
             for j, value in enumerate(job['values']):
-                item = QTableWidgetItem(value if isinstance(value, str) else f'{value:g}')
+                item = QTableWidgetItem(f'{value:g}' if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value))
                 alignment = Qt.AlignmentFlag.AlignLeft if isinstance(value, str) else Qt.AlignmentFlag.AlignRight
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | alignment)
                 table.setItem(i, j + 1, item)
@@ -1427,6 +1438,8 @@ def readScanDescription(folder: Path) -> Optional[dict]:
             values = []
             for run in scan['runs']:
                 run_values = run.get('values', []) if isinstance(run, dict) else []
+                if not isinstance(run_values, list):
+                    run_values = []
                 if i < len(run_values) and run_values[i] not in values:
                     values.append(run_values[i])
             rows.append({'label': label, 'values': ', '.join(f'{value:g}' if isinstance(value, (int, float)) else str(value) for value in values)})

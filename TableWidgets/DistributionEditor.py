@@ -9,8 +9,9 @@ ene_ang.inp has two formats:
               and the fluence is calculated from their sum (flc = sum * 17e-20 * 500)
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pathlib import Path
+from math import isfinite
 
 import numpy as np
 
@@ -45,6 +46,44 @@ def readDistributionFile(path: Path) -> List[List[float]]:
         except ValueError:
             break
     return rows
+
+
+def finiteNumber(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value)
+
+
+def validDistributions(distributions) -> Dict[str, Any]:
+    """
+    Returns the valid parts of the distributions of the arguments (e.g. of a damaged input.json):
+    {'energy' and 'angle': {symbol: [[upper limit, value], ...]}, 'energy_angle': {'angle', 'energy': [min, max, step],
+    'matrix': rows of equal length}}
+    """
+
+    result: Dict[str, Any] = {}
+    if not isinstance(distributions, dict):
+        return result
+    for kind in ('energy', 'angle'):
+        species = distributions.get(kind)
+        if not isinstance(species, dict):
+            continue
+        valid = {}
+        for symbol, rows in species.items():
+            if isinstance(symbol, str) and isinstance(rows, list):
+                rows = [[float(row[0]), float(row[1])] for row in rows
+                        if isinstance(row, (list, tuple)) and len(row) == 2 and all(finiteNumber(value) for value in row)]
+                if rows:
+                    valid[symbol] = rows
+        if valid:
+            result[kind] = valid
+    data = distributions.get('energy_angle')
+    if isinstance(data, dict):
+        ranges: List[Any] = [data.get('angle'), data.get('energy')]
+        matrix = data.get('matrix')
+        if all(isinstance(r, (list, tuple)) and len(r) == 3 and all(finiteNumber(value) for value in r) for r in ranges) \
+                and isinstance(matrix, list) and matrix and all(isinstance(row, list) and row and all(finiteNumber(value) for value in row) for row in matrix) \
+                and len({len(row) for row in matrix}) == 1:
+            result['energy_angle'] = {'angle': list(ranges[0]), 'energy': list(ranges[1]), 'matrix': matrix}
+    return result
 
 
 def writeDistributionFile(rows: List[List[float]], header: str) -> str:

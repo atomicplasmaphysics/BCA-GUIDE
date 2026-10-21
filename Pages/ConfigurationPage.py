@@ -508,10 +508,15 @@ class ConfigurationPage(TabWithToolbar):
         try:
             with open(save_file, 'r', encoding='utf-8', errors='replace') as conf_file:
                 data = load(conf_file)
-        except (FileNotFoundError, JSONDecodeError):
+        except (OSError, JSONDecodeError, RecursionError, UnicodeError):
             logging.info(f'Could not open file "{save_file}"!')
             return
 
+        # a damaged file (e.g. autosave.json): entries that are no configurations are skipped
+        if not isinstance(data, list):
+            logging.info(f'"{save_file}" does not contain a list of configurations!')
+            return
+        data = [d if isinstance(d, dict) else {} for d in data]
         scs = [SimulationConfiguration.load(d) for d in data]
 
         error_msg = ''

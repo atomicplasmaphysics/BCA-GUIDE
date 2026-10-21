@@ -210,6 +210,14 @@ python -m pytest --simulations -n 20 --test-dir=D:/BCA-GUIDE/tests   # all files
 With `--test-dir=DIR` (with `=`, otherwise pytest treats DIR as test folder; or the environment variable `BCA_TEST_DIR`) the temporary files of the tests are created in
 `DIR/tmp` and the simulation runs are kept in `DIR/simulation_data` (instead of the temporary folder of the system drive).
 
+Robustness: `tests/test_fuzz_inputs.py` loads broken, extreme and unknown input (many and unknown elements, unknown
+parameters, Fortran syntax, invalid numbers, wrong types, binary garbage) and random mutations of the examples: tri.inp,
+layer.inp and crystal.inp of SDTrimSP, the input file of TRIDYN, input.json, scan.json, damaged output files, damaged
+tables of an installation, a damaged configuration (autosave.json) and imported crystal and distribution files. The GUI
+may refuse a file, but it never raises an exception. `BCA_TEST_FUZZ` sets the number of random mutations per file
+(default 5) and `BCA_TEST_FUZZ_SEED` the seed. Every test keeps about 20 MB (see TODO.md), so run many mutations in
+several runs, e.g. `BCA_TEST_FUZZ=300 python -m pytest tests/test_fuzz_inputs.py -k json_mutations`.
+
 Start time: `tests/test_startup.py` starts the GUI with a simulation tab for every example and writes the times of the
 phases (imports, main window, showing the window) and the slowest functions (cProfile) to `tests/startup_profile.txt`
 (also a download of each test job of the continuous integration). The profile can also be created without the tests:

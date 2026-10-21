@@ -4,6 +4,32 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.6.07 (2026-10-21)
+
+Robustness against broken, extreme and unknown input (found with the new fuzz test `tests/test_fuzz_inputs.py`):
+
+- Crystal import: a CIF file with a `loop_` without headers (e.g. a damaged file) made the import run forever and fill
+  the whole memory of the computer; damaged CIF and POSCAR files (missing columns, invalid numbers) are reported as
+  import error instead of crashing the GUI
+- Start of the GUI: a damaged configuration (autosave.json, e.g. entries that are no configurations or a broken state of
+  the parameter scan) no longer crashes the start, the configurations that can not be read are skipped
+- Input fields: values that are no numbers (texts, lists, NaN, infinite values of a damaged input file) are ignored and
+  numbers are limited to the range of the field (e.g. `nqx = 99999999999999999999` crashed with an overflow)
+- input.json: files that are no JSON object are refused with a message; NaN, infinite values and true/false are no
+  numbers, integers are accepted for decimal values (`"energy": 1000` of a file written by hand was replaced by the
+  default); elements, compounds, crystal vectors, Miller indices, crystal fractions of the layers, distributions of
+  energies and angles and the additional settings with wrong types no longer crash; optional values can no longer
+  replace the checked values of a row
+- scan.json: runs, values and settings with wrong types or NaN no longer crash
+- TRIDYN input file: a command given twice (e.g. `cdat`) and an invalid action at the maximum atomic fraction no longer
+  crash
+- Damaged output files (e.g. of an aborted run): output.dat and serie.dat of SDTrimSP and the protocol of TRIDYN are
+  treated as missing data instead of raising errors, the lists and plots stay usable
+- Damaged installation: a table1 of SDTrimSP that can not be read gives the default elements instead of a crash
+- Tests: the known problems of the Windows binaries (stack overflows of 6.06 and 7.00 with matrices, 6.06 with the
+  target of two layers) only apply on Windows, the linux builds run these simulations; the color scheme signal of the
+  application no longer keeps the main window alive (method instead of a lambda)
+
 ## v1.6.06 (2026-10-20)
 
 - Tests: the test of the private inputs of colleagues is removed from the repository (the inputs stay local, outside of

@@ -558,7 +558,7 @@ class CrystalEditorDialog(QDialog):
             miller = list(DefaultValues.miller_ind)
         for column, value in enumerate(miller, start=1):
             box = DoubleSpinBox(0, input_range=SpinBoxRange.INF_INF, decimals=2)
-            box.setValue(float(value))
+            box.setValue(value)
             box.setMinimumWidth(50)
             box.valueChanged.connect(lambda _: self.tableCrystalChanged())
             self.crystal_list.setCellWidget(row, column, box)

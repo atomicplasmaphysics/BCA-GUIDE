@@ -1773,7 +1773,7 @@ class CompRowBeamSettings(CompRow):
         self.angle.setValue(alpha)
 
         ires = arguments.get('max_atomic_fraction_action')
-        ires = DictLookup.ires.get(ires)
+        ires = DictLookup.ires.get(ires) if isinstance(ires, int) else None
         if ires is None:
             ires = DefaultValues.ires - 1
         self.action_switch.setCurrentIndex(ires)
@@ -3975,10 +3975,13 @@ fout {idfout} {iddout} {idqout}{output}
                 assumed_cls = DefaultAssumed()
             try:
                 return [k for k, v in lookup_dict.items() if v == int(value)][0]
-            except (ValueError, IndexError):
+            except (ValueError, TypeError, IndexError):
                 if item is not None:
                     assumed_cls.assumed(item)
-                return [k for k, v in lookup_dict.items() if v == default_value][0]
+                # the default is a value of TRIDYN or already a value of the GUI (a command given twice in the input file)
+                if default_value in lookup_dict:
+                    return default_value
+                return next((k for k, v in lookup_dict.items() if v == default_value), next(iter(lookup_dict)))
 
         def getValueList(values: list, value_type, default_value, item=None, lookup_dict=None, assumed_cls: Optional[DefaultAssumed] = None) -> list:
             """Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value"""
@@ -5160,6 +5163,15 @@ class SimulationAnalysis(SimulationsAnalysis):
         return result
 
     def getProtocolData(self) -> Optional[Tuple[np.ndarray, ...]]:
+        """Returns the output protocol (*_out.dat file data) or None, also for a damaged file (e.g. of an aborted run)"""
+
+        try:
+            return self.readProtocolData()
+        except (ValueError, IndexError, ZeroDivisionError):
+            logging.warning('Could not process the output protocol (*_out.dat)!')
+            return None
+
+    def readProtocolData(self) -> Optional[Tuple[np.ndarray, ...]]:
         """
         Returns the output protocol (*_out.dat file data)
 

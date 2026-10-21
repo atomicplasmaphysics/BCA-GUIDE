@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Union, Optional, Tuple, List, Callable, Dict, Sequence, Any, cast
 from pathlib import Path
+from math import isfinite
 import warnings
 
 from Utility.Styles import Styles
@@ -320,6 +321,28 @@ class InputHBoxLayout(InputHBoxLayouts):
         )
 
 
+def spinBoxNumber(value) -> Optional[float]:
+    """
+    Returns the value for a spin box as finite number (also numeric texts like "1.5d3" of Fortran), None for other values
+    (e.g. None, texts, lists or NaN of a damaged input file)
+    """
+
+    if isinstance(value, str):
+        try:
+            value = float(value.strip().replace('d', 'e').replace('D', 'E'))
+        except ValueError:
+            return None
+    if not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        # integers larger than the floats: limited by the range of the spin box
+        number = float('inf') if value > 0 else float('-inf')
+        return number
+    return number if isfinite(number) else None
+
+
 class SpinBoxRange:
     """
     Special input ranges for SpinBox and DoubleSpinBox
@@ -380,6 +403,17 @@ class SpinBox(QSpinBox):
         if self.scroll_enabled:
             super().wheelEvent(event)
 
+    def setValue(self, val):
+        """
+        Sets the value, limited to the range of the spin box; values that are no numbers (e.g. of a damaged input file) are
+        ignored, the spin box keeps its value
+        """
+
+        number = spinBoxNumber(val)
+        if number is None:
+            return
+        super().setValue(int(round(min(max(number, self.minimum()), self.maximum()))))
+
     def reset(self):
         """Resets itself to its default value"""
         self.setValue(self.default)
@@ -439,6 +473,17 @@ class DoubleSpinBox(QDoubleSpinBox):
 
         if self.scroll_enabled:
             super().wheelEvent(event)
+
+    def setValue(self, val):
+        """
+        Sets the value, limited to the range of the spin box; values that are no numbers (e.g. of a damaged input file) are
+        ignored, the spin box keeps its value
+        """
+
+        number = spinBoxNumber(val)
+        if number is None:
+            return
+        super().setValue(min(max(number, self.minimum()), self.maximum()))
 
     def reset(self):
         """Resets itself to its default value"""
