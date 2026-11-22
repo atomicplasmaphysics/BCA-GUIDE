@@ -39,6 +39,8 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 
 ## Build
 
+- [ ] CI type check pins `PyQt6<6.12` (the stubs of 6.12 are broken), remove the pin when a fixed PyQt6 is released.
+
 - [ ] macOS with Intel processors: the release only contains an Apple silicon (arm64) build (macos-latest), an
       additional build on an Intel runner (or a universal2 build) would be needed.
 - [ ] Start time: the simulation tabs are created at the start (about 0.15 s per tab, see tests/startup_profile.txt),

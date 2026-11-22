@@ -24,7 +24,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - run: pip install -r requirements.txt "mypy==1.18.2"
+      # the type stubs of PyQt6 6.12 are broken (pyqtSignal requires "arguments", parents typed as typing.Self)
+      - run: pip install -r requirements.txt "mypy==1.18.2" "PyQt6<6.12"
       - run: mypy
 
   tests:
