@@ -1,17 +1,6 @@
-"""
-Editor for the input files of energy and angle distributions of SDTrimSP:
-energy.inp (energy02.inp, ...), angle.inp (angle02.inp, ...) and ene_ang.inp
-
-The first line of energy.inp and angle.inp is a header, since 7.07 it must start with "!" or "#".
-ene_ang.inp has two formats:
-  since 7.05: header, number of angles, (min, max, step) of angles, number of energies, (min, max, step) of energies, matrix
-  until 7.02: two numbers (not used), then the same as since 7.05. The values of the matrix are fluxes in atoms/(s m^2)
-              and the fluence is calculated from their sum (flc = sum * 17e-20 * 500)
-"""
-
 from typing import Any, Dict, List, Optional
 from pathlib import Path
-from math import isfinite
+
 
 import numpy as np
 
@@ -21,16 +10,21 @@ from PyQt6.QtWidgets import (
     QWidget, QHeaderView, QDialogButtonBox, QFileDialog, QDoubleSpinBox, QAbstractItemView
 )
 
+
 from Utility.Icons import getIcon
 from Utility.Layouts import MplCanvas, PlotToolbar
 from Utility.Typing import notNone
+from Utility.Functions import isNumber, toNumber
+from Utility.Styles import Styles
 
 
 def readDistributionFile(path: Path) -> List[List[float]]:
     """
-    Reads a distribution file (energy.inp or angle.inp): header line, then rows of upper bound and value
+    Reads a distribution file (energy.inp or angle.inp, energy02.inp, ...): header line (since 7.07 it must start with
+    "!" or "#"), then rows of upper bound and value
 
     :param path: path to file
+
     :return: list of [upper bound, value]
     """
 
@@ -48,46 +42,69 @@ def readDistributionFile(path: Path) -> List[List[float]]:
     return rows
 
 
-def finiteNumber(value) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value)
+def isNumberList(values, length: Optional[int] = None) -> bool:
+    """
+    Returns if values is a non-empty list of finite numbers
+
+    :param values: value to check
+    :param length: (optional) required length of list
+    """
+
+    if not isinstance(values, (list, tuple)) or not values:
+        return False
+    if length is not None and len(values) != length:
+        return False
+    return all(isNumber(value) for value in values)
 
 
 def validDistributions(distributions) -> Dict[str, Any]:
     """
-    Returns the valid parts of the distributions of the arguments (e.g. of a damaged input.json):
-    {'energy' and 'angle': {symbol: [[upper limit, value], ...]}, 'energy_angle': {'angle', 'energy': [min, max, step],
-    'matrix': rows of equal length}}
+    Returns the valid parts of the distributions of the arguments (e.g. of a damaged input.json)
+
+    :param distributions: {'energy' and 'angle': {symbol: [[upper limit, value], ...]},
+                           'energy_angle': {'angle', 'energy': [min, max, step], 'matrix': rows of equal length}}
     """
 
     result: Dict[str, Any] = {}
     if not isinstance(distributions, dict):
         return result
+
     for kind in ('energy', 'angle'):
         species = distributions.get(kind)
         if not isinstance(species, dict):
             continue
         valid = {}
         for symbol, rows in species.items():
-            if isinstance(symbol, str) and isinstance(rows, list):
-                rows = [[float(row[0]), float(row[1])] for row in rows
-                        if isinstance(row, (list, tuple)) and len(row) == 2 and all(finiteNumber(value) for value in row)]
-                if rows:
-                    valid[symbol] = rows
+            if not isinstance(symbol, str) or not isinstance(rows, list):
+                continue
+            rows = [[float(row[0]), float(row[1])] for row in rows if isNumberList(row, 2)]
+            if rows:
+                valid[symbol] = rows
         if valid:
             result[kind] = valid
+
     data = distributions.get('energy_angle')
-    if isinstance(data, dict):
-        ranges: List[Any] = [data.get('angle'), data.get('energy')]
-        matrix = data.get('matrix')
-        if all(isinstance(r, (list, tuple)) and len(r) == 3 and all(finiteNumber(value) for value in r) for r in ranges) \
-                and isinstance(matrix, list) and matrix and all(isinstance(row, list) and row and all(finiteNumber(value) for value in row) for row in matrix) \
-                and len({len(row) for row in matrix}) == 1:
-            result['energy_angle'] = {'angle': list(ranges[0]), 'energy': list(ranges[1]), 'matrix': matrix}
+    if not isinstance(data, dict):
+        return result
+    angle: Any = data.get('angle')
+    energy: Any = data.get('energy')
+    matrix: Any = data.get('matrix')
+    if not isNumberList(angle, 3) or not isNumberList(energy, 3):
+        return result
+    if not isinstance(matrix, list) or not matrix or not all(isNumberList(row) for row in matrix):
+        return result
+    if len({len(row) for row in matrix}) == 1:
+        result['energy_angle'] = {'angle': list(angle), 'energy': list(energy), 'matrix': matrix}
     return result
 
 
 def writeDistributionFile(rows: List[List[float]], header: str) -> str:
-    """Returns the content of a distribution file (energy.inp or angle.inp)"""
+    """
+    Returns content of a distribution file (energy.inp or angle.inp)
+
+    :param rows: list of [upper bound, value]
+    :param header: first line of file
+    """
 
     lines = [header]
     lower = 0.
@@ -97,20 +114,12 @@ def writeDistributionFile(rows: List[List[float]], header: str) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def isNumber(text: str) -> bool:
-    """Returns True if text is a (Fortran) number"""
-
-    try:
-        float(text.replace('D', 'E').replace('d', 'e'))
-        return True
-    except ValueError:
-        return False
-
-
 def readEnergyAngleFile(path: Path) -> Optional[dict]:
     """
-    Reads ene_ang.inp (both formats): number of angles, (min, max, step) of angles, number of energies,
-    (min, max, step) of energies, matrix
+    Reads ene_ang.inp: number of angles, (min, max, step) of angles, number of energies, (min, max, step) of energies,
+    matrix (since 7.05 after a header, until 7.02 after two unused numbers)
+
+    :param path: path to file
 
     :return: {'angle': [min, max, step], 'energy': [min, max, step], 'matrix': rows of energies with values for each angle}
     """
@@ -118,7 +127,7 @@ def readEnergyAngleFile(path: Path) -> Optional[dict]:
     with open(path, 'r', encoding='utf-8', errors='replace') as file:
         lines = [line.split('!')[0].split() for line in file.read().splitlines()]
     # only lines with numbers, the header (since 7.05) is skipped
-    values = [line for line in lines if line and isNumber(line[0])]
+    values = [line for line in lines if line and toNumber(line[0], from_text=True) is not None]
     # until 7.02 two single numbers precede the number of angles
     if len(values) > 2 and len(values[1]) < 3:
         values = values[2:]
@@ -140,7 +149,7 @@ def writeEnergyAngleFile(data: dict, legacy: bool = False) -> str:
     Returns the content of ene_ang.inp
 
     :param data: {'angle': [min, max, step], 'energy': [min, max, step], 'matrix': rows}
-    :param legacy: format until SDTrimSP 7.02 (two numbers instead of the header)
+    :param legacy: format until SDTrimSP 7.02 (two numbers instead of the header, the values are fluxes)
     """
 
     matrix = data['matrix']
@@ -170,6 +179,7 @@ class DistributionTable(QWidget):
 
     :param unit: unit of the intervals, e.g. 'eV'
     :param rows: initial rows [upper bound, value]
+    :param parent: (optional) parent widget
     """
 
     def __init__(self, unit: str, rows: List[List[float]], parent=None):
@@ -184,10 +194,7 @@ class DistributionTable(QWidget):
         self.table = QTableWidget(0, 2, self)
         self.table.setHorizontalHeaderLabels([f'Upper bound [{unit}]', 'Particles per interval width'])
         notNone(self.table.horizontalHeader()).setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.setToolTip(
-            f'Each row is an interval from the upper bound of the previous row (or 0) to the upper bound of this row.<br>'
-            f'The value is the number (or probability) of particles per {unit} in this interval, it is normalized by SDTrimSP'
-        )
+        self.table.setToolTip(f'Each row is an interval from the upper bound of the previous row (or 0) to the upper bound of this row.<br>The value is the number (or probability) of particles per {unit} in this interval, it is normalized by SDTrimSP')
         self.table.itemChanged.connect(lambda _: self.updatePreview())
         table_layout.addWidget(self.table)
 
@@ -212,7 +219,11 @@ class DistributionTable(QWidget):
         self.setRows(rows)
 
     def setRows(self, rows: List[List[float]]):
-        """Sets the intervals"""
+        """
+        Sets the intervals
+
+        :param rows: list of [upper bound, value]
+        """
 
         self.table.blockSignals(True)
         self.table.setRowCount(0)
@@ -222,11 +233,18 @@ class DistributionTable(QWidget):
         self.updatePreview()
 
     def addRow(self, upper: Optional[float] = None, value: float = 1.):
-        """Adds an interval after the last one"""
+        """
+        Adds an interval after the last one
+
+        :param upper: (optional) upper bound, by default twice the last upper bound
+        :param value: (optional) value of interval
+        """
 
         if upper is None:
             rows = self.rows()
-            upper = (rows[-1][0] * 2 if rows and rows[-1][0] > 0 else 100.)
+            upper = 100.
+            if rows and rows[-1][0] > 0:
+                upper = rows[-1][0] * 2
         row = self.table.rowCount()
         self.table.insertRow(row)
         self.table.setItem(row, 0, QTableWidgetItem(f'{upper:g}'))
@@ -236,7 +254,9 @@ class DistributionTable(QWidget):
     def removeRow(self):
         """Removes the selected intervals or the last one"""
 
-        rows = sorted({index.row() for index in self.table.selectedIndexes()}, reverse=True) or [self.table.rowCount() - 1]
+        rows = sorted({index.row() for index in self.table.selectedIndexes()}, reverse=True)
+        if not rows:
+            rows = [self.table.rowCount() - 1]
         for row in rows:
             if row >= 0:
                 self.table.removeRow(row)
@@ -294,6 +314,8 @@ class EnergyAngleTable(QWidget):
     Matrix of the distribution of energies (rows) and angles (columns) for ene_ang.inp
 
     :param data: initial data {'angle': [min, max, step], 'energy': [min, max, step], 'matrix': rows}
+    :param parent: (optional) parent widget
+    :param flux_note: (optional) shows the note that the values are fluxes (until SDTrimSP 7.02)
     """
 
     def __init__(self, data: Optional[dict], parent=None, flux_note: bool = False):
@@ -301,10 +323,7 @@ class EnergyAngleTable(QWidget):
         layout = QVBoxLayout(self)
 
         if flux_note:
-            note = QLabel(
-                'Until SDTrimSP 7.02 the values are fluxes in atoms/(s·m²) and the fluence is calculated from their sum '
-                '(fluence = sum · 8.5·10⁻¹⁷ atoms/Å²), the fluence in the settings is not used.'
-            )
+            note = QLabel('Until SDTrimSP 7.02 the values are fluxes in atoms/(s·m²) and the fluence is calculated from their sum (fluence = sum · 8.5·10⁻¹⁷ atoms/Å²), the fluence in the settings is not used.')
             note.setWordWrap(True)
             layout.addWidget(note)
 
@@ -348,7 +367,11 @@ class EnergyAngleTable(QWidget):
 
     @staticmethod
     def axis(values: List[float]) -> np.ndarray:
-        """Returns the points from min to max with step"""
+        """
+        Returns points from min to max with step
+
+        :param values: [min, max, step]
+        """
 
         minimum, maximum, step = values
         if step <= 0 or maximum < minimum:
@@ -356,7 +379,11 @@ class EnergyAngleTable(QWidget):
         return np.arange(minimum, maximum + step / 2, step)
 
     def updateMatrix(self, matrix: Optional[List[List[float]]] = None):
-        """Creates the table with the current ranges, keeps existing values"""
+        """
+        Creates the table with the current ranges and keeps existing values
+
+        :param matrix: (optional) values of the table, by default the current values
+        """
 
         if matrix is None:
             matrix = self.matrix()
@@ -369,7 +396,9 @@ class EnergyAngleTable(QWidget):
         self.table.setVerticalHeaderLabels([f'{energy:g} eV' for energy in energies])
         for row in range(len(energies)):
             for column in range(len(angles)):
-                value = matrix[row][column] if row < len(matrix) and column < len(matrix[row]) else 0.
+                value = 0.
+                if row < len(matrix) and column < len(matrix[row]):
+                    value = matrix[row][column]
                 self.table.setItem(row, column, QTableWidgetItem(f'{value:g}'))
 
     def matrix(self) -> List[List[float]]:
@@ -380,8 +409,11 @@ class EnergyAngleTable(QWidget):
             values = []
             for column in range(self.table.columnCount()):
                 item = self.table.item(row, column)
+                if item is None:
+                    values.append(0.)
+                    continue
                 try:
-                    values.append(float(item.text().replace(',', '.')) if item is not None else 0.)
+                    values.append(float(item.text().replace(',', '.')))
                 except ValueError:
                     values.append(0.)
             matrix.append(values)
@@ -411,8 +443,17 @@ class DistributionDialog(QDialog):
     :param legacy_energy_angle: format of ene_ang.inp until SDTrimSP 7.02 (values are fluxes)
     """
 
-    def __init__(self, parent, projectiles: List[str], distributions: Dict, energy: bool, angle: bool, energy_angle: bool,
-                 angle_per_projectile: bool, legacy_energy_angle: bool = False):
+    def __init__(
+        self,
+        parent,
+        projectiles: List[str],
+        distributions: Dict,
+        energy: bool,
+        angle: bool,
+        energy_angle: bool,
+        angle_per_projectile: bool,
+        legacy_energy_angle: bool = False
+    ):
         super().__init__(parent)
         self.setWindowTitle('Distributions of energies and angles')
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
@@ -421,9 +462,7 @@ class DistributionDialog(QDialog):
         self.distributions = distributions or {}
         layout = QVBoxLayout(self)
 
-        layout.addWidget(QLabel(
-            'The distributions are written to the input files of SDTrimSP (energy.inp, angle.inp, ene_ang.inp) when the settings are saved.'
-        ))
+        layout.addWidget(QLabel('The distributions are written to the input files of SDTrimSP (energy.inp, angle.inp, ene_ang.inp) when the settings are saved.'))
 
         self.tabs = QTabWidget(self)
         layout.addWidget(self.tabs, stretch=1)
@@ -450,7 +489,7 @@ class DistributionDialog(QDialog):
 
         self.problems = QLabel('')
         self.problems.setWordWrap(True)
-        self.problems.setStyleSheet('color: #bf3e2f;')
+        self.problems.setStyleSheet(f'color: {Styles.red_hex};')
         layout.addWidget(self.problems)
 
         buttons_layout = QHBoxLayout()

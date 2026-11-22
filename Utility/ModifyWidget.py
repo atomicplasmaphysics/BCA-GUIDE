@@ -1,5 +1,8 @@
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QSpinBox, QDoubleSpinBox, QWidget, QComboBox, QGraphicsDropShadowEffect, QGraphicsColorizeEffect
+from PyQt6.QtWidgets import QSpinBox, QDoubleSpinBox, QWidget, QComboBox, QGraphicsDropShadowEffect, QGraphicsColorizeEffect, QLayout
+
+
+from Utility.Typing import notNone
 
 
 def setWidgetBackground(widget: QWidget, enabled: bool, color: QColor = QColor(144, 12, 63, 255)):
@@ -89,3 +92,20 @@ def widgetSetValueOfWidget(target, source):
         value = source.currentIndex()
 
     widgetSetValue(target, value)
+
+
+def setLayoutVisible(layout: QLayout, visible: bool):
+    """
+    Shows or hides all widgets in a layout (recursively)
+
+    :param layout: layout with widgets
+    :param visible: if widgets are shown
+    """
+
+    for i in range(layout.count()):
+        item = notNone(layout.itemAt(i))
+        widget, child_layout = item.widget(), item.layout()
+        if widget is not None:
+            widget.setVisible(visible)
+        elif child_layout is not None:
+            setLayoutVisible(child_layout, visible)

@@ -1,7 +1,10 @@
 from typing import Generic, List, Union, Optional, TypeVar
 
+
 from PyQt6.QtCore import pyqtSignal, QObject, Qt
+from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import QTableWidget, QPushButton, QAbstractItemView, QHeaderView, QHBoxLayout, QWidget, QAbstractSpinBox, QFrame
+
 
 from Utility.Icons import getIcon
 from Utility.Typing import notNone
@@ -173,7 +176,13 @@ class CustomTable(QTableWidget, Generic[RowT]):
         self.frozen.show()
 
     def frozenSectionResized(self, column: int, _old_size: int, new_size: int):
-        """Keeps the widths of the frozen columns equal to the ones of this table"""
+        """
+        Keeps the widths of the frozen columns equal to the ones of this table
+
+        :param column: index of resized column
+        :param _old_size: old width of column
+        :param new_size: new width of column
+        """
 
         if self.frozen is None or column >= self.frozen_columns:
             return
@@ -195,32 +204,74 @@ class CustomTable(QTableWidget, Generic[RowT]):
             notNone(self.viewport()).height() + header_height
         )
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: Optional[QResizeEvent]):
+        """
+        Resizes the table of the frozen columns too
+
+        :param event: resize event
+        """
+
         super().resizeEvent(event)
         self.updateFrozenGeometry()
 
     def insertRow(self, row: int):
+        """
+        Inserts a row (also in the table of the frozen columns)
+
+        :param row: index of row
+        """
+
         super().insertRow(row)
         if self.frozen is not None:
             self.frozen.insertRow(row)
 
     def removeRow(self, row: int):
+        """
+        Removes a row (also in the table of the frozen columns)
+
+        :param row: index of row
+        """
+
         super().removeRow(row)
         if self.frozen is not None:
             self.frozen.removeRow(row)
 
     def setCellWidget(self, row: int, column: int, widget: Optional[QWidget]):
+        """
+        Sets widget of a cell (frozen columns in the table of the frozen columns)
+
+        :param row: index of row
+        :param column: index of column
+        :param widget: widget of cell
+        """
+
         if self.frozen is not None and column < self.frozen_columns:
             self.frozen.setCellWidget(row, column, widget)
         else:
             super().setCellWidget(row, column, widget)
 
     def cellWidget(self, row: int, column: int) -> Optional[QWidget]:
+        """
+        Returns widget of a cell (frozen columns from the table of the frozen columns)
+
+        :param row: index of row
+        :param column: index of column
+        """
+
         if self.frozen is not None and column < self.frozen_columns:
             return self.frozen.cellWidget(row, column)
         return super().cellWidget(row, column)
 
     def setSpan(self, row: int, column: int, row_span: int, column_span: int):
+        """
+        Sets span of a cell (also in the table of the frozen columns)
+
+        :param row: index of row
+        :param column: index of column
+        :param row_span: number of spanned rows
+        :param column_span: number of spanned columns
+        """
+
         super().setSpan(row, column, row_span, column_span)
         if self.frozen is not None and column < self.frozen_columns:
             span = min(column_span, self.frozen_columns - column)
@@ -374,6 +425,10 @@ class CustomTable(QTableWidget, Generic[RowT]):
         self.settingsChanged.emit(value_dict)
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         pass

@@ -1,18 +1,19 @@
-"""
-Loading of the GUI files input.json: the same simulation as loading the input files of the simulation program, and
-input.json of other versions and of the other simulation program (TRIDYN <-> SDTrimSP) can be loaded without errors and
-only parameters are written that the version reads
-"""
+# Loading of the GUI files input.json: the same simulation as loading the input files of the simulation program, and
+# input.json of other versions and of the other simulation program (TRIDYN <-> SDTrimSP) can be loaded without errors and
+# only parameters are written that the version reads
 
 import shutil
 from re import findall, IGNORECASE, MULTILINE
 
+
 import pytest
+
 
 from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, pump
 
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions, namelistParameters
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
+
 from Pages.ConfigurationPage import bestVersion
 
 
@@ -40,6 +41,16 @@ SOURCES += sorted(path.parent for path in (TEST_SAVES / 'TRIDYN').glob('*/input.
 
 
 def addPage(main_window, program: str, folder, version: str, save):
+    """
+    Adds a simulation tab for the save
+
+    :param main_window: main window of the GUI
+    :param program: name of simulation program
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    :param save: folder of the example save
+    """
+
     cls = SDTrimSPInput if program == 'SDTrimSP' else TridynInput
     return addSimulationPage(main_window, save.name, 0 if program == 'SDTrimSP' else 1, folder, cls.findBinary(folder) or folder / 'binary.exe', version, save)
 
@@ -48,6 +59,8 @@ def speciesInput(text: str) -> tuple:
     """
     Returns the input of tri.inp independent of the order of the species: ({symbol: (values of the lists)}, other lines).
     Old versions of the GUI wrote input.json without the setting "group_elements", the order of the species can differ
+
+    :param text: text of the input file
     """
 
     lists = {}
@@ -64,7 +77,12 @@ def speciesInput(text: str) -> tuple:
 
 
 def writtenParameters(program: str, text: str) -> set:
-    """Returns the names of the parameters of an input file"""
+    """
+    Returns the names of the parameters of an input file
+
+    :param program: name of simulation program
+    :param text: text of the input file
+    """
 
     if program == 'SDTrimSP':
         names = findall(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s*=', text, flags=MULTILINE)
@@ -74,7 +92,15 @@ def writtenParameters(program: str, text: str) -> set:
 
 @pytest.mark.parametrize('save', [save for save in SOURCES if (save / 'tri.inp').is_file()], ids=lambda save: save.name)
 def test_tri_inp_and_json_give_the_same_input(main_window, qapp, tmp_path, errors, save):
-    """input.json and tri.inp written by the GUI describe the same simulation"""
+    """
+    input.json and tri.inp written by the GUI describe the same simulation
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param save: folder of the example save
+    """
 
     folder = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
     if not (folder / 'tables').is_dir():
@@ -103,6 +129,19 @@ def test_tri_inp_and_json_give_the_same_input(main_window, qapp, tmp_path, error
 @pytest.mark.parametrize('program, folder, version', TARGETS, ids=[f'{program}-{version}' for program, _, version in TARGETS])
 @pytest.mark.parametrize('save', SOURCES, ids=lambda save: f'{save.parent.name}-{save.name}')
 def test_load_json_in_other_versions(main_window, qapp, tmp_path, errors, save, program, folder, version):
+    """
+    Load json in other versions
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param save: folder of the example save
+    :param program: name of simulation program
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    """
+
     copy = tmp_path / save.name
     copy.mkdir()
     shutil.copy(save / 'input.json', copy / 'input.json')

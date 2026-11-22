@@ -1,13 +1,21 @@
-"""Consistency of the version specific options of SDTrimSP with the documentation of each version"""
+# Consistency of the version specific options of SDTrimSP with the documentation of each version
 
 import pytest
 
+
 from Containers.Arguments import ArgumentValues
+
 from Simulations.SDTrimSP import Versions, DefaultValues, DictLookup, VlSimulationSettings, CompRowBeamSettings
 
 
 @pytest.mark.parametrize('version', Versions.ORDER)
 def test_defaults_are_valid(version):
+    """
+    Defaults are valid
+
+    :param version: version of simulation
+    """
+
     defaults = DefaultValues(version)
     lookup = DictLookup(version)
     assert defaults.isbv in lookup.isbv.values()
@@ -17,6 +25,8 @@ def test_defaults_are_valid(version):
 
 
 def test_version_order():
+    """Version order"""
+
     assert Versions.atLeast(Versions.V_702, Versions.V_609)
     assert not Versions.atLeast(Versions.V_601, Versions.V_609)
     assert not Versions.atLeast('unknown', Versions.V_601)
@@ -31,6 +41,13 @@ def test_version_order():
     (Versions.V_707, {1, 2, 3, 4, 6, 8}),
 ])
 def test_surface_binding_models(version, isbv):
+    """
+    Surface binding models
+
+    :param version: version of simulation
+    :param isbv: surface binding models of the version
+    """
+
     assert set(DictLookup(version).isbv.values()) == isbv
 
 
@@ -43,12 +60,24 @@ def test_surface_binding_models(version, isbv):
     (Versions.V_707, {-1, 1, 2, 3, 4, 5, 6, 7, 8}),
 ])
 def test_inelastic_loss_models(version, inel0):
+    """
+    Inelastic loss models
+
+    :param version: version of simulation
+    :param inel0: inelastic loss models of the version
+    """
+
     assert set(DictLookup(version).inel0.values()) == inel0
 
 
 @pytest.mark.parametrize('version', Versions.ORDER)
 def test_gui_entries_match_lookup(qapp, version):
-    """Every selectable entry in the GUI must be written as a valid value, and the number shown must be the value"""
+    """
+    Every selectable entry in the GUI must be written as a valid value, and the number shown must be the value
+
+    :param qapp: QApplication of the tests
+    :param version: version of simulation
+    """
 
     lookup = DictLookup(version)
 
@@ -80,18 +109,32 @@ def test_gui_entries_match_lookup(qapp, version):
     (Versions.V_707, True, True),
 ])
 def test_crystal_support(version, crystal, table):
+    """
+    Crystal support
+
+    :param version: version of simulation
+    :param crystal: if crystals are supported
+    :param table: if the crystal table is used
+    """
+
     defaults = DefaultValues(version)
     assert defaults.enable_crystal == crystal
     assert defaults.crystal_table == table
 
 
 def test_tabulated_model_exists():
+    """Tabulated model exists"""
+
     assert ArgumentValues.InelasticLossModel.TABULATED in DictLookup(Versions.V_700).inel0
 
 
 @pytest.mark.parametrize('version, selection', [(Versions.V_702, False), (Versions.V_707, True)])
 def test_tbsp_file_selection(qapp, version, selection):
     """Since 7.07 the file of the tabulated stopping power is selected (tbsp_binary, tbsp_ascii), the GUI always uses the
+
+    :param qapp: QApplication of the tests
+    :param version: version of simulation
+    :param selection: if the tabulated stopping file can be selected
     binary file (both files contain the same data), so the selection is not shown"""
 
     settings = VlSimulationSettings(version)
@@ -100,7 +143,11 @@ def test_tbsp_file_selection(qapp, version, selection):
 
 
 def test_run_failed(tmp_path):
-    """SDTrimSP sometimes terminates with exit code 0 after an error"""
+    """
+    SDTrimSP sometimes terminates with exit code 0 after an error
+
+    :param tmp_path: temporary folder of the test
+    """
 
     from Simulations.SDTrimSP import SimulationInput
     simulation = SimulationInput()

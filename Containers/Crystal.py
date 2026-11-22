@@ -1,18 +1,9 @@
 from __future__ import annotations
 from typing import Iterator, List, Optional, Union
-from math import isfinite
 import logging
 
 
-from Containers.Element import Element
-
-
-def vectorNumber(value, integer: bool = False) -> Union[int, float]:
-    """Returns a component of a vector as finite number (0 for other values, e.g. of a damaged input.json)"""
-
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
-        return 0
-    return int(value) if integer else value
+from Utility.Functions import isNumber
 
 
 class Vec3:
@@ -24,7 +15,12 @@ class Vec3:
         self.vec = vec
 
     def crystal_inp_str(self, delimiter: str = ',') -> str:
-        """Returns string of vector to use in crystal input file"""
+        """
+        Returns string of vector to use in crystal input file
+
+        :param delimiter: delimiter between components
+        """
+
         return f'{self.vec[0]}{delimiter} {self.vec[1]}{delimiter} {self.vec[2]}'
 
     def __mul__(self, factor: float) -> Vec3:
@@ -47,6 +43,7 @@ class Vec3:
 
     def __str__(self) -> str:
         """Returns string of basis vector"""
+
         return f'[{self.vec[0]}, {self.vec[1]}, {self.vec[2]}]'
 
 
@@ -67,10 +64,15 @@ class Coordinate(Vec3):
                 logging.warning(f'Coordinate "{coord}" must have length 3, will only take first 3 elements. Missing elements will be filled with zeros')
 
             for i in range(min(len(coord), 3)):
-                self.vec[i] = vectorNumber(coord[i])
+                self.vec[i] = coord[i] if isNumber(coord[i]) else 0
 
     def crystal_inp_str(self, delimiter: str = '') -> str:
-        """Returns string of vector to use in crystal input file"""
+        """
+        Returns string of vector to use in crystal input file
+
+        :param delimiter: delimiter between components
+        """
+
         return super().crystal_inp_str(delimiter)
 
 
@@ -95,7 +97,7 @@ class BasisVector(Vec3):
                 logging.warning(f'Basis vector "{basis_vec}" must have length 3, will only take first 3 elements. Missing elements will be filled with zeros')
 
             for i in range(min(len(basis_vec), 3)):
-                self.vec[i] = vectorNumber(basis_vec[i])
+                self.vec[i] = basis_vec[i] if isNumber(basis_vec[i]) else 0
 
 
 class MillerIndex(Vec3):
@@ -116,9 +118,10 @@ class MillerIndex(Vec3):
 
             conversion_error = False
             for i in range(min(len(miller_index), 3)):
-                if vectorNumber(miller_index[i], integer=True) != miller_index[i]:
+                value = int(miller_index[i]) if isNumber(miller_index[i]) else 0
+                if value != miller_index[i]:
                     conversion_error = True
-                self.vec[i] = vectorNumber(miller_index[i], integer=True)
+                self.vec[i] = value
 
             if conversion_error:
                 logging.warning(f'Miller index "{miller_index}" is not purely integers, will convert to int()')
@@ -126,40 +129,17 @@ class MillerIndex(Vec3):
     @property
     def h(self) -> float:
         """Returns h (=1) component of miller index vector"""
+
         return self.vec[0]
 
     @property
     def k(self) -> float:
         """Returns k (=2) component of miller index vector"""
+
         return self.vec[1]
 
     @property
     def l(self) -> float:
         """Returns l (=3) component of miller index vector"""
+
         return self.vec[2]
-
-
-class Crystal:
-    """
-    Container that stores crystal information, structure and elements
-
-    :param name: crystal name
-    :param basis_vec: basis vector
-    :param crystal_structure:
-    :param elements:
-    :param matrix_id:
-    :param p_max:
-    :param deltaH_f:
-    """
-
-    def __init__(
-        self,
-        name: str,
-        basis_vec: BasisVector,
-        crystal_structure: List[Coordinate],
-        elements: List[Element],
-        matrix_id: int = 3,
-        p_max: float = 3,
-        deltaH_f: float = 0
-    ):
-        pass

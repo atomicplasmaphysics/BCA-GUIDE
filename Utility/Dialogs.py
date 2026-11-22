@@ -1,25 +1,25 @@
 from typing import Optional, Any
 from pathlib import Path
-
+import logging
 from urllib.parse import urlparse
 from urllib.request import urlretrieve
+
 
 from PyQt6.QtCore import QFileInfo, Qt, QUrl
 from PyQt6.QtGui import QFont, QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
-    QCheckBox, QMessageBox, QDialog, QFileDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QProgressBar, QGridLayout, QStackedWidget,
+    QCheckBox, QMessageBox, QDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QProgressBar, QGridLayout, QStackedWidget,
     QWidget, QDialogButtonBox, QComboBox, QSpinBox
 )
 
+
 from Utility.GlobalConf import GlobalConf
-
-from Simulations.SimulationsList import SimulationsList
-
+from Utility.Styles import Styles
 from Utility.Layouts import InputHBoxLayout, FilePath
-
 from Utility.Functions import pathToStr
 from Utility.Icons import getIcon, getPixmap
+
+from Simulations.SimulationsList import SimulationsList
 
 
 def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: Path | None, file_filter: str = '') -> Optional[Path]:
@@ -44,8 +44,17 @@ def selectFileDialog(parent, for_saving: bool, instruction: str, start_dir: Path
     return Path(full_file_path)
 
 
-def showMessageBox(parent, icon, window_title: str, text: str, info_message: str = '', detailed_message: str = '',
-                   standard_buttons: QMessageBox.StandardButton = QMessageBox.StandardButton.Ok, check_box_text: str = '', expand_details: bool = False):
+def showMessageBox(
+    parent,
+    icon,
+    window_title: str,
+    text: str,
+    info_message: str = '',
+    detailed_message: str = '',
+    standard_buttons: QMessageBox.StandardButton = QMessageBox.StandardButton.Ok,
+    check_box_text: str = '',
+    expand_details: bool = False
+):
     """
     Displays message box
 
@@ -139,7 +148,14 @@ class DownloadDialog(QDialog):
         self.main_layout.addLayout(self.hlClose)
 
     def updateProgress(self, block_num, block_size, total_size):
-        """Updates the progressbar"""
+        """
+        Updates the progressbar
+
+        :param block_num: number of downloaded blocks
+        :param block_size: size of a block in bytes
+        :param total_size: total size of file in bytes (-1 if unknown)
+        """
+
         if total_size == -1:
             if self.expected_file_size == -1:
                 self.downloadProgress.setValue(100)
@@ -148,15 +164,16 @@ class DownloadDialog(QDialog):
         self.downloadProgress.setValue(int(downloaded * 100))
 
     def tryDownloadFile(self):
-        """Tries to download the file, errors (e.g. the server refuses the download) are shown in the dialog"""
+        """Tries to download the file"""
 
         self.downloadStatus.setText('Downloading...')
         try:
             self.path.mkdir(parents=True, exist_ok=True)
             urlretrieve(self.url, self.path / self.name, reporthook=self.updateProgress)
-        except Exception as error:
+        except OSError as error:
+            logging.info(f'Could not download file "{self.url}": {error}')
             self.downloadProgress.setValue(0)
-            self.downloadStatus.setText(f'<span style="color: #c62828">Download failed ({error})</span>')
+            self.downloadStatus.setText(f'<span style="color: {Styles.red_hex}">Download failed ({error})</span>')
             self.downloadStatus.setToolTip('The file could not be downloaded, please download it manually (link below)')
             return
         self.downloadProgress.setValue(100)
@@ -330,7 +347,7 @@ class PreferencesDialog(QDialog):
 
         # Theme
         self.theme = QComboBox(self)
-        for key, label in GlobalConf.THEMES.items():
+        for key, label in GlobalConf.themes.items():
             self.theme.addItem(label, key)
         self.theme.setCurrentIndex(max(0, self.theme.findData(GlobalConf.theme)))
         self.layout_theme = InputHBoxLayout(
@@ -380,9 +397,7 @@ class PreferencesDialog(QDialog):
         self.layout_max_parallel_runs = InputHBoxLayout(
             'Simultaneous simulations:',
             self.max_parallel_runs,
-            tooltip='Maximum number of simulations of all tabs that run at the same time ("Run all" and parameter scans). The '
-                    'other simulations wait in a queue.<br>Each simulation uses one processor core (except MPI builds), by '
-                    'default two cores are left for the GUI and the system',
+            tooltip='Maximum number of simulations of all tabs that run at the same time ("Run all" and parameter scans). The other simulations wait in a queue.<br>Each simulation uses one processor core (except MPI builds), by default two cores are left for the GUI and the system',
             split=0
         )
         self.main_layout.addLayout(self.layout_max_parallel_runs)
@@ -414,7 +429,6 @@ class PreferencesDialog(QDialog):
         GlobalConf.keep_configurations_info = self.keep_configurations_info.isChecked()
         GlobalConf.no_autodetect_version = self.no_autodetect_version.isChecked()
         GlobalConf.max_parallel_runs = self.max_parallel_runs.value()
-        GlobalConf.setValue(GlobalConf.max_parallel_runs_name, GlobalConf.max_parallel_runs)
 
         GlobalConf.use_default_language = self.use_default_language.isChecked()
         GlobalConf.setLanguage()
@@ -422,10 +436,8 @@ class PreferencesDialog(QDialog):
         theme = self.theme.currentData()
         if theme != GlobalConf.theme:
             GlobalConf.theme = theme
-            GlobalConf.setValue(GlobalConf.theme_name, theme)
-            parent: Any = self.parent()
-            if hasattr(parent, 'applyTheme'):
-                parent.applyTheme()
+            main_window: Any = self.parent()
+            main_window.applyTheme()
 
         self.accept()
 

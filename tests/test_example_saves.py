@@ -1,6 +1,7 @@
-"""Loads all example saves, lists their output files and parameters and draws all plots"""
+# Loads all example saves, lists their output files and parameters and draws all plots
 
 import pytest
+
 
 from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
@@ -9,7 +10,11 @@ from Simulations.TRIDYN2022 import SimulationInput as TridynInput
 
 
 def sdtrimspVersion(name: str) -> str:
-    """Returns the version group of SDTrimSP that suits an example save best"""
+    """
+    Returns the version group of SDTrimSP that suits an example save best
+
+    :param name: name of the file or case
+    """
 
     if '7.02' in name or '7.05' in name:
         return Versions.V_702
@@ -23,6 +28,12 @@ def sdtrimspVersion(name: str) -> str:
 
 
 def sdtrimspFolder(version: str):
+    """
+    Returns the folder of the installation of an SDTrimSP version
+
+    :param version: version of simulation
+    """
+
     folder_name = {
         Versions.V_601: 'SDTrimSP_6.01',
         Versions.V_606: 'SDTrimSP_6.06',
@@ -40,6 +51,17 @@ CASES += [(program, save) for program in ('SDTrimSP', 'TRIDYN') for save in sort
 
 @pytest.mark.parametrize('program, save', CASES, ids=lambda value: getattr(value, 'name', value))
 def test_example_save(main_window, qapp, tmp_path, errors, program, save):
+    """
+    Example save
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param program: name of simulation program
+    :param save: folder of the example save
+    """
+
     save_folder = copySave(save, tmp_path / save.name)
 
     if program == 'SDTrimSP':

@@ -1,26 +1,12 @@
-"""
-Parameter scan: a series of simulations in which any number of parameters of a simulation tab are varied (all combinations).
-The scan is enabled with the scan button in the toolbar of the simulation tab. Then the input fields that can be scanned
-show a small mark in their corner: a click opens a popup in which several values are entered (directly or as linear or
-logarithmic range, or a selection of the choices of a combo box), the field then shows its values. Parameters: energies,
-angles, starting depth and charge of the beam species, the properties of the elements (also the inelastic loss model), the
-atomic fractions (first layer), thickness and number of segments of the target, the numeric simulation settings (e.g.
-fluence, number of histories), the models of the simulation settings (interaction potential, integration method, surface
-binding model) and the version of the simulation program (other configurations, menu of the scan button).
-The simulations of the scan are written into subfolders of the folder of the simulation, the scan is described in
-scan.json in this folder (opening scan.json opens the scan again, each subfolder is a simulation on its own). The
-simulations run with a lower priority than the GUI and at most GlobalConf.max_parallel_runs simulations of all tabs run
-at the same time (see MainWindow.startQueuedSimulations), the results are compared in a <CompareWidget>
-"""
-
 from __future__ import annotations
 from typing import List, Optional, Callable, Any, Dict, Tuple, Iterator, TYPE_CHECKING
 from itertools import product
 from json import dump, load
 from locale import getpreferredencoding
-from math import isfinite
 from pathlib import Path
 from re import sub
+import logging
+
 
 import numpy as np
 
@@ -32,70 +18,33 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QApplication, QHBoxLayout, QListWidget, QListWidgetItem
 )
 
-from Pages.CompareDialog import CompareWidget, SCAN_FILE
+
+from Pages.CompareDialog import CompareWidget, formatParameter
 
 from Simulations.Simulations import writeInputFiles
 
 from TableWidgets.CompTable import setSpinboxValue
 
+from Utility.GlobalConf import GlobalConf
 from Utility.Styles import paletteQColor
 from Utility.Dialogs import showMessageBox
-from Utility.Functions import pathToStr, lowerProcessPriority, ensureExecutable
+from Utility.Functions import pathToStr, lowerProcessPriority, ensureExecutable, toNumber
 from Utility.Icons import getIcon
 from Utility.Layouts import InputHBoxLayouts
 from Utility.Typing import notNone
+
 
 if TYPE_CHECKING:
     from Pages.ProgramPage import SimulationPage
     from Containers.Arguments import SimulationArguments
 
 
-# scales of the range of values
-SCALES = ['linear', 'logarithmic (dense at start)', 'logarithmic (dense at end)']
-
-# icons of the states of the simulations of a scan
-STATUS_ICONS = {'waiting': 'clock', 'running': 'play', 'finished': 'okay', 'not started': 'abort', 'not run': 'abort'}
-
-# log of the simulations of a scan (in their folders)
-LOG_FILE = 'scan_log.txt'
-
-# fields of the rows of the composition tables: attribute of the row, key of the parameter (with the symbol)
-ROW_FIELDS = [
-    ('kinetic_energy', 'energy'), ('angle', 'angle'), ('azimuth', 'azimuth'), ('atomic_mass', 'mass'),
-    ('atomic_density', 'density'), ('surface_binding_energy', 'sbe'), ('displacement_energy', 'ed'),
-    ('cutoff_energy', 'ecut'), ('cutoff_energy_input', 'ecut'), ('bulk_binding_energy', 'ebulk'),
-    ('heat_of_formation', 'dhf'), ('inelastic_correction', 'ck'), ('start_depth', 'x0'), ('charge', 'charge')
-]
-
-# fields of the rows of the composition tables whose value is set in the field before the arguments are created:
-# attribute of the row, key of the parameter (with the symbol), label
-ROW_WIDGET_FIELDS = [
-    ('max_concentration', 'qumax', 'Maximum atomic fraction'), ('maximum_concentration', 'qumax', 'Maximum atomic fraction')
-]
-
-# combo boxes of the rows of the composition tables: attribute of the row, key of the parameter (with the symbol), label
-ROW_CHOICES = [
-    ('inelastic_loss_model', 'inel', 'Inelastic loss model'), ('action_switch', 'ires', 'Action at the maximum atomic fraction')
-]
-
-# fields of the simulation settings that are parameters with own keys (attribute: key)
-SETTINGS_KEYS = {'fluence': 'fluence', 'histories_total': 'histories', 'projectiles': 'projectiles'}
-
-# numeric fields of the simulation settings that are not scanned (they do not change the results)
-SETTINGS_EXCLUDED = {'histories_between', 'threads', 'log_frequency', 'integral_frequency', 'output_frequency'}
-
-# numeric fields of the beam and target settings that are not scanned (calculated from other fields or not working)
-BEAM_TARGET_EXCLUDED = {'segment_thickness', 'sweep'}
-
-# combo boxes of the simulation settings that can be scanned (attribute: label)
-SETTINGS_CHOICES = {
-    'potential': 'Interaction potential', 'integration': 'Integration method', 'surface_binding_model': 'Surface binding model',
-    'inelastic_loss_model': 'Electronic stopping mode'
-}
-
-
 def formatValue(value) -> str:
-    """Returns a value for a folder name, e.g. 1000.0 -> "1000", 0.5 -> "0.5" """
+    """
+    Returns value for a folder name, e.g. 1000.0 -> "1000", 0.5 -> "0.5"
+
+    :param value: value of parameter
+    """
 
     if isinstance(value, str):
         return sub(r'[^A-Za-z0-9_.]+', '_', value)
@@ -109,14 +58,71 @@ class ScanParameter:
     :param key: unique key (used in folder names)
     :param label: label with unit
     :param current: function that returns the current value from the arguments
-    :param apply: function that sets a value in the arguments or None: the value is set in the widgets of the parameter
-        before the arguments are created (fields of the simulation settings)
+    :param apply: function that sets a value in the arguments or None (the value is set in the widgets of the parameter
+        before the arguments are created, e.g. fields of the simulation settings)
     :param integer: integer values
     :param choices: (optional) texts of the choices of a combo box, the values are the indices of the choices
     """
 
-    def __init__(self, key: str, label: str, current: Callable[..., Any], apply: Optional[Callable[..., None]], integer: bool = False,
-                 choices: Optional[List[str]] = None):
+    # scales of the range of values
+    scales = ['linear', 'logarithmic (dense at start)', 'logarithmic (dense at end)']
+
+    # fields of the rows of the composition tables as (attribute of the row, key of the parameter)
+    rowFields = [
+        ('kinetic_energy', 'energy'),
+        ('angle', 'angle'),
+        ('azimuth', 'azimuth'),
+        ('atomic_mass', 'mass'),
+        ('atomic_density', 'density'),
+        ('surface_binding_energy', 'sbe'),
+        ('displacement_energy', 'ed'),
+        ('cutoff_energy', 'ecut'),
+        ('cutoff_energy_input', 'ecut'),
+        ('bulk_binding_energy', 'ebulk'),
+        ('heat_of_formation', 'dhf'),
+        ('inelastic_correction', 'ck'),
+        ('start_depth', 'x0'),
+        ('charge', 'charge')
+    ]
+
+    # fields of the rows whose value is set in the field before the arguments are created as (attribute, key, label)
+    rowWidgetFields = [
+        ('max_concentration', 'qumax', 'Maximum atomic fraction'),
+        ('maximum_concentration', 'qumax', 'Maximum atomic fraction')
+    ]
+
+    # combo boxes of the rows as (attribute, key, label)
+    rowChoices = [
+        ('inelastic_loss_model', 'inel', 'Inelastic loss model'),
+        ('action_switch', 'ires', 'Action at the maximum atomic fraction')
+    ]
+
+    # fields of the simulation settings with own keys as {attribute: key}
+    settingsKeys = {'fluence': 'fluence', 'histories_total': 'histories', 'projectiles': 'projectiles'}
+
+    # numeric fields of the simulation settings that do not change the results
+    settingsExcluded = {'histories_between', 'threads', 'log_frequency', 'integral_frequency', 'output_frequency'}
+
+    # numeric fields of the beam and target settings that are calculated from other fields or not working
+    beamTargetExcluded = {'segment_thickness', 'sweep'}
+
+    # combo boxes of the simulation settings as {attribute: label}
+    settingsChoices = {
+        'potential': 'Interaction potential',
+        'integration': 'Integration method',
+        'surface_binding_model': 'Surface binding model',
+        'inelastic_loss_model': 'Electronic stopping mode'
+    }
+
+    def __init__(
+        self,
+        key: str,
+        label: str,
+        current: Callable[..., Any],
+        apply: Optional[Callable[..., None]],
+        integer: bool = False,
+        choices: Optional[List[str]] = None
+    ):
         self.key = key
         self.label = label
         self.current = current
@@ -134,8 +140,8 @@ def rangeValues(start: float, stop: float, number: int, scale: int = 0) -> np.nd
     :param start: first value
     :param stop: last value
     :param number: number of values
-    :param scale: (optional) index in SCALES: linear, logarithmic (dense at start) or logarithmic (dense at end). Ranges
-        that include 0 or negative values (e.g. angles from 0°) are shifted for the logarithmic spacing
+    :param scale: (optional) index in ScanParameter.scales (ranges that include 0 or negative values, e.g. angles from 0°,
+        are shifted for the logarithmic spacing)
     """
 
     if scale == 0 or start == stop or number < 3:
@@ -152,26 +158,33 @@ def rangeValues(start: float, stop: float, number: int, scale: int = 0) -> np.nd
 
 
 def formatRangeValue(value: float) -> str:
-    """Returns a value of a range rounded to 4 significant digits, e.g. 632.456 -> "632.5", 20000.0 -> "20000" """
+    """
+    Returns value of a range rounded to 4 significant digits, e.g. 632.456 -> "632.5", 20000.0 -> "20000"
+
+    :param value: value of range
+    """
 
     return f'{float(f"{value:.4g}"):.10g}'
 
 
 def parseValues(text: str, integer: bool = False) -> list:
-    """Returns the values of a comma separated text (integer values are rounded, duplicates removed)"""
+    """
+    Returns values of a comma separated text (integer values are rounded, duplicates removed)
+
+    :param text: comma separated values
+    :param integer: (optional) if values are integers
+    """
 
     values: list = []
     # a list or a number of a damaged scan.json
     if isinstance(text, (list, tuple)):
         text = ', '.join(str(value) for value in text)
     elif not isinstance(text, str):
-        text = str(text) if isinstance(text, (int, float)) and not isinstance(text, bool) else ''
+        number = toNumber(text)
+        text = str(text) if number is not None else ''
     for part in text.replace(';', ',').split(','):
-        try:
-            value = float(part)
-        except ValueError:
-            continue
-        if not isfinite(value):
+        value = toNumber(part, from_text=True)
+        if value is None:
             continue
         if integer:
             value = int(round(value))
@@ -181,30 +194,48 @@ def parseValues(text: str, integer: bool = False) -> list:
 
 
 def defaultRange(key: str, current: float) -> dict:
-    """Default range of values of a parameter around its current value"""
+    """
+    Returns default range of values of a parameter around its current value
 
-    if key.startswith(('angle_', 'azimuth_')):
-        angle = key.startswith('angle_')
-        return {'start': 0., 'stop': 80. if angle else 90., 'number': 9 if angle else 4, 'scale': 0}
+    :param key: key of parameter
+    :param current: current value of parameter
+    """
+
+    if key.startswith('angle_'):
+        return {'start': 0., 'stop': 80., 'number': 9, 'scale': 0}
+    if key.startswith('azimuth_'):
+        return {'start': 0., 'stop': 90., 'number': 4, 'scale': 0}
     if key.startswith(('fraction_', 'qubeam_')):
         return {'start': 0.1, 'stop': 0.9, 'number': 5, 'scale': 0}
     if key.startswith('qumax_'):
         return {'start': 0.2, 'stop': 1., 'number': 5, 'scale': 0}
+    if current > 0 and (key.startswith('energy_') or key in ('fluence', 'histories', 'projectiles')):
+        return {'start': current / 10, 'stop': current * 10, 'number': 5, 'scale': 1}
     if current > 0:
-        logarithmic = key.startswith('energy_') or key in ('fluence', 'histories', 'projectiles')
-        return {'start': current / 10 if logarithmic else current / 2, 'stop': current * 10 if logarithmic else current * 2,
-                'number': 5, 'scale': 1 if logarithmic else 0}
+        return {'start': current / 2, 'stop': current * 2, 'number': 5, 'scale': 0}
     return {'start': current, 'stop': current + 1, 'number': 5, 'scale': 0}
 
 
 def elementRows(arguments, symbol: str) -> list:
-    """Returns the beam and target rows of an element"""
+    """
+    Returns beam and target rows of an element
+
+    :param arguments: arguments of simulation
+    :param symbol: symbol of element
+    """
 
     return [row for row in arguments.beam_rows + arguments.target_rows if row.symbol == symbol]
 
 
 def setElementValue(arguments, symbol: str, attribute: str, value: float):
-    """Sets a property of an element (in the beam and in the target) and marks the element as modified"""
+    """
+    Sets a property of an element (in the beam and in the target) and marks the element as modified
+
+    :param arguments: arguments of simulation
+    :param symbol: symbol of element
+    :param attribute: attribute of element
+    :param value: new value
+    """
 
     for row in elementRows(arguments, symbol):
         element = row.element
@@ -215,14 +246,27 @@ def setElementValue(arguments, symbol: str, attribute: str, value: float):
 
 
 def setRowValue(arguments, symbol: str, key: str, value: float):
-    """Sets an optional value of the rows of an element (e.g. cutoff_energy)"""
+    """
+    Sets an optional value of the rows of an element
+
+    :param arguments: arguments of simulation
+    :param symbol: symbol of element
+    :param key: key of optional value, e.g. cutoff_energy
+    :param value: new value
+    """
 
     for row in elementRows(arguments, symbol):
         row.optional[key] = float(value)
 
 
 def setTargetFraction(arguments, symbol: str, value: float):
-    """Sets the atomic fraction of an element in the first layer of the target, the other elements keep their ratios"""
+    """
+    Sets atomic fraction of an element in the first layer of the target, the other elements keep their ratios
+
+    :param arguments: arguments of simulation
+    :param symbol: symbol of element
+    :param value: new atomic fraction
+    """
 
     target_rows = [row for row in arguments.target_rows if row.symbol]
     symbols = [row.symbol for row in target_rows]
@@ -233,17 +277,28 @@ def setTargetFraction(arguments, symbol: str, value: float):
     layers = arguments.structure[:1] if arguments.structure else []
     for layer in layers:
         others = sum(a for i, a in enumerate(layer.abundances) if i != index)
-        layer.abundances = [
-            value if i == index else (a / others * (1 - value) if others > 0 else (1 - value) / max(len(symbols) - 1, 1))
-            for i, a in enumerate(layer.abundances)
-        ]
+        abundances = []
+        for i, abundance in enumerate(layer.abundances):
+            if i == index:
+                abundances.append(value)
+            elif others > 0:
+                abundances.append(abundance / others * (1 - value))
+            else:
+                abundances.append((1 - value) / max(len(symbols) - 1, 1))
+        layer.abundances = abundances
     for i, row in enumerate(target_rows):
         if layers and i < len(layers[0].abundances):
             row.abundance = layers[0].abundances[i]
 
 
 def setBeamFraction(arguments, symbol: str, value: float):
-    """Sets the fraction of an element in the beam, the other elements of the beam keep their ratios"""
+    """
+    Sets fraction of an element in the beam, the other elements of the beam keep their ratios
+
+    :param arguments: arguments of simulation
+    :param symbol: symbol of element
+    :param value: new fraction
+    """
 
     rows = [row for row in arguments.beam_rows if row.symbol]
     if not any(row.symbol == symbol for row in rows):
@@ -260,7 +315,12 @@ def setBeamFraction(arguments, symbol: str, value: float):
 
 
 def setSegments(arguments, value: float):
-    """Sets the number of segments of the target (nqx), the layers keep their relative number of segments (at least 1)"""
+    """
+    Sets number of segments of the target (nqx), the layers keep their relative number of segments (at least 1)
+
+    :param arguments: arguments of simulation
+    :param value: new number of segments
+    """
 
     number = max(int(round(value)), 1)
     arguments.target_args.segments = number
@@ -273,19 +333,30 @@ def setSegments(arguments, value: float):
         if i == len(layers) - 1:
             segments = max(remaining, 1)
         else:
-            segments = min(max(int(round(layer.segments * number / total)), 1), max(remaining - (len(layers) - 1 - i), 1))
+            # at least one segment for each of the following layers
+            maximum = max(remaining - (len(layers) - 1 - i), 1)
+            segments = min(max(int(round(layer.segments * number / total)), 1), maximum)
         layer.segments = segments
         remaining -= segments
 
 
 def choiceTexts(widget: QComboBox) -> List[str]:
-    """Texts of the choices of a combo box (without the mark of the default choice)"""
+    """
+    Returns texts of the choices of a combo box (without the mark of the default choice)
+
+    :param widget: combo box
+    """
 
     return [widget.itemText(i).replace(' (default)', '') for i in range(widget.count())]
 
 
 def choiceEnabled(widget: QComboBox, index: int) -> bool:
-    """Returns if a choice of a combo box can be selected"""
+    """
+    Returns if a choice of a combo box can be selected
+
+    :param widget: combo box
+    :param index: index of choice
+    """
 
     model = widget.model()
     if model is None:
@@ -294,16 +365,30 @@ def choiceEnabled(widget: QComboBox, index: int) -> bool:
 
 
 def setThickness(arguments, value: float):
-    """Sets the thickness of the target, the layers keep their relative thickness"""
+    """
+    Sets thickness of the target, the layers keep their relative thickness
+
+    :param arguments: arguments of simulation
+    :param value: new thickness
+    """
 
     total = sum(layer.thickness for layer in arguments.structure)
     for layer in arguments.structure:
-        layer.thickness = layer.thickness * value / total if total > 0 else value / max(len(arguments.structure), 1)
+        if total > 0:
+            layer.thickness = layer.thickness * value / total
+        else:
+            layer.thickness = value / max(len(arguments.structure), 1)
     arguments.target_args.thickness = float(value)
 
 
 def scanParameters(arguments, simulation_name: str, supports_azimuth: bool = True) -> List[ScanParameter]:
-    """Returns the parameters that can be scanned for the arguments of a simulation (without the simulation settings)"""
+    """
+    Returns parameters that can be scanned for the arguments of a simulation (without the simulation settings)
+
+    :param arguments: arguments of simulation
+    :param simulation_name: name of simulation program
+    :param supports_azimuth: (optional) if the simulation supports azimuthal angles
+    """
 
     parameters = []
     beam_elements = len([row for row in arguments.beam_rows if row.symbol])
@@ -312,20 +397,37 @@ def scanParameters(arguments, simulation_name: str, supports_azimuth: bool = Tru
             continue
         symbol = row.symbol
         if beam_elements > 1:
-            parameters.append(ScanParameter(f'qubeam_{symbol}', f'Fraction of {symbol} in the beam',
-                                            lambda a, i=i: a.beam_rows[i].abundance, lambda a, v, s=symbol: setBeamFraction(a, s, v)))
-        parameters.append(ScanParameter(f'energy_{symbol}', f'Energy of {symbol} [eV]', lambda a, i=i: a.beam_rows[i].energy,
-                                        lambda a, v, i=i: setattr(a.beam_rows[i], 'energy', float(v))))
-        parameters.append(ScanParameter(f'angle_{symbol}', f'Angle of incidence of {symbol} [°]', lambda a, i=i: a.beam_rows[i].angle,
-                                        lambda a, v, i=i: setattr(a.beam_rows[i], 'angle', float(v))))
+            parameters.append(ScanParameter(
+                f'qubeam_{symbol}',
+                f'Fraction of {symbol} in the beam',
+                lambda a, i=i: a.beam_rows[i].abundance,
+                lambda a, v, s=symbol: setBeamFraction(a, s, v)
+            ))
+        parameters.append(ScanParameter(
+            f'energy_{symbol}',
+            f'Energy of {symbol} [eV]',
+            lambda a, i=i: a.beam_rows[i].energy,
+            lambda a, v, i=i: setattr(a.beam_rows[i], 'energy', float(v))
+        ))
+        parameters.append(ScanParameter(
+            f'angle_{symbol}',
+            f'Angle of incidence of {symbol} [°]',
+            lambda a, i=i: a.beam_rows[i].angle,
+            lambda a, v, i=i: setattr(a.beam_rows[i], 'angle', float(v))
+        ))
         if supports_azimuth and simulation_name == 'SDTrimSP':
-            parameters.append(ScanParameter(f'azimuth_{symbol}', f'Azimuthal angle of {symbol} [°]',
-                                            lambda a, i=i: a.beam_rows[i].get('azimuth') or 0.,
-                                            lambda a, v, i=i: a.beam_rows[i].optional.__setitem__('azimuth', float(v))))
+            parameters.append(ScanParameter(
+                f'azimuth_{symbol}',
+                f'Azimuthal angle of {symbol} [°]',
+                lambda a, i=i: a.beam_rows[i].get('azimuth') or 0.,
+                lambda a, v, i=i: a.beam_rows[i].optional.__setitem__('azimuth', float(v))
+            ))
         if simulation_name == 'SDTrimSP':
-            for key, name, option in (('x0', 'Starting depth', 'start_depth'), ('charge', 'Charge', 'charge')):
+            for key, label, option in (('x0', 'Starting depth', 'start_depth'), ('charge', 'Charge', 'charge')):
+                unit = ' [Å]' if key == 'x0' else ''
                 parameters.append(ScanParameter(
-                    f'{key}_{symbol}', f'{name} of {symbol}' + (' [Å]' if key == 'x0' else ''),
+                    f'{key}_{symbol}',
+                    f'{label} of {symbol}{unit}',
                     lambda a, i=i, o=option: float(a.beam_rows[i].get(o) or 0.),
                     lambda a, v, i=i, o=option: a.beam_rows[i].optional.__setitem__(o, float(v))
                 ))
@@ -337,55 +439,84 @@ def scanParameters(arguments, simulation_name: str, supports_azimuth: bool = Tru
         ('density', 'Atomic density', '[atoms/Å³]', 'atomic_density'),
         ('mass', 'Atomic mass', '[amu]', 'atomic_mass'),
     ]
+    row_properties = [
+        ('ecut', 'Cutoff energy', 'cutoff_energy'),
+        ('ebulk', 'Bulk binding energy', 'bulk_binding_energy'),
+        ('dhf', 'Heat of formation', 'heat_of_formation')
+    ]
     for symbol in symbols:
-        for key, name, unit, attribute in element_properties:
+        for key, label, unit, attribute in element_properties:
             parameters.append(ScanParameter(
-                f'{key}_{symbol}', f'{name} of {symbol} {unit}',
+                f'{key}_{symbol}',
+                f'{label} of {symbol} {unit}',
                 lambda a, s=symbol, at=attribute: getattr(elementRows(a, s)[0].element, at) or 0.,
                 lambda a, v, s=symbol, at=attribute: setElementValue(a, s, at, v)
             ))
         if simulation_name == 'SDTrimSP':
-            for key, name, option in (('ecut', 'Cutoff energy', 'cutoff_energy'), ('ebulk', 'Bulk binding energy', 'bulk_binding_energy'),
-                                      ('dhf', 'Heat of formation', 'heat_of_formation')):
+            for key, label, option in row_properties:
                 parameters.append(ScanParameter(
-                    f'{key}_{symbol}', f'{name} of {symbol} [eV]',
+                    f'{key}_{symbol}',
+                    f'{label} of {symbol} [eV]',
                     lambda a, s=symbol, o=option: max(float(elementRows(a, s)[0].get(o) or 0.), 0.),
                     lambda a, v, s=symbol, o=option: setRowValue(a, s, o, v)
                 ))
             parameters.append(ScanParameter(
-                f'ck_{symbol}', f'Correction of the electronic stopping of {symbol} (ck_elec)',
+                f'ck_{symbol}',
+                f'Correction of the electronic stopping of {symbol} (ck_elec)',
                 lambda a, s=symbol: float(elementRows(a, s)[0].get('inelastic_correction') or 1.),
                 lambda a, v, s=symbol: setRowValue(a, s, 'inelastic_correction', v)
             ))
         else:
             parameters.append(ScanParameter(
-                f'ecut_{symbol}', f'Cutoff energy of {symbol} [eV]', lambda a, s=symbol: elementRows(a, s)[0].element.cutoff_energy or 0.,
+                f'ecut_{symbol}',
+                f'Cutoff energy of {symbol} [eV]',
+                lambda a, s=symbol: elementRows(a, s)[0].element.cutoff_energy or 0.,
                 lambda a, v, s=symbol: setElementValue(a, s, 'cutoff_energy', v)
             ))
         if any(row in arguments.target_rows for row in elementRows(arguments, symbol)):
             parameters.append(ScanParameter(
-                f'fraction_{symbol}', f'Atomic fraction of {symbol} in the target (first layer)',
+                f'fraction_{symbol}',
+                f'Atomic fraction of {symbol} in the target (first layer)',
                 lambda a, s=symbol: next((r.abundance for r in a.target_rows if r.symbol == s), 0.),
                 lambda a, v, s=symbol: setTargetFraction(a, s, v)
             ))
 
     parameters.append(ScanParameter('thickness', 'Target thickness [Å]', lambda a: a.target_args.thickness, setThickness))
     if isinstance(getattr(arguments.target_args, 'segments', None), int):
-        parameters.append(ScanParameter('segments', 'Target segments (nqx)', lambda a: a.target_args.segments, setSegments, integer=True))
-    parameters.append(ScanParameter('fluence', 'Fluence [atoms/Å²]', lambda a: a.settings.fluence,
-                                    lambda a, v: setattr(a.settings, 'fluence', float(v))))
+        parameters.append(ScanParameter(
+            'segments',
+            'Target segments (nqx)',
+            lambda a: a.target_args.segments,
+            setSegments,
+            integer=True
+        ))
+    parameters.append(ScanParameter(
+        'fluence',
+        'Fluence [atoms/Å²]',
+        lambda a: a.settings.fluence,
+        lambda a, v: setattr(a.settings, 'fluence', float(v))
+    ))
     labels = {'histories': 'Number of histories (nh)', 'projectiles': 'Projectiles per history (nr_pproj)'}
     if simulation_name != 'SDTrimSP':
         labels = {'projectiles': 'Number of projectiles (pspr)'}
     for name, label in labels.items():
         if isinstance(arguments.settings.get(name), (int, float)):
-            parameters.append(ScanParameter(name, label, lambda a, n=name: a.settings.get(n),
-                                            lambda a, v, n=name: a.settings.optional.__setitem__(n, int(round(v))), integer=True))
+            parameters.append(ScanParameter(
+                name,
+                label,
+                lambda a, n=name: a.settings.get(n),
+                lambda a, v, n=name: a.settings.optional.__setitem__(n, int(round(v))),
+                integer=True
+            ))
     return parameters
 
 
 def plainLabel(text: str) -> str:
-    """Label of an input field without html, colon and trailing spaces"""
+    """
+    Returns label of an input field without html, colon and trailing spaces
+
+    :param text: text of label
+    """
 
     return sub(r'<[^>]+>', '', text).strip().rstrip(':').strip()
 
@@ -396,10 +527,11 @@ def settingsFields(owner, excluded: Optional[set] = None) -> List[Tuple[str, str
     <InputHBoxLayouts> that are attributes of the layout
 
     :param owner: settings layout (e.g. VlSimulationSettings)
-    :param excluded: (optional) attribute names of fields that are not returned (default: SETTINGS_EXCLUDED)
+    :param excluded: (optional) attribute names of fields that are not returned (default: ScanParameter.settingsExcluded)
     """
 
-    excluded = SETTINGS_EXCLUDED if excluded is None else excluded
+    if excluded is None:
+        excluded = ScanParameter.settingsExcluded
 
     names = {id(value): name for name, value in vars(owner).items() if isinstance(value, (QSpinBox, QDoubleSpinBox))}
     fields = []
@@ -419,14 +551,18 @@ def settingsFields(owner, excluded: Optional[set] = None) -> List[Tuple[str, str
 
 
 def fieldWidgets(page: SimulationPage) -> Iterator[Tuple[str, QWidget]]:
-    """Returns the input fields of the parameters of the composition tables and the target as (key, widget)"""
+    """
+    Returns input fields of the parameters of the composition tables and the target as (key, widget)
+
+    :param page: page of the simulation
+    """
 
     for table in (page.table_beam, page.table_target):
         for row in table.rows:
             symbol = row.element.symbol
             if not symbol:
                 continue
-            for attribute, prefix in ROW_FIELDS:
+            for attribute, prefix in ScanParameter.rowFields:
                 widget = getattr(row, attribute, None)
                 if isinstance(widget, QWidget) and widget in row.row_widgets:
                     yield f'{prefix}_{symbol}', widget
@@ -457,7 +593,8 @@ class ScanFieldOverlay(QWidget):
     :param field: input field
     """
 
-    SIZE = 9
+    # size of the mark in pixels
+    markSize = 9
 
     def __init__(self, scan: ParameterScan, field: QWidget):
         super().__init__(field)
@@ -468,6 +605,13 @@ class ScanFieldOverlay(QWidget):
         field.installEventFilter(self)
 
     def eventFilter(self, obj: Optional[QObject], event: Optional[QEvent]) -> bool:
+        """
+        Updates the overlay if the field is resized or enabled
+
+        :param obj: watched object
+        :param event: event of object
+        """
+
         if obj is self.field and event is not None and event.type() in (QEvent.Type.Resize, QEvent.Type.EnabledChange):
             self.updateOverlay()
         return False
@@ -479,23 +623,29 @@ class ScanFieldOverlay(QWidget):
         label = self.scan.labels.get(self.key, self.key)
         if text:
             self.setGeometry(self.field.rect())
-            self.setToolTip(f'<b>{label}</b><br>Values of the parameter scan: {", ".join(self.scan.valuesStrings(self.key))}'
-                            '<br>Click to change the values')
+            values = ', '.join(self.scan.valuesStrings(self.key))
+            self.setToolTip(f'<b>{label}</b><br>Values of the parameter scan: {values}<br>Click to change the values')
         else:
-            self.setGeometry(0, 0, self.SIZE, self.SIZE)
+            self.setGeometry(0, 0, self.markSize, self.markSize)
             self.setToolTip(f'<b>{label}</b><br>Click to enter several values for the parameter scan')
         self.setVisible(self.scan.enabled and bool(self.key) and (bool(text) or self.field.isEnabled()))
         self.raise_()
         self.update()
 
     def paintEvent(self, event: Optional[QPaintEvent]):
+        """
+        Paints the mark or the values
+
+        :param event: paint event
+        """
+
         painter = QPainter(self)
         color = paletteQColor(0)
         text = self.scan.valuesText(self.key)
         if not text:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color)
-            painter.drawPolygon(QPolygon([QPoint(0, 0), QPoint(self.SIZE, 0), QPoint(0, self.SIZE)]))
+            painter.drawPolygon(QPolygon([QPoint(0, 0), QPoint(self.markSize, 0), QPoint(0, self.markSize)]))
             return
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         background = QColor(self.palette().base().color())
@@ -509,10 +659,16 @@ class ScanFieldOverlay(QWidget):
         painter.drawRoundedRect(rect, 2, 2)
         painter.setPen(self.palette().text().color())
         text_rect = rect.adjusted(4, 0, -2, 0)
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                         self.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, text_rect.width()))
+        elided_text = self.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, text_rect.width())
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, elided_text)
 
     def mousePressEvent(self, event: Optional[QMouseEvent]):
+        """
+        Opens the popup for the values
+
+        :param event: mouse event
+        """
+
         if event is not None and event.button() == Qt.MouseButton.LeftButton:
             self.scan.editValues(self.key, self.field)
             event.accept()
@@ -548,8 +704,10 @@ class ScanValuesEditor(QFrame):
             combo = field if isinstance(field, QComboBox) else None
             for i, text in enumerate(parameter.choices):
                 item = QListWidgetItem(text, self.choices)
-                enabled = combo is None or choiceEnabled(combo, i)
-                item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled if enabled else Qt.ItemFlag.ItemIsUserCheckable)
+                flags = Qt.ItemFlag.ItemIsUserCheckable
+                if combo is None or choiceEnabled(combo, i):
+                    flags |= Qt.ItemFlag.ItemIsEnabled
+                item.setFlags(flags)
                 item.setCheckState(Qt.CheckState.Unchecked)
             self.choices.setMinimumWidth(360)
             self.choices.setMaximumHeight(min(self.choices.sizeHintForRow(0) * len(parameter.choices) + 6, 300))
@@ -566,14 +724,19 @@ class ScanValuesEditor(QFrame):
         self.number.setRange(1, 1000)
         self.number.valueChanged.connect(lambda _: self.updateValues())
         self.scale = QComboBox(self)
-        self.scale.addItems(SCALES)
-        self.scale.setToolTip(
-            'Spacing of the values of the range: linear or logarithmic with dense values at the start or at the end of the '
-            'range (e.g. at grazing incidence for angles from 0° to 89°). Ranges that include 0 are shifted.'
-        )
+        self.scale.addItems(ScanParameter.scales)
+        self.scale.setToolTip('Spacing of the values of the range: linear or logarithmic with dense values at the start or at the end of the range (e.g. at grazing incidence for angles from 0° to 89°). Ranges that include 0 are shifted.')
         self.scale.currentIndexChanged.connect(lambda _: self.updateValues())
         line = QHBoxLayout()
-        range_widgets: List[QWidget] = [QLabel('from', self), self.start, QLabel('to', self), self.stop, QLabel('number', self), self.number, self.scale]
+        range_widgets: List[QWidget] = [
+            QLabel('from', self),
+            self.start,
+            QLabel('to', self),
+            self.stop,
+            QLabel('number', self),
+            self.number,
+            self.scale
+        ]
         for widget in range_widgets:
             line.addWidget(widget)
         values_label = QLabel('Values:', self)
@@ -626,7 +789,11 @@ class ScanValuesEditor(QFrame):
         self.values.setFocus()
 
     def setState(self, state: dict):
-        """Sets the range and the values (state of ParameterScan.values)"""
+        """
+        Sets the range and the values
+
+        :param state: state of ParameterScan.values
+        """
 
         for widget in (self.start, self.stop, self.number, self.scale):
             widget.blockSignals(True)
@@ -649,22 +816,33 @@ class ScanValuesEditor(QFrame):
             selected = parseValues(self.values.text(), True)
             self.choices.blockSignals(True)
             for i in range(self.choices.count()):
-                notNone(self.choices.item(i)).setCheckState(Qt.CheckState.Checked if i in selected else Qt.CheckState.Unchecked)
+                check_state = Qt.CheckState.Checked if i in selected else Qt.CheckState.Unchecked
+                notNone(self.choices.item(i)).setCheckState(check_state)
             self.choices.blockSignals(False)
 
     def choicesChanged(self):
-        """The selection of the choices sets the values (indices of the choices)"""
+        """Sets the values to the indices of the selected choices"""
 
         if self.choices is None:
             return
-        selected = [i for i in range(self.choices.count()) if notNone(self.choices.item(i)).checkState() == Qt.CheckState.Checked]
+        selected = []
+        for i in range(self.choices.count()):
+            if notNone(self.choices.item(i)).checkState() == Qt.CheckState.Checked:
+                selected.append(i)
         self.values.setText(', '.join(str(i) for i in selected))
 
     def state(self) -> dict:
+        """Returns the range and the values"""
+
         if self.choices is not None:
             return {'values': self.values.text()}
-        return {'start': self.start.value(), 'stop': self.stop.value(), 'number': self.number.value(),
-                'scale': self.scale.currentIndex(), 'values': self.values.text()}
+        return {
+            'start': self.start.value(),
+            'stop': self.stop.value(),
+            'number': self.number.value(),
+            'scale': self.scale.currentIndex(),
+            'values': self.values.text()
+        }
 
     def updateValues(self):
         """Fills the values from the range"""
@@ -682,20 +860,27 @@ class ScanValuesEditor(QFrame):
         self.count.setText(f'{number} value{"s" if number != 1 else ""}, {self.scan.count()} simulations in the scan')
 
     def removeValues(self):
+        """Removes the values of the parameter from the scan"""
+
         self.scan.setValues(self.parameter.key, None)
         self.close()
 
 
 class ParameterScan(QObject):
     """
-    Parameter scan of a simulation tab (see the module description). The values of the parameters are entered in the input
-    fields of the tab, the simulations are written into subfolders of the folder of the simulation
+    Parameter scan of a simulation tab: a series of simulations in which any number of parameters are varied (all
+    combinations). The values are entered in popups of the input fields of the tab (<ScanFieldOverlay>). The simulations are
+    written into subfolders of the folder of the simulation and described in scan.json, at most GlobalConf.max_parallel_runs
+    simulations of all tabs run at the same time and the results are compared in a <CompareWidget>
 
     :param page: <SimulationPage> of the simulation
     """
 
     # the values of the parameters have changed
     changed = pyqtSignal()
+
+    # icons of the states of the simulations
+    statusIcons = {'waiting': 'clock', 'running': 'play', 'finished': 'okay', 'not started': 'abort', 'not run': 'abort'}
 
     def __init__(self, page: SimulationPage):
         super().__init__(page)
@@ -738,10 +923,8 @@ class ParameterScan(QObject):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.updateProgress)
 
-    # --- parameters and their values ---
-
     def otherVersions(self) -> list:
-        """Other configurations of the same simulation program (with folder and binary)"""
+        """Returns other configurations of the same simulation program (with folder and binary)"""
 
         return [
             sc for sc in self.main_window.simulation_configs
@@ -753,22 +936,24 @@ class ParameterScan(QObject):
         """Returns the parameters that can be scanned with their input fields"""
 
         page = self.page
-        supports_azimuth = bool(getattr(getattr(page.simulation_class, 'default_values', None), 'supports_beta0', True))
-        parameters = {parameter.key: parameter for parameter in scanParameters(page.makeArguments(), page.simulation_class.Name, supports_azimuth)}
+        default_values = getattr(page.simulation_class, 'default_values', None)
+        supports_azimuth = bool(getattr(default_values, 'supports_beta0', True))
+        scan_parameters = scanParameters(page.makeArguments(), page.simulation_class.Name, supports_azimuth)
+        parameters = {parameter.key: parameter for parameter in scan_parameters}
         for key, widget in fieldWidgets(page):
             if key in parameters:
                 parameters[key].widgets.append(widget)
         # numeric fields whose value is set in the field before the arguments are created: simulation settings, beam
         # and target settings (e.g. thin film thickness, global density) and fields of the rows (e.g. maximum fraction)
-        fields: List[Tuple[str, str, QWidget]] = [
-            (SETTINGS_KEYS.get(name, name), label, widget) for name, label, widget in settingsFields(page.settings_group_layout_settings)
-        ]
+        fields: List[Tuple[str, str, QWidget]] = []
+        for name, label, widget in settingsFields(page.settings_group_layout_settings):
+            fields.append((ScanParameter.settingsKeys.get(name, name), label, widget))
         for owner in (page.general_beam_settings, page.general_target_settings):
-            fields += settingsFields(owner, BEAM_TARGET_EXCLUDED)
+            fields += settingsFields(owner, ScanParameter.beamTargetExcluded)
         for table in (page.table_beam, page.table_target):
             for row in table.rows:
                 symbol = row.element.symbol
-                for attribute, prefix, label in ROW_WIDGET_FIELDS:
+                for attribute, prefix, label in ScanParameter.rowWidgetFields:
                     field = getattr(row, attribute, None)
                     if symbol and isinstance(field, (QSpinBox, QDoubleSpinBox)) and field in row.row_widgets:
                         fields.append((f'{prefix}_{symbol}', f'{label} of {symbol}', field))
@@ -781,13 +966,13 @@ class ParameterScan(QObject):
             parameter.widgets.append(widget)
             parameters[key] = parameter
         # combo boxes of the simulation settings and of the composition tables (the choice is set in the combo box)
-        choices: List[Tuple[str, str, Any]] = [
-            (name, label, getattr(page.settings_group_layout_settings, name, None)) for name, label in SETTINGS_CHOICES.items()
-        ]
+        choices: List[Tuple[str, str, Any]] = []
+        for name, label in ScanParameter.settingsChoices.items():
+            choices.append((name, label, getattr(page.settings_group_layout_settings, name, None)))
         for table in (page.table_beam, page.table_target):
             for row in table.rows:
                 symbol = row.element.symbol
-                for attribute, prefix, label in ROW_CHOICES:
+                for attribute, prefix, label in ScanParameter.rowChoices:
                     combo = getattr(row, attribute, None)
                     if symbol and combo in row.row_widgets:
                         choices.append((f'{prefix}_{symbol}', f'{label} of {symbol}', combo))
@@ -824,7 +1009,11 @@ class ParameterScan(QObject):
         return True
 
     def setVersions(self, titles: List[str]):
-        """Sets the other configurations of the scan (version of the simulation program)"""
+        """
+        Sets the other configurations of the scan (version of the simulation program)
+
+        :param titles: titles of the configurations
+        """
 
         self.versions = list(titles)
         self.page.setEdited(True)
@@ -840,6 +1029,12 @@ class ParameterScan(QObject):
         self.changed.emit()
 
     def valuesStrings(self, key: str) -> List[str]:
+        """
+        Returns values of a parameter as texts
+
+        :param key: key of parameter
+        """
+
         state = self.values.get(key)
         if state is None:
             return []
@@ -849,7 +1044,11 @@ class ParameterScan(QObject):
         return [formatRangeValue(value) for value in parseValues(state.get('values', ''))]
 
     def valuesText(self, key: str) -> str:
-        """Short text of the values of a parameter (shown in its field) or '' if it is not scanned"""
+        """
+        Returns short text of the values of a parameter (shown in its field) or '' if it is not scanned
+
+        :param key: key of parameter
+        """
 
         strings = self.valuesStrings(key)
         if not strings:
@@ -864,7 +1063,7 @@ class ParameterScan(QObject):
         return bool(self.versions) or any(self.valuesStrings(key) for key in self.values)
 
     def count(self) -> int:
-        """Number of simulations of the scan"""
+        """Returns number of simulations of the scan"""
 
         count = 1
         for key in self.values:
@@ -874,7 +1073,12 @@ class ParameterScan(QObject):
         return count * (1 + len([title for title in self.versions if title in titles]))
 
     def editValues(self, key: str, field: QWidget):
-        """Opens the popup for the values of a parameter below its field"""
+        """
+        Opens the popup for the values of a parameter below its field
+
+        :param key: key of parameter
+        :param field: input field of parameter
+        """
 
         parameter = self.parameters().get(key)
         if parameter is None:
@@ -885,10 +1089,12 @@ class ParameterScan(QObject):
         self.editor.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.editor.show()
 
-    # --- marks of the input fields ---
-
     def setEnabled(self, enabled: bool):
-        """Shows or hides the marks and values of the input fields"""
+        """
+        Shows or hides the marks and values of the input fields
+
+        :param enabled: if the scan is shown
+        """
 
         self.enabled = enabled
         if enabled:
@@ -905,16 +1111,16 @@ class ParameterScan(QObject):
     def refreshFields(self):
         """Adds marks to the input fields that can be scanned and updates them"""
 
-        try:
-            parameters = self.parameters()
-        except Exception:
+        parameters = self.safeParameters()
+        if not parameters:
             return
         self.labels = {key: parameter.label for key, parameter in parameters.items()}
         self.choices = {key: parameter.choices for key, parameter in parameters.items() if parameter.choices is not None}
         overlays = []
         for key, parameter in parameters.items():
             for widget in parameter.widgets:
-                overlay = next((child for child in widget.findChildren(ScanFieldOverlay, options=Qt.FindChildOption.FindDirectChildrenOnly)), None)
+                children = widget.findChildren(ScanFieldOverlay, options=Qt.FindChildOption.FindDirectChildrenOnly)
+                overlay = children[0] if children else None
                 if overlay is None:
                     overlay = ScanFieldOverlay(self, widget)
                 overlay.key = key
@@ -923,15 +1129,16 @@ class ParameterScan(QObject):
         for overlay in self.overlays:
             if not sip.isdeleted(overlay) and overlay not in overlays:
                 overlay.key = ''
-        self.overlays = overlays + [overlay for overlay in self.overlays if not sip.isdeleted(overlay) and overlay not in overlays]
+        old_overlays = [overlay for overlay in self.overlays if not sip.isdeleted(overlay) and overlay not in overlays]
+        self.overlays = overlays + old_overlays
         self.updateOverlays()
 
     def updateOverlays(self):
+        """Updates the marks of the input fields"""
+
         self.overlays = [overlay for overlay in self.overlays if not sip.isdeleted(overlay)]
         for overlay in self.overlays:
             overlay.updateOverlay()
-
-    # --- simulations of the scan ---
 
     def plan(self) -> Tuple[List[dict], List[str]]:
         """
@@ -944,8 +1151,10 @@ class ParameterScan(QObject):
         names = []
         for key in self.values:
             parameter = parameters.get(key)
-            parsed = parseValues(self.values[key].get('values', ''), parameter.integer if parameter else False)
-            if parameter is None or not parsed:
+            if parameter is None:
+                continue
+            parsed = parseValues(self.values[key].get('values', ''), parameter.integer)
+            if not parsed:
                 continue
             dimensions.append([(parameter, value) for value in parsed])
             names.append(parameter.label)
@@ -967,14 +1176,26 @@ class ParameterScan(QObject):
                     continue
                 # combo boxes: the text of the choice (the folder name contains its index)
                 choices = parameter.choices
-                values.append(choices[value] if choices is not None and 0 <= value < len(choices) else value)
+                if choices is not None and 0 <= value < len(choices):
+                    values.append(choices[value])
+                else:
+                    values.append(value)
                 labels.append(f'{parameter.key}_{formatValue(value)}')
                 assignments.append((parameter, value))
-            simulations.append({'values': values, 'label': '__'.join(labels), 'assignments': assignments, 'configuration': configuration})
+            simulations.append({
+                'values': values,
+                'label': '__'.join(labels),
+                'assignments': assignments,
+                'configuration': configuration
+            })
         return simulations, names
 
     def arguments(self, assignments: List[Tuple[ScanParameter, Any]]) -> SimulationArguments:
-        """Returns the arguments of the tab with the values of a simulation of the scan"""
+        """
+        Returns arguments of the tab with the values of a simulation of the scan
+
+        :param assignments: list of (parameter, value)
+        """
 
         restore: List[Tuple[Any, Any, bool]] = []
         for parameter, value in assignments:
@@ -1004,7 +1225,11 @@ class ParameterScan(QObject):
         return arguments
 
     def description(self, simulations: List[dict]) -> dict:
-        """Description of the scan (scan.json): settings of the scan, parameters and values of the simulations"""
+        """
+        Returns description of the scan (scan.json): settings of the scan, parameters and values of the simulations
+
+        :param simulations: simulations of the scan
+        """
 
         return {
             'rows': [dict(state, key=key) for key, state in self.values.items()],
@@ -1014,7 +1239,11 @@ class ParameterScan(QObject):
         }
 
     def writeDescription(self, simulations: Optional[List[dict]] = None):
-        """Writes scan.json into the folder of the simulation"""
+        """
+        Writes scan.json into the folder of the simulation
+
+        :param simulations: (optional) simulations of the scan, by default the planned simulations
+        """
 
         folder = self.configuration.save_folder
         if folder is None or not folder.is_dir():
@@ -1022,26 +1251,34 @@ class ParameterScan(QObject):
         if simulations is None:
             try:
                 simulations, self.parameter_names = self.plan()
-            except Exception:
+            except Exception as error:
+                # the parameters of a tab in an intermediate state can fail in many ways
+                logging.info(f'Could not plan parameter scan: {error}')
                 return
         try:
-            with open(folder / SCAN_FILE, 'w', encoding='utf-8') as file:
+            with open(folder / GlobalConf.scan_file, 'w', encoding='utf-8') as file:
                 dump(self.description(simulations), file, indent=2)
         except OSError:
-            pass
+            logging.info(f'Could not write "{folder / GlobalConf.scan_file}"!')
 
     def state(self) -> dict:
-        """Settings of the scan (for the configuration of the tab)"""
+        """Returns settings of the scan (for the configuration of the tab)"""
 
         return {'rows': [dict(state, key=key) for key, state in self.values.items()], 'versions': list(self.versions)}
 
     def setState(self, state: dict):
-        """Sets the settings of the scan from state() or scan.json"""
+        """
+        Sets the settings of the scan
+
+        :param state: settings from state() or scan.json
+        """
 
         self.values = {}
         labels = {parameter.label: key for key, parameter in self.safeParameters().items()}
         rows = state.get('rows') if isinstance(state, dict) else None
-        for row in rows if isinstance(rows, list) else []:
+        if not isinstance(rows, list):
+            rows = []
+        for row in rows:
             if not isinstance(row, dict):
                 continue
             # scans of older versions only store the label of the parameter
@@ -1057,13 +1294,21 @@ class ParameterScan(QObject):
         self.changed.emit()
 
     def safeParameters(self) -> Dict[str, ScanParameter]:
+        """Returns the parameters that can be scanned or an empty dictionary if they can not be determined"""
+
         try:
             return self.parameters()
-        except Exception:
+        except Exception as error:
+            # the parameters of a tab in an intermediate state can fail in many ways
+            logging.info(f'Could not determine parameters of the scan: {error}')
             return {}
 
     def loadFolder(self, folder: Optional[Path]):
-        """Reads the scan of a folder (scan.json): its values and the state of its simulations"""
+        """
+        Reads the scan of a folder (scan.json): its values and the state of its simulations
+
+        :param folder: folder of the scan
+        """
 
         scan = readScanDescription(folder) if folder is not None else None
         if scan is None:
@@ -1090,28 +1335,47 @@ class ParameterScan(QObject):
             if not isinstance(run, dict) or 'folder' not in run:
                 continue
             job_folder = folder / str(run['folder'])
-            log_file = job_folder / LOG_FILE
+            log_file = job_folder / GlobalConf.scan_log_file
             log = log_file.read_text(encoding='utf-8', errors='replace') if log_file.is_file() else ''
             status = 'not run'
             if log or any(job_folder.glob('output*')):
                 problem = self.simulation_class.runFailed(job_folder, log, 0, self.configuration.version)
                 status = 'finished' if problem is None else f'failed ({problem})'
             values = run.get('values')
-            values = [value for value in values if isinstance(value, (str, int, float)) and not isinstance(value, bool)] if isinstance(values, list) else []
-            jobs.append({'values': values, 'label': str(run['folder']), 'folder': job_folder, 'log': log,
-                         'status': status, 'process': None, 'configuration': self.configuration, 'simulation': self.simulation_class})
+            if not isinstance(values, list):
+                values = []
+            values = [value for value in values if isinstance(value, (str, int, float)) and not isinstance(value, bool)]
+            jobs.append({
+                'values': values,
+                'label': str(run['folder']),
+                'folder': job_folder,
+                'log': log,
+                'status': status,
+                'process': None,
+                'configuration': self.configuration,
+                'simulation': self.simulation_class
+            })
         self.showJobs(jobs)
 
     def prepareJobs(self, check_warnings: bool = True) -> Optional[List[dict]]:
-        """Writes the input files of all simulations of the scan and returns the jobs or None if the scan can not be run"""
+        """
+        Writes the input files of all simulations of the scan and returns the jobs or None if the scan can not be run
+
+        :param check_warnings: (optional) if warnings of the simulations are shown
+        """
 
         folder = self.configuration.save_folder
         if folder is None:
             return None
         simulations, names = self.plan()
         if not simulations or not names:
-            showMessageBox(self.page, QMessageBox.Icon.Warning, 'Warning!', 'No values for the parameter scan',
-                           info_message='Click on the mark in the corner of an input field to enter several values.')
+            showMessageBox(
+                self.page,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'No values for the parameter scan',
+                info_message='Click on the mark in the corner of an input field to enter several values.'
+            )
             return None
 
         jobs: List[Dict[str, Any]] = []
@@ -1126,8 +1390,15 @@ class ParameterScan(QObject):
                     programs[id(sc)].update(sc.folder, sc.binary, sc.version)
                     programs[id(sc)].updateElements(sc.folder, sc.version)
                 program = programs[id(sc)]
-            jobs.append(dict(simulation, simulation=program, arguments=self.arguments(simulation['assignments']),
-                             folder=folder / simulation['label'], log='', status='waiting', process=None))
+            jobs.append(dict(
+                simulation,
+                simulation=program,
+                arguments=self.arguments(simulation['assignments']),
+                folder=folder / simulation['label'],
+                log='',
+                status='waiting',
+                process=None
+            ))
 
         problems: List[str] = []
         for job in jobs:
@@ -1135,8 +1406,13 @@ class ParameterScan(QObject):
                 if problem not in problems:
                     problems.append(problem)
         if problems:
-            showMessageBox(self.page, QMessageBox.Icon.Warning, 'Warning!', 'The simulation does not accept these parameters',
-                           detailed_message='\n'.join(problems))
+            showMessageBox(
+                self.page,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'The simulation does not accept these parameters',
+                detailed_message='\n'.join(problems)
+            )
             return None
 
         # warnings of all simulations (the user decides)
@@ -1148,9 +1424,14 @@ class ParameterScan(QObject):
                         warnings.append(warning)
         if warnings:
             _, result = showMessageBox(
-                self.page, QMessageBox.Icon.Warning, 'Warning!', 'Some simulations might fail, give wrong results or create very large files',
-                info_message='Press "OK" to run the scan anyway.', detailed_message='\n\n'.join(warnings),
-                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel, expand_details=True
+                self.page,
+                QMessageBox.Icon.Warning,
+                'Warning!',
+                'Some simulations might fail, give wrong results or create very large files',
+                info_message='Press "OK" to run the scan anyway.',
+                detailed_message='\n\n'.join(warnings),
+                standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                expand_details=True
             )
             if result == QMessageBox.StandardButton.Cancel:
                 return None
@@ -1168,7 +1449,11 @@ class ParameterScan(QObject):
         return jobs
 
     def showJobs(self, jobs: List[dict]):
-        """Shows the simulations of the scan in the table of the tab "Run status" and in the lists of the tab"""
+        """
+        Shows the simulations of the scan in the table of the tab "Run status" and in the lists of the tab
+
+        :param jobs: simulations of the scan
+        """
 
         self.jobs = jobs
         table = self.page.scan_runs
@@ -1181,7 +1466,7 @@ class ParameterScan(QObject):
             job['item'].setToolTip(pathToStr(job['folder']))
             table.setItem(i, 0, job['item'])
             for j, value in enumerate(job['values']):
-                item = QTableWidgetItem(f'{value:g}' if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value))
+                item = QTableWidgetItem(formatParameter(value))
                 alignment = Qt.AlignmentFlag.AlignLeft if isinstance(value, str) else Qt.AlignmentFlag.AlignRight
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | alignment)
                 table.setItem(i, j + 1, item)
@@ -1196,12 +1481,20 @@ class ParameterScan(QObject):
         self.page.updateScanLists()
 
     def jobText(self, job: dict) -> str:
-        """Values of a simulation of the scan as text, e.g. "Energy of Ar [eV] = 500, Angle of incidence of Ar [°] = 0" """
+        """
+        Returns values of a simulation of the scan as text, e.g. "Energy of Ar [eV] = 500, Angle of incidence of Ar [°] = 0"
 
-        return ', '.join(f'{name} = {value if isinstance(value, str) else f"{value:g}"}' for name, value in zip(self.parameter_names, job['values']))
+        :param job: simulation of the scan
+        """
+
+        return ', '.join(f'{name} = {formatParameter(value)}' for name, value in zip(self.parameter_names, job['values']))
 
     def run(self, check_warnings: bool = True) -> bool:
-        """Writes the input files and starts the simulations of the scan, returns if the scan was started"""
+        """
+        Writes the input files and starts the simulations of the scan, returns if the scan was started
+
+        :param check_warnings: (optional) if warnings of the simulations are shown
+        """
 
         jobs = self.prepareJobs(check_warnings)
         if not jobs:
@@ -1244,7 +1537,11 @@ class ParameterScan(QObject):
             process.start()
 
     def readLog(self, job: dict):
-        """Reads the output of a simulation"""
+        """
+        Reads the output of a simulation
+
+        :param job: simulation of the scan
+        """
 
         text = bytes(job['process'].readAll().data()).decode(getpreferredencoding(), 'ignore')
         job['log'] = (job['log'] + text)[-20000:]
@@ -1252,7 +1549,13 @@ class ParameterScan(QObject):
         self.page.showScanLog(job, text)
 
     def jobFinished(self, job: dict, exit_code: int, exit_status):
-        """A simulation of the scan has finished"""
+        """
+        Called when a simulation of the scan has finished
+
+        :param job: simulation of the scan
+        :param exit_code: exit code of the process
+        :param exit_status: exit status of the process
+        """
 
         if job in self.running:
             self.running.remove(job)
@@ -1263,9 +1566,9 @@ class ParameterScan(QObject):
             problem = 'aborted'
         self.setJobStatus(job, 'finished' if problem is None else f'failed ({problem})')
         try:
-            (job['folder'] / LOG_FILE).write_text(job['log'], encoding='utf-8')
+            (job['folder'] / GlobalConf.scan_log_file).write_text(job['log'], encoding='utf-8')
         except OSError:
-            pass
+            logging.info(f'Could not write log of "{job["folder"]}"!')
         job['process'].deleteLater()
         job['process'] = None
         if not self.running and not self.queue:
@@ -1275,7 +1578,7 @@ class ParameterScan(QObject):
         self.updateProgress()
 
     def finished(self):
-        """All simulations of the scan have finished"""
+        """Called when all simulations of the scan have finished"""
 
         page = self.page
         self.timer.stop()
@@ -1291,7 +1594,8 @@ class ParameterScan(QObject):
         page.setProcessWidgetsEnabled(True)
         page.setProgressStatus(100)
         finished = len(self.jobs) - len(failed)
-        self.main_window.writeStatusBar(f'Parameter scan of "{self.configuration.title}": {finished} of {len(self.jobs)} simulations finished', 8000)
+        message = f'Parameter scan of "{self.configuration.title}": {finished} of {len(self.jobs)} simulations finished'
+        self.main_window.writeStatusBar(message, 8000)
         page.updateScanLists()
         if page.resultsShown():
             self.refreshResults()
@@ -1308,9 +1612,9 @@ class ParameterScan(QObject):
         """
 
         if job.get('shown_status') != status:
-            job['item'].setIcon(getIcon(STATUS_ICONS.get(status, 'error')))
+            job['item'].setIcon(getIcon(self.statusIcons.get(status, 'error')))
             if status.startswith('failed'):
-                job['item'].setToolTip(f'{pathToStr(job["folder"])}\n{status}\nThe output of the simulation is in {LOG_FILE}')
+                job['item'].setToolTip(f'{pathToStr(job["folder"])}\n{status}\nThe output of the simulation is in {GlobalConf.scan_log_file}')
             job['shown_status'] = status
         job['status'] = status
         text = f'{status} ({percent:.0f} %)' if percent is not None and percent >= 0 else status
@@ -1318,7 +1622,7 @@ class ParameterScan(QObject):
             job['item'].setText(text)
 
     def progress(self) -> int:
-        """Overall progress of the scan (in %)"""
+        """Returns overall progress of the scan in %"""
 
         if not self.jobs:
             return 0
@@ -1331,15 +1635,18 @@ class ParameterScan(QObject):
         return int(total / len(self.jobs))
 
     def updateProgress(self):
-        """Progress of the running simulations and of the scan (progress bar and status of the tab)"""
+        """Updates progress of the running simulations and of the scan (progress bar and status of the tab)"""
 
         if not self.jobs:
             return
         for job in self.jobs:
             if job['status'] == 'running':
                 try:
-                    job['percent'] = job['simulation'].getProgress(job['folder'], job.get('last_log', ''), job['configuration'].version)
-                except Exception:
+                    version = job['configuration'].version
+                    job['percent'] = job['simulation'].getProgress(job['folder'], job.get('last_log', ''), version)
+                except Exception as error:
+                    # output files of running simulations can be incomplete
+                    logging.debug(f'Could not read progress of "{job["folder"]}": {error}')
                     job['percent'] = -1
                 self.setJobStatus(job, 'running', job['percent'])
         if not self.isRunning():
@@ -1374,14 +1681,16 @@ class ParameterScan(QObject):
             return
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            self.results.addFolders([job['folder'] for job in finished],
-                                    parameters=[dict(zip(self.parameter_names, job['values'])) for job in finished])
+            self.results.addFolders(
+                [job['folder'] for job in finished],
+                parameters=[dict(zip(self.parameter_names, job['values'])) for job in finished]
+            )
         finally:
             QApplication.restoreOverrideCursor()
         self.results_loaded += [job['folder'] for job in finished]
 
     def createResults(self) -> CompareWidget:
-        """Comparison of the results of the scan"""
+        """Returns comparison of the results of the scan"""
 
         if self.results is None:
             self.results = CompareWidget(self.page, self.analysis_class, self.simulation_class.element_data)
@@ -1402,7 +1711,10 @@ class ParameterScan(QObject):
         if self.isRunning():
             if ask:
                 _, result = showMessageBox(
-                    self.page, QMessageBox.Icon.Question, 'Abort scan?', 'The simulations of the parameter scan are still running',
+                    self.page,
+                    QMessageBox.Icon.Question,
+                    'Abort scan?',
+                    'The simulations of the parameter scan are still running',
                     info_message='They will be aborted.',
                     standard_buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
                 )
@@ -1419,14 +1731,14 @@ class ParameterScan(QObject):
 
 def readScanDescription(folder: Path) -> Optional[dict]:
     """
-    Returns the description of a parameter scan (scan.json in its folder) or None. Scans of older versions of the GUI only
-    contain the labels of the parameters: the rows of the parameters are derived from them
+    Returns description of a parameter scan (scan.json in its folder) or None (the rows of scans of older versions of
+    the GUI are derived from the labels of the parameters)
 
     :param folder: folder of the scan
     """
 
     try:
-        with open(folder / SCAN_FILE, 'r', encoding='utf-8') as file:
+        with open(folder / GlobalConf.scan_file, 'r', encoding='utf-8') as file:
             scan = load(file)
     except (OSError, ValueError):
         return None
@@ -1442,6 +1754,6 @@ def readScanDescription(folder: Path) -> Optional[dict]:
                     run_values = []
                 if i < len(run_values) and run_values[i] not in values:
                     values.append(run_values[i])
-            rows.append({'label': label, 'values': ', '.join(f'{value:g}' if isinstance(value, (int, float)) else str(value) for value in values)})
+            rows.append({'label': label, 'values': ', '.join(formatParameter(value) for value in values)})
         scan['rows'] = rows
     return scan

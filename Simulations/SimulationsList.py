@@ -2,6 +2,7 @@ from typing import List, Dict, Type
 from os import listdir, path
 from sys import exit
 
+
 from Simulations.Simulations import SimulationsInput, SimulationsOutput
 
 
@@ -44,7 +45,12 @@ class SimulationsList:
         self.__initialized = True
 
         def hasattrs(cls, attrs: List[str]) -> bool:
-            """Returns if given class has all attributes"""
+            """
+            Returns if given class has all attributes
+
+            :param cls: class to check
+            :param attrs: names of attributes
+            """
 
             return all([hasattr(cls, attr) for attr in attrs])
 

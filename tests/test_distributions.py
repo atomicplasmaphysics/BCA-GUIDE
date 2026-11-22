@@ -1,14 +1,17 @@
-"""Input files of the distributions of energies and angles of SDTrimSP (energy.inp, angle.inp, ene_ang.inp)"""
+# Input files of the distributions of energies and angles of SDTrimSP (energy.inp, angle.inp, ene_ang.inp)
 
 from pathlib import Path
 
+
 import pytest
 
+
 from Containers.Arguments import ArgumentValues, GeneralArguments, GeneralBeamArguments, GeneralTargetArguments, RowArguments
+
 from Simulations.SDTrimSP import Versions, SimulationInput, distributionFileNames
-from TableWidgets.DistributionEditor import (
-    readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile, DistributionDialog
-)
+
+from TableWidgets.DistributionEditor import readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile, DistributionDialog
+
 
 EXAMPLES = Path(__file__).resolve().parents[1] / 'Simulation Programs' / 'SDTrimSP'
 
@@ -30,6 +33,12 @@ class Arguments:
 
 
 def test_distribution_file_roundtrip(tmp_path):
+    """
+    Distribution file roundtrip
+
+    :param tmp_path: temporary folder of the test
+    """
+
     rows = [[50., 5.], [200., 10.], [300., 15.5]]
     path = tmp_path / 'energy.inp'
     path.write_text(writeDistributionFile(rows, 'E [eV] distribution [-/dE]'))
@@ -37,6 +46,12 @@ def test_distribution_file_roundtrip(tmp_path):
 
 
 def test_energy_angle_file_roundtrip(tmp_path):
+    """
+    Energy angle file roundtrip
+
+    :param tmp_path: temporary folder of the test
+    """
+
     data = {'angle': [10., 30., 10.], 'energy': [100., 200., 100.], 'matrix': [[1., 2., 3.], [4., 0., 0.5]]}
     path = tmp_path / 'ene_ang.inp'
     path.write_text(writeEnergyAngleFile(data))
@@ -45,6 +60,8 @@ def test_energy_angle_file_roundtrip(tmp_path):
 
 @pytest.mark.skipif(not (EXAMPLES / 'SDTrimSP_7.07' / 'case' / 'He_Ar_Si_distribution').is_dir(), reason='example of SDTrimSP 7.07 not available')
 def test_read_examples():
+    """Read examples"""
+
     folder = EXAMPLES / 'SDTrimSP_7.07' / 'case' / 'He_Ar_Si_distribution'
     assert readDistributionFile(folder / 'energy.inp') == [[50., 5.], [200., 10.], [300., 15.], [400., 17.5]]
     assert readDistributionFile(folder / 'angle02.inp') == [[10., 10.], [20., 20.], [40., 35.]]
@@ -54,6 +71,8 @@ def test_read_examples():
 
 
 def test_file_names_per_version():
+    """File names per version"""
+
     energy = ArgumentValues.KineticEnergy.FILE
     angle = ArgumentValues.Angle.FILE
     # species order of the input file with grouped elements: target (Si), then the other projectiles (He, Ar)
@@ -71,6 +90,8 @@ def test_file_names_per_version():
 
 
 def test_make_and_check_files():
+    """Make and check files"""
+
     simulation = SimulationInput()
     energy = ArgumentValues.KineticEnergy.FILE
     angle = ArgumentValues.Angle.FILE
@@ -87,6 +108,12 @@ def test_make_and_check_files():
 
 
 def test_dialog(qapp):
+    """
+    Dialog
+
+    :param qapp: QApplication of the tests
+    """
+
     dialog = DistributionDialog(None, ['He', 'Ar'], {'energy': {'Ar': [[10., 1.], [20., 2.]]}}, True, True, True, angle_per_projectile=False)
     assert dialog.tabs.count() == 4  # energy He, energy Ar, angle (all), energy and angle
     dialog.energy_tables['He'].addRow(500., 3.)
@@ -105,7 +132,11 @@ def test_dialog(qapp):
 
 
 def test_energy_angle_legacy_format(tmp_path):
-    """until SDTrimSP 7.02 two numbers precede the matrix instead of the header"""
+    """
+    until SDTrimSP 7.02 two numbers precede the matrix instead of the header
+
+    :param tmp_path: temporary folder of the test
+    """
 
     data = {'angle': [10., 30., 10.], 'energy': [100., 200., 100.], 'matrix': [[1., 2., 3.], [4., 0., 0.5]]}
     text = writeEnergyAngleFile(data, legacy=True)
@@ -116,6 +147,8 @@ def test_energy_angle_legacy_format(tmp_path):
 
 
 def test_energy_angle_file_support():
+    """Energy angle file support"""
+
     simulation = SimulationInput()
     assert simulation.supportsEnergyAngleFile(Versions.V_601)
     assert not simulation.supportsEnergyAngleFile(Versions.V_700)
@@ -127,6 +160,8 @@ def test_energy_angle_file_support():
 
 
 def test_legacy_format_per_version():
+    """Legacy format per version"""
+
     simulation = SimulationInput()
     assert simulation.legacyEnergyAngleFormat(Versions.V_601)
     assert simulation.legacyEnergyAngleFormat(Versions.V_700)

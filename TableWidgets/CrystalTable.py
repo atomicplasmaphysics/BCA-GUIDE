@@ -1,6 +1,8 @@
 from typing import List, Optional
 
+
 from PyQt6.QtCore import pyqtSignal
+
 
 from Utility.Functions import limitSum
 from Utility.ModifyWidget import setWidgetHighlight
@@ -74,7 +76,7 @@ class CrystalRow(CustomRow):
         )
 
         self.element_combobox.currentIndexChanged.connect(self.coordinateChanged.emit)
-        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetHighlight(self.element_combobox, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+        self.element_combobox.mouseReleaseEvent = lambda _: setWidgetHighlight(self.element_combobox, False)  # type: ignore[method-assign, assignment]
 
         self.coords = [DoubleSpinBox(
             default=0,
@@ -259,10 +261,12 @@ class CrystalTable(CustomTable[CrystalRow]):
 
     def connectRows(self):
         """Connect all rows"""
+
         super().connectRows()
 
     def resetTable(self):
         """Reset the table"""
+
         super().resetTable()
 
     def removeCustomRow(self, row_idx: int, update: bool = True):
@@ -327,14 +331,21 @@ class CrystalTable(CustomTable[CrystalRow]):
 
         :param value_dict: dictionary to be received
         """
+
         # forward value_dict to all rows
         for row in self.rows:
             row.receive(value_dict)
 
     def updateAvailableElements(self, target_elements: List[Element]):
-        """Updates available elements"""
+        """
+        Updates available elements
+
+        :param target_elements: elements of the target
+        """
+
         self.target_elements = target_elements
 
     def getRows(self):
         """Returns rows"""
+
         return self.rows

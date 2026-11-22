@@ -1,11 +1,15 @@
 import shutil
 
+
 import pytest
+
 
 from conftest import SIMULATION_PROGRAMS, DATA
 
 from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError
+
 from Simulations.SDTrimSP import CrystalTableLimits
+
 from Utility.CrystalImport import importCrystal, CrystalImportError
 
 
@@ -15,6 +19,12 @@ TABLES = sorted(SIMULATION_PROGRAMS.glob('SDTrimSP/*/tables/table.crystal'))
 
 @pytest.mark.parametrize('table', TABLES, ids=lambda path: path.parents[1].name)
 def test_read_table(table):
+    """
+    Read table
+
+    :param table: table file
+    """
+
     table_file = CrystalTableFile(table, LIMITS)
     assert table_file.structures
     assert table_file.crystals
@@ -26,6 +36,12 @@ def test_read_table(table):
 
 @pytest.fixture
 def table_copy(tmp_path):
+    """
+    Returns a copy of a table.crystal of an installed SDTrimSP
+
+    :param tmp_path: temporary folder of the test
+    """
+
     if not TABLES:
         pytest.skip('no table.crystal found')
     shutil.copy(TABLES[-1], tmp_path / 'table.crystal')
@@ -33,6 +49,12 @@ def table_copy(tmp_path):
 
 
 def test_add_crystal_existing_structure(table_copy):
+    """
+    Add crystal existing structure
+
+    :param table_copy: copy of table.crystal
+    """
+
     fcc = [(0.5, 0.5, 0.), (0., 0., 0.), (0., 0.5, 0.5), (0.5, 0., 0.5)]
     crystal = table_copy.addCrystal(TableCrystal('Au_fcc', 4.078, 4.078, 4.078, 0.05898, elements=['Au'] * 4), fcc)
     assert table_copy.structure(crystal.structure).name == 'fcc-type'
@@ -44,6 +66,12 @@ def test_add_crystal_existing_structure(table_copy):
 
 
 def test_add_crystal_new_structure(table_copy):
+    """
+    Add crystal new structure
+
+    :param table_copy: copy of table.crystal
+    """
+
     count = len(table_copy.structures)
     crystal = table_copy.addCrystal(TableCrystal('TiO_test', 3., 3., 5., 0.03, elements=['Ti', 'Ti', 'O']), [(0, 0, 0), (0.5, 0.5, 0.5), (0.3, 0.3, 0)])
     reread = CrystalTableFile(table_copy.path, LIMITS)
@@ -53,6 +81,12 @@ def test_add_crystal_new_structure(table_copy):
 
 def test_reordered_elements(table_copy):
     # positions of the bcc structure in reversed order, elements must be reordered accordingly
+    """
+    Reordered elements
+
+    :param table_copy: copy of table.crystal
+    """
+
     crystal = table_copy.addCrystal(TableCrystal('CsCl_test', 4.12, 4.12, 4.12, 0.0286, elements=['Cl', 'Cs']), [(0.5, 0.5, 0.5), (0, 0, 0)])
     assert crystal.elements == ['Cs', 'Cl']
 
@@ -64,17 +98,33 @@ def test_reordered_elements(table_copy):
     (TableCrystal('too_many', 1, 1, 1, 1, elements=['Cu'] * 9), [(i / 9, 0, 0) for i in range(9)]),
 ])
 def test_invalid_crystals(table_copy, crystal, positions):
+    """
+    Invalid crystals
+
+    :param table_copy: copy of table.crystal
+    :param crystal: crystal parameters
+    :param positions: relative coordinates of the atoms
+    """
+
     with pytest.raises(CrystalTableError):
         table_copy.addCrystal(crystal, positions)
 
 
 def test_duplicate_name(table_copy):
+    """
+    Duplicate name
+
+    :param table_copy: copy of table.crystal
+    """
+
     name = table_copy.crystals[0].name
     with pytest.raises(CrystalTableError):
         table_copy.addCrystal(TableCrystal(name, 1, 1, 1, 1, elements=['Cu']), [(0, 0, 0)])
 
 
 def test_import_cif_with_symmetry():
+    """Import cif with symmetry"""
+
     crystal = importCrystal(DATA / 'NaCl.cif')
     assert crystal.isOrthogonal()
     assert crystal.lengths[0] == pytest.approx(5.640487)
@@ -82,12 +132,16 @@ def test_import_cif_with_symmetry():
 
 
 def test_import_poscar():
+    """Import poscar"""
+
     crystal = importCrystal(DATA / 'Si_diamond.vasp')
     assert crystal.elements == ['Si'] * 8
     assert crystal.lengths == pytest.approx((5.431, 5.431, 5.431))
 
 
 def test_import_matches_table_structures():
+    """Import matches table structures"""
+
     if not TABLES:
         pytest.skip('no table.crystal found')
     table_file = CrystalTableFile(TABLES[-1], LIMITS)
@@ -98,10 +152,18 @@ def test_import_matches_table_structures():
 
 
 def test_import_hexagonal_is_not_orthogonal():
+    """Import hexagonal is not orthogonal"""
+
     assert not importCrystal(DATA / 'Mg_hcp.cif').isOrthogonal()
 
 
 def test_import_unknown_format(tmp_path):
+    """
+    Import unknown format
+
+    :param tmp_path: temporary folder of the test
+    """
+
     (tmp_path / 'crystal.xyz').write_text('')
     with pytest.raises(CrystalImportError):
         importCrystal(tmp_path / 'crystal.xyz')

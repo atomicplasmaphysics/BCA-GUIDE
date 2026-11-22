@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+
 from Utility.Functions import normalizeList
 
 from Containers.Element import Element
@@ -18,7 +19,13 @@ class GlobalDensity:
     # [amu * cm^3 / g * A^3]
     G_TO_AMU = 1 / 1.66
 
-    def __init__(self, elements: Optional[List[Element]] = None, abundances: Optional[List[float]] = None, density: Optional[float] = None, density_in_amu: bool = False):
+    def __init__(
+        self,
+        elements: Optional[List[Element]] = None,
+        abundances: Optional[List[float]] = None,
+        density: Optional[float] = None,
+        density_in_amu: bool = False
+    ):
         if elements is None:
             elements = []
         self.elements = elements

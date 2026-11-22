@@ -15,7 +15,12 @@ class CounterItem(QObject):
         self.value = value
 
     def update(self, value: int):
-        """Update own value. Should only be called in Counter class!"""
+        """
+        Update own value. Should only be called in Counter class!
+
+        :param value: new value
+        """
+
         if self.value != value:
             self.value = value
             self.rankChanged.emit(self.value)
@@ -80,6 +85,8 @@ class RunningIndex:
         self.index = initial_value
 
     def get(self):
+        """Returns next index"""
+
         self.index += 1
         return self.index
 
@@ -92,7 +99,14 @@ class DeleteDict(dict):
     def __init__(self):
         super().__init__()
 
-    def get(self, key, default=None):  # type: ignore[override]  # the key is deleted when it is requested
+    def get(self, key, default=None):  # type: ignore[override]
+        """
+        Returns value of key and deletes key
+
+        :param key: key of value
+        :param default: returned if key is not set
+        """
+
         result = super().get(key)
         if result is not None:
             super().__delitem__(key)
@@ -110,6 +124,12 @@ class DefaultAssumed(list):
         super().__init__()
 
     def assumed(self, item: str):
+        """
+        Notes that default value is assumed
+
+        :param item: name of value
+        """
+
         self.append(item)
 
 
@@ -134,12 +154,21 @@ class ElementList(list):
 
     @staticmethod
     def rename(item: str, index: int):
-        """Rename routine"""
+        """
+        Rename routine
+
+        :param item: name of element
+        :param index: sub index of element
+        """
 
         return f'{item}_[{index}]'
 
     def append(self, item: str):
-        """Append method of list"""
+        """
+        Append method of list
+
+        :param item: name of element
+        """
 
         exists = self.distinct.get(item)
 

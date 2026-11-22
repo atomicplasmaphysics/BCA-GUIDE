@@ -6,7 +6,9 @@ from pathlib import Path
 from re import findall, sub, split
 import logging
 
+
 import numpy as np
+
 from matplotlib.artist import Artist
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -19,20 +21,21 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QMessageBox, QMainWindow, QHBoxLayout, QVBoxLayout
 
+
 from Utility.Layouts import (
     MplCanvas, InputHBoxLayout, InputHBoxLayouts, VBoxTitleLayout,
     setWidgetBackground, ListWidget, ListWidgetItem,
     SpinBox, DoubleSpinBox, SpinBoxRange, ComboBox, LineEdit
 )
 from Utility.Indexing import RunningIndex, DefaultAssumed, DeleteDict, ElementList
-from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt, readlines, pathToStr
+from Utility.Functions import dateStr, fileToNpArray, roundToStr, normalizeList, intSafe, floatSafe, SafeInt, readlines, pathToStr, toNumber
 from Utility.Dialogs import DownloadDialog, selectFileDialog
 from Utility.Styles import layerHex, paletteColormap
+from Utility.Icons import getIcon
+from Utility.Typing import notNone
 
 from TableWidgets.CustomTable import CustomRowField
 from TableWidgets.CompTable import CompRow
-from Utility.Icons import getIcon
-from Utility.Typing import notNone
 from TableWidgets.DistributionEditor import (
     DistributionDialog, readDistributionFile, writeDistributionFile, readEnergyAngleFile, writeEnergyAngleFile, validDistributions
 )
@@ -169,6 +172,19 @@ def speciesList(arguments: SimulationArguments, group_elements: bool) -> List[Tu
     return [(row.symbol, row in arguments.beam_rows and row.abundance > 0) for row in rows]
 
 
+def numberedFileName(name: str, index: int) -> str:
+    """
+    Returns name of a numbered input file, e.g. energy.inp, energy02.inp
+
+    :param name: name of file without extension
+    :param index: number of species
+    """
+
+    if index == 1:
+        return f'{name}.inp'
+    return f'{name}{index:02d}.inp'
+
+
 def distributionFileNames(arguments: SimulationArguments, version: str, group_elements: bool) -> Dict[str, List[Tuple[str, str]]]:
     """
     Returns the names of the files of the energy and angle distributions as
@@ -189,18 +205,15 @@ def distributionFileNames(arguments: SimulationArguments, version: str, group_el
     species = speciesList(arguments, group_elements)
     projectiles = [(index, symbol) for index, (symbol, beam) in enumerate(species, start=1) if beam]
 
-    def numbered(name: str, index: int) -> str:
-        return f'{name}.inp' if index == 1 else f'{name}{index:02d}.inp'
-
     result: Dict[str, List[Tuple[str, str]]] = {'energy': [], 'angle': [], 'energy_angle': []}
     if case_e0 == ArgumentValues.KineticEnergy.FILE:
         if Versions.atLeast(version, Versions.V_700):
-            result['energy'] = [(symbol, numbered('energy', index)) for index, symbol in projectiles]
+            result['energy'] = [(symbol, numberedFileName('energy', index)) for index, symbol in projectiles]
         else:
             result['energy'] = [(symbol, name) for (_, symbol), name in zip(projectiles, ['energy.inp', 'energy2.inp'])]
     if case_alpha == ArgumentValues.Angle.FILE:
         if Versions.atLeast(version, Versions.V_702):
-            result['angle'] = [(symbol, numbered('angle', index)) for index, symbol in projectiles]
+            result['angle'] = [(symbol, numberedFileName('angle', index)) for index, symbol in projectiles]
             if version == Versions.V_702 and projectiles and all(name != 'angle.inp' for _, name in result['angle']):
                 result['angle'].append((projectiles[0][1], 'angle.inp'))
         else:
@@ -272,7 +285,12 @@ def readCrystalInp(path: Path) -> dict:
     position = [0]
 
     def read(count: int) -> List[str]:
-        """Reads count values starting at the next line"""
+        """
+        Reads count values starting at the next line
+
+        :param count: number of values
+        """
+
         values: List[str] = []
         while len(values) < count:
             line = lines[position[0]].split('!')[0]
@@ -357,6 +375,8 @@ def readTrajectoryFile(path: Path) -> List[dict]:
     expect_info = False
 
     def finish():
+        """Adds the current trajectory"""
+
         if current is not None:
             current['points'] = np.array(points, dtype=float).reshape(-1, 5)
             trajectories.append(current)
@@ -383,10 +403,13 @@ def readTrajectoryFile(path: Path) -> List[dict]:
                 continue
             # termflag 1-3: stopped, backscattered, transmitted projectile; 4-6: the same for recoils
             recoil = termflag >= 4 if termflag > 0 else parent > 0
+            generation = 1 if recoil else 0
+            if generation_known and recoil:
+                generation = parent
             current = {
                 'projectile': (ihist, iproj),
                 'recoil': recoil,
-                'generation': (parent if recoil else 0) if generation_known else (1 if recoil else 0),
+                'generation': generation,
                 'generation_known': generation_known,
                 'species': species - 1,
                 'termflag': termflag,
@@ -454,7 +477,9 @@ def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
                     continue
                 if count <= 0:
                     break
-                name = values[-1] if not values[-1].replace('.', '').replace('E', '').replace('-', '').replace('+', '').isdigit() else f'Layer {len(layers) + 1}'
+                name = values[-1]
+                if toNumber(name, from_text=True) is not None:
+                    name = f'Layer {len(layers) + 1}'
                 layers.append((depth, depth + count * thickness, name))
                 depth += count * thickness
     except OSError:
@@ -474,7 +499,11 @@ def readLayers(save_folder: Path) -> List[Tuple[float, float, str]]:
 
 
 def joinValues(values: list) -> str:
-    """Returns the values as comma separated list of a Fortran namelist"""
+    """
+    Returns the values as comma separated list of a Fortran namelist
+
+    :param values: list of values
+    """
 
     return ', '.join(f'{value}' for value in values)
 
@@ -483,6 +512,8 @@ def numbersOfLine(line: str) -> List[float]:
     """
     Returns all numbers of a line or an empty list if the line contains other text.
     Fortran exponents with D are accepted, numbers without blank in between (e.g. "0.24525E-04-0.10110E-04") are separated
+
+    :param line: line of file
     """
 
     if findall(r'[a-cf-zA-CF-Z]', line):
@@ -564,7 +595,13 @@ def readEnergyDistribution(path: Path) -> Optional[dict]:
     # E_distr_stop/inel/nucl are written in eV, E_distr_all is normalized to [eV/delta**3/nh/nr_pproj]
     if not normalized and projectiles > 0 and delta > 0:
         values = values / (delta ** 3 * projectiles)
-    return {'x': np.array(edges['x']), 'y': np.array(edges['y']), 'z': np.array(edges['z']), 'values': values, 'projectiles': projectiles}
+    return {
+        'x': np.array(edges['x']),
+        'y': np.array(edges['y']),
+        'z': np.array(edges['z']),
+        'values': values,
+        'projectiles': projectiles
+    }
 
 
 def readEnergyDepthMatrix(path: Path) -> List[dict]:
@@ -596,7 +633,14 @@ def readEnergyDepthMatrix(path: Path) -> List[dict]:
             continue
         if 'component(' in lower:
             name = text.split(':')[-1].strip() if ':' in text else f'Species {len(matrices) + 1}'
-            current = {'species': name, 'energies': [], 'depths': None, 'counts': [], 'projectiles': projectiles, 'dimensions': None}
+            current = {
+                'species': name,
+                'energies': [],
+                'depths': None,
+                'counts': [],
+                'projectiles': projectiles,
+                'dimensions': None
+            }
             matrices.append(current)
             continue
         if current is None or lower.startswith(('#', 'energy')):
@@ -635,7 +679,11 @@ def readEnergyDepthMatrix(path: Path) -> List[dict]:
 
 
 def matrixSpecies(path: Path) -> List[str]:
-    """Returns the names of the species of the matrices with linear energy intervals in a matrix file (e.g. meagb_p.dat)"""
+    """
+    Returns the names of the species of the matrices with linear energy intervals in a matrix file (e.g. meagb_p.dat)
+
+    :param path: path of matrix file
+    """
 
     names: List[str] = []
     try:
@@ -680,10 +728,17 @@ def readEnergyAngleMatrix(path: Path) -> List[dict]:
             i += 1
             continue
         n_energy, n_azimuth, n_polar = (int(value) for value in dimensions[:3])
+        value_counts = {'ENERGY': n_energy, 'AZIMUTHAL': n_azimuth}
         projectiles = dimensions[3] if len(dimensions) > 3 else 0.
         i += 3
 
         def readValues(label: str) -> List[float]:
+            """
+            Returns the values after the next line containing label
+
+            :param label: label of values
+            """
+
             nonlocal i
             while i < len(lines) and label not in lines[i].upper():
                 i += 1
@@ -695,7 +750,7 @@ def readEnergyAngleMatrix(path: Path) -> List[dict]:
                     break
                 values += numbers
                 i += 1
-                if len(values) >= (n_energy if label == 'ENERGY' else n_azimuth if label == 'AZIMUTHAL' else n_polar):
+                if len(values) >= value_counts.get(label, n_polar):
                     break
             return values
 
@@ -726,7 +781,29 @@ def readEnergyAngleMatrix(path: Path) -> List[dict]:
     return matrices
 
 
-MAX_ELEMENTS_CACHE: Dict[str, Optional[int]] = {}
+class InstallationCache:
+    """
+    Values read from the files of installations of SDTrimSP (the files are only read once)
+    """
+
+    # {folder: maximum number of elements}
+    max_elements: Dict[str, Optional[int]] = {}
+    # {path of table: symbols}
+    stopping_tables: Dict[str, Optional[set]] = {}
+    # {folder: names of parameters of tri.inp}
+    namelists: Dict[str, Optional[set]] = {}
+
+
+def sourceFiles(folder: Path) -> List[Path]:
+    """
+    Returns Fortran source files of an installation (empty list if the source code is not available)
+
+    :param folder: folder of the installation
+    """
+
+    if not (folder / 'src').is_dir():
+        return []
+    return sorted((folder / 'src').glob('*.[fF]90'))
 
 
 def maxElements(folder: Optional[Path]) -> Optional[int]:
@@ -741,9 +818,9 @@ def maxElements(folder: Optional[Path]) -> Optional[int]:
     if folder is None:
         return None
     key = str(folder)
-    if key not in MAX_ELEMENTS_CACHE:
+    if key not in InstallationCache.max_elements:
         value = None
-        for source in sorted((folder / 'src').glob('*.[fF]90')) if (folder / 'src').is_dir() else []:
+        for source in sourceFiles(folder):
             try:
                 text = source.read_text(encoding='utf-8', errors='replace')
             except OSError:
@@ -752,11 +829,8 @@ def maxElements(folder: Optional[Path]) -> Optional[int]:
             if numbers:
                 value = int(numbers[0])
                 break
-        MAX_ELEMENTS_CACHE[key] = value
-    return MAX_ELEMENTS_CACHE[key]
-
-
-STOPPING_TABLE_CACHE: Dict[str, Optional[set]] = {}
+        InstallationCache.max_elements[key] = value
+    return InstallationCache.max_elements[key]
 
 
 def stoppingTableSymbols(folder: Optional[Path], table: str) -> Optional[set]:
@@ -772,7 +846,7 @@ def stoppingTableSymbols(folder: Optional[Path], table: str) -> Optional[set]:
     if folder is None:
         return None
     key = str(folder / 'tables' / table)
-    if key not in STOPPING_TABLE_CACHE:
+    if key not in InstallationCache.stopping_tables:
         symbols: Optional[set] = None
         try:
             symbols = set()
@@ -782,11 +856,8 @@ def stoppingTableSymbols(folder: Optional[Path], table: str) -> Optional[set]:
                     symbols.add(values[0])
         except OSError:
             symbols = None
-        STOPPING_TABLE_CACHE[key] = symbols
-    return STOPPING_TABLE_CACHE[key]
-
-
-NAMELIST_CACHE: Dict[str, Optional[set]] = {}
+        InstallationCache.stopping_tables[key] = symbols
+    return InstallationCache.stopping_tables[key]
 
 
 def namelistParameters(folder: Optional[Path]) -> Optional[set]:
@@ -801,11 +872,11 @@ def namelistParameters(folder: Optional[Path]) -> Optional[set]:
     if folder is None:
         return None
     key = str(folder)
-    if key in NAMELIST_CACHE:
-        return NAMELIST_CACHE[key]
+    if key in InstallationCache.namelists:
+        return InstallationCache.namelists[key]
 
     names = None
-    for source in sorted((folder / 'src').glob('*.[fF]90')) if (folder / 'src').is_dir() else []:
+    for source in sourceFiles(folder):
         try:
             text = source.read_text(encoding='utf-8', errors='replace')
         except OSError:
@@ -844,7 +915,7 @@ def namelistParameters(folder: Optional[Path]) -> Optional[set]:
                     names.add(match[0].lower())
             names = names or None
 
-    NAMELIST_CACHE[key] = names
+    InstallationCache.namelists[key] = names
     return names
 
 
@@ -1054,8 +1125,9 @@ class DefaultValues(GeneralDefaultValues):
         self.supports_beta0 = Versions.atLeast(version, Versions.V_700)  # azimuthal angle
         self.supports_x0 = Versions.atLeast(version, Versions.V_609)  # starting depth (not in 6.06)
         self.supports_deltahf = Versions.atLeast(version, Versions.V_609)  # heat of formation per element (scalar before)
-        # case_e0 = 6 (ene_ang.inp) is not implemented in 7.00 - 7.02 (7.02 shares the settings with 7.05, see SimulationInput.supportsEnergyAngleFile)
-        self.supports_energy_angle_file = not Versions.atLeast(version, Versions.V_700) or Versions.atLeast(version, Versions.V_702)
+        # case_e0 = 6 (ene_ang.inp) is not implemented in 7.00 - 7.02 (7.02 shares the settings with 7.05)
+        before_700 = not Versions.atLeast(version, Versions.V_700)
+        self.supports_energy_angle_file = before_700 or Versions.atLeast(version, Versions.V_702)
         # sfin = 1 crashes the Windows binaries of 7.00 - 7.07 with an access violation (also without other changes)
         self.supports_sfin = not Versions.atLeast(version, Versions.V_700)
 
@@ -1128,7 +1200,7 @@ class DictLookup:
     }
 
     def __init__(self, version: str):
-        # since 6.09: SDTrimSP chooses the inelastic loss model for inel0 = -1 (default), since 7.00: tabulated stopping power (inel0=8)
+        # since 6.09 SDTrimSP chooses the inelastic loss model for inel0 = -1 (default), since 7.00 tabulated stopping (inel0 = 8)
         if Versions.atLeast(version, Versions.V_609):
             self.inel0 = dict(DictLookup.inel0)
             if Versions.atLeast(version, Versions.V_700):
@@ -1473,7 +1545,11 @@ class HlBeamSettings(HlGeneralBeamSettings):
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
-        """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
+        """
+        Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)
+
+        :param arguments: arguments of simulation
+        """
 
         self.reset()
         beam_args = arguments.beam_args
@@ -1687,7 +1763,11 @@ class HlTargetSettings(HlGeneralTargetSettings):
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
-        """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
+        """
+        Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)
+
+        :param arguments: arguments of simulation
+        """
 
         self.reset()
         target_args = arguments.target_args
@@ -1740,7 +1820,11 @@ class HlTargetSettings(HlGeneralTargetSettings):
         return not_loadable
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         layer_table_rows = value_dict.get('layer_table_rows')
         if layer_table_rows is not None:
@@ -2159,27 +2243,17 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         # selection is not shown and the binary file is always used (tbsp_binary = .true.)
         self.tbsp_format: Optional[ComboBox] = None
         self.layout_tbsp_format: Optional[InputHBoxLayout] = None
-        # if self.default_values.tbsp_file_selection:
-        #     self.tbsp_format = ComboBox(
-        #         default=0,
-        #         entries=['tbsp.db (binary)', 'tbsp.ascii (text)'],
-        #         entries_save=['binary', 'ascii'],
-        #         label_default=True
-        #     )
-        #     self.layout_tbsp_format = InputHBoxLayout(
-        #         'Tabulated stopping power file:',
-        #         self.tbsp_format,
-        #         tooltip='<i>tbsp_binary, tbsp_ascii</i><br>File in the tables-directory that is used for the tabulated stopping power (inelastic loss model 8)'
-        #     )
-        #     self.tbsp_format.currentIndexChanged.connect(lambda _: self.edited())
-        #     self.addLayout(self.layout_tbsp_format)
 
         self.changedPotential()
         self.changedMode()
         self.changedGroupElements()
 
     def changeHistoriesBetween(self, state):
-        """Changes histories between value depending on if limit histories is checked"""
+        """
+        Changes histories between value depending on if limit histories is checked
+
+        :param state: state of checkbox
+        """
 
         if state:
             self.layout_histories_between.setEnabled(False)
@@ -2252,8 +2326,16 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         self.layout_matrix_files.reset()
         if self.layout_tbsp_format is not None:
             self.layout_tbsp_format.reset()
-        for layout in (self.layout_trajectories_p, self.layout_trajectories_r, self.layout_trajectories_number,
-                       self.layout_energy_distribution, self.layout_distribution_grid, self.layout_random_seed, self.layout_inelastic_outside):
+        optional_layouts = [
+            self.layout_trajectories_p,
+            self.layout_trajectories_r,
+            self.layout_trajectories_number,
+            self.layout_energy_distribution,
+            self.layout_distribution_grid,
+            self.layout_random_seed,
+            self.layout_inelastic_outside
+        ]
+        for layout in optional_layouts:
             layout.reset()
         self.changedOutputs()
 
@@ -2297,7 +2379,11 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
-        """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
+        """
+        Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)
+
+        :param arguments: arguments of simulation
+        """
 
         self.reset()
         settings = arguments.settings
@@ -2424,7 +2510,8 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         numb_hist = settings.get('trajectories_number')
         self.trajectories_number.setValue(numb_hist if isinstance(numb_hist, int) else self.default_values.numb_hist)
         grid = settings.get('distribution_grid')
-        defaults = [self.default_values.dist_nx, self.default_values.dist_ny, self.default_values.dist_nz, self.default_values.dist_delta]
+        default_values = self.default_values
+        defaults = [default_values.dist_nx, default_values.dist_ny, default_values.dist_nz, default_values.dist_delta]
         if not isinstance(grid, list) or len(grid) != 4:
             grid = defaults
         for widget, value in zip(self.distribution_grid, grid):
@@ -2445,7 +2532,11 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         return not_loadable
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         output_options = value_dict.get('output_options')
         if output_options is not None:
@@ -2749,7 +2840,7 @@ class CompRowBeamSettings(CompRow):
         self.inelastic_loss_model.entries = self.inelastic_loss_model_entries
 
         self.inelastic_loss_model.currentIndexChanged.connect(self.contentChanged.emit)
-        self.inelastic_loss_model.mouseReleaseEvent = lambda _: setWidgetBackground(self.inelastic_loss_model, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+        self.inelastic_loss_model.mouseReleaseEvent = lambda _: setWidgetBackground(self.inelastic_loss_model, False)  # type: ignore[method-assign, assignment]
 
         # azimuthal angle, starting depth and charge of projectiles
         self.azimuth = DoubleSpinBox(default=self.default_values.beta0, input_range=(-360, 360), step_size=0.01)
@@ -2766,7 +2857,16 @@ class CompRowBeamSettings(CompRow):
         self.heat_of_formation.setEnabled(self.default_values.supports_deltahf)
         self.isotopes = ComboBox(default=0, entries=['natural', 'isotopes'], entries_save=[0, 1])
 
-        for widget in (self.azimuth, self.start_depth, self.charge, self.inelastic_correction, self.cutoff_energy, self.bulk_binding_energy, self.heat_of_formation):
+        optional_widgets = [
+            self.azimuth,
+            self.start_depth,
+            self.charge,
+            self.inelastic_correction,
+            self.cutoff_energy,
+            self.bulk_binding_energy,
+            self.heat_of_formation
+        ]
+        for widget in optional_widgets:
             widget.valueChanged.connect(self.contentChanged.emit)
         self.isotopes.currentIndexChanged.connect(self.contentChanged.emit)
 
@@ -2797,7 +2897,11 @@ class CompRowBeamSettings(CompRow):
         self.clearSpinboxButtons()
 
     def setElement(self, element: Element):
-        """Sets rows element to element"""
+        """
+        Sets rows element to element
+
+        :param element: new element
+        """
 
         self.element = element
 
@@ -2829,7 +2933,11 @@ class CompRowBeamSettings(CompRow):
         super().setElement(element)
 
     def adaptElement(self, element: Element):
-        """Adapts element specific parameters"""
+        """
+        Adapts element specific parameters
+
+        :param element: element with parameters
+        """
 
         self.atomic_mass.setValue(round(element.atomic_mass, self.element_precision))
 
@@ -2919,7 +3027,12 @@ class CompRowBeamSettings(CompRow):
         )
 
     def setArguments(self, arguments: RowArguments, general_arguments: Union[SimulationArguments, GeneralArguments]):
-        """Sets <RowArguments> container of parameters for row"""
+        """
+        Sets <RowArguments> container of parameters for row
+
+        :param arguments: arguments of row
+        :param general_arguments: arguments of simulation
+        """
 
         assumed = arguments.get('assumed')
         if not isinstance(assumed, list):
@@ -2978,7 +3091,11 @@ class CompRowBeamSettings(CompRow):
             self.inelastic_loss_model.setValue(inel0, from_entries_save=True)
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         max_concentration = value_dict.get('max_concentration')
         if max_concentration is not None:
@@ -3008,7 +3125,11 @@ class CompRowTargetSettings(CompRowBeamSettings):
     )(CompRowBeamSettings.allRowFields))
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         super().receive(value_dict)
         density = value_dict.get('atomic_global_density')
@@ -3184,7 +3305,11 @@ class HlPlot(HlGeneralPlot):
         })
 
     def setEnergyDistributionHidden(self, hidden: bool):
-        """Shows or hides the settings of the energy distribution plot"""
+        """
+        Shows or hides the settings of the energy distribution plot
+
+        :param hidden: if settings are hidden
+        """
 
         for layout in self.energy_distribution_layouts:
             layout.setHidden(hidden)
@@ -3214,7 +3339,11 @@ class HlPlot(HlGeneralPlot):
         self.emit({'trajectories': self.trajectoryArguments()})
 
     def animate(self, play: bool):
-        """Starts or stops the animation of the collision cascade"""
+        """
+        Starts or stops the animation of the collision cascade
+
+        :param play: if animation is played
+        """
 
         if play:
             if self.trajectory_time.value() >= self.trajectory_time_steps:
@@ -3234,7 +3363,11 @@ class HlPlot(HlGeneralPlot):
             self.trajectory_play.setChecked(False)
 
     def setTrajectoriesHidden(self, hidden: bool):
-        """Shows or hides the settings of the trajectory plot"""
+        """
+        Shows or hides the settings of the trajectory plot
+
+        :param hidden: if settings are hidden
+        """
 
         for layout in self.trajectory_layouts:
             layout.setHidden(hidden)
@@ -3252,7 +3385,11 @@ class HlPlot(HlGeneralPlot):
         })
 
     def receive(self, value_dict: dict):
-        """Receives pyqtSignal -> dict"""
+        """
+        Receives pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         hide = value_dict.get('hide')
         if hide:
@@ -3474,6 +3611,12 @@ Andreas Mutzke
             return False
 
         def pdfFiles(directory: Path) -> List[Path]:
+            """
+            Returns pdf files in a directory
+
+            :param directory: directory to search
+            """
+
             try:
                 return sorted(file for file in directory.iterdir() if file.is_file() and file.suffix.lower() == '.pdf')
             except OSError:
@@ -3487,7 +3630,8 @@ Andreas Mutzke
         # newer versions (e.g. 7.05, 7.07) come without the pdf: the documentation of another installed version next to
         # this folder (the newest one, the folder names contain the version)
         try:
-            siblings = sorted((path for path in folder.parent.iterdir() if path.is_dir() and path != folder), key=lambda path: path.name, reverse=True)
+            siblings = [path for path in folder.parent.iterdir() if path.is_dir() and path != folder]
+            siblings = sorted(siblings, key=lambda path: path.name, reverse=True)
         except OSError:
             siblings = []
         for sibling in siblings:
@@ -3974,7 +4118,13 @@ Andreas Mutzke
         a_mass = [f'{e}' for e in a_mass]
 
         def speciesValues(key: str, default, beam_only: bool = False) -> list:
-            """Returns the value of a row parameter for all species (in the order of symbol)"""
+            """
+            Returns the value of a row parameter for all species (in the order of symbol)
+
+            :param key: key of optional value of the rows
+            :param default: default value
+            :param beam_only: (optional) only projectiles
+            """
 
             values = []
             if group_elements:
@@ -4642,7 +4792,15 @@ text = "--- extra ---"
         error_list = []
 
         def getValue(value: str, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
-            """Returns value if value has type value_type, otherwise return default_value"""
+            """
+            Returns value if value has type value_type, otherwise return default_value
+
+            :param value: value to convert
+            :param value_type: required type
+            :param default_value: returned if value can not be converted
+            :param item: (optional) name of value, noted as assumed if default_value is returned
+            :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+            """
 
             if assumed_cls is None:
                 assumed_cls = DefaultAssumed()
@@ -4658,14 +4816,23 @@ text = "--- extra ---"
                 return default_value
 
         def getValueBool(value: str, default_value) -> bool:
-            """Returns a boolean representation of the value, or default value if it can not be converted"""
+            """
+            Returns a boolean representation of the value, or default value if it can not be converted
+
+            :param value: Fortran logical
+            :param default_value: returned if value is no logical
+            """
 
             if not isinstance(value, str):
                 return default_value
             return 'true' in value
 
         def getValueBoolInt(value: str) -> Union[bool, float]:
-            """Returns the integer of value or False"""
+            """
+            Returns the integer of value or False
+
+            :param value: Fortran logical or number
+            """
 
             if value is None:
                 return False
@@ -4677,7 +4844,15 @@ text = "--- extra ---"
                 return False
 
         def getValueDict(value: str, lookup_dict: dict, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
-            """Returns class member with name value if is class member, otherwise return default_value"""
+            """
+            Returns class member with name value if is class member, otherwise return default_value
+
+            :param value: value to look up
+            :param lookup_dict: dictionary of values
+            :param default_value: returned if value is not in lookup_dict
+            :param item: (optional) name of value, noted as assumed if default_value is returned
+            :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+            """
 
             if assumed_cls is None:
                 assumed_cls = DefaultAssumed()
@@ -4689,7 +4864,17 @@ text = "--- extra ---"
                 return [k for k, v in lookup_dict.items() if v == default_value][0]
 
         def getValueList(value: str, value_type, default_value, item=None, lookup_dict=None, split_str: str = ',', assumed_cls: Optional[DefaultAssumed] = None) -> list:
-            """Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value"""
+            """
+            Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value
+
+            :param value: comma separated values
+            :param value_type: required type
+            :param default_value: replaces values that can not be converted
+            :param item: (optional) name of values, noted as assumed if default_value is used
+            :param lookup_dict: (optional) dictionary to look up the values
+            :param split_str: (optional) separator of values
+            :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+            """
 
             if assumed_cls is None:
                 assumed_cls = DefaultAssumed()
@@ -4697,7 +4882,7 @@ text = "--- extra ---"
                 if item is not None:
                     assumed_cls.assumed(item)
                 value = ''
-            value = value.replace('\"', ' ').replace('\'', ' ')
+            value = value.replace('"', ' ').replace('\'', ' ')
             # the values of Fortran namelists are separated by commas and/or blanks (e.g. symbol = "C_g" "W")
             if split_str == ',':
                 values = [part for part in split(r'[\s,]+', value.strip()) if part] or ['']
@@ -4749,7 +4934,16 @@ text = "--- extra ---"
         symbol = getValueList(contents.get('symbol'), str, 'H', 'symbol', assumed_cls=assumed)
         # without inel0 the default of SDTrimSP is used for each species (see defaultInelasticLossModel)
         inel0_text = contents.get('inel0')
-        inel0 = getValueList(inel0_text, getValueDict, default_values.inel0, 'inelastic_loss_model', dict_lookup.inel0, assumed_cls=assumed) if isinstance(inel0_text, str) else []
+        inel0 = []
+        if isinstance(inel0_text, str):
+            inel0 = getValueList(
+                inel0_text,
+                getValueDict,
+                default_values.inel0,
+                'inelastic_loss_model',
+                dict_lookup.inel0,
+                assumed_cls=assumed
+            )
         qubeam = getValueList(contents.get('qubeam'), float, default_values.qubeam, 'abundance', assumed_cls=assumed)
         qu_text = contents.get('qu')
         qu = getValueList(qu_text, float, default_values.qubeam, 'abundance', assumed_cls=assumed)
@@ -4761,7 +4955,14 @@ text = "--- extra ---"
 
         # further parameters of the species
         def optionalList(name: str, value_type, default) -> list:
-            """Returns list of values of a parameter (empty if not given)"""
+            """
+            Returns list of values of a parameter (empty if not given)
+
+            :param name: name of parameter
+            :param value_type: required type
+            :param default: default value
+            """
+
             value = contents.get(name)
             if not isinstance(value, str):
                 return []
@@ -4810,7 +5011,8 @@ text = "--- extra ---"
             crystals: List[Dict[str, Any]] = []
             for i in range(1, CrystalTableLimits.max_crystals + 1):
                 name = str(contents.get(f'name_cryst{i}') or '').strip().strip('"\'')
-                miller = getValueList(contents.get(f'miller_ind{i}'), float, 0, 'miller_indices_list' if i <= crystal_count else None, assumed_cls=assumed)
+                item = 'miller_indices_list' if i <= crystal_count else None
+                miller = getValueList(contents.get(f'miller_ind{i}'), float, 0, item, assumed_cls=assumed)
                 if i <= crystal_count:
                     crystals.append({'name': name, 'miller': [SafeInt(m) if float(m).is_integer() else m for m in miller]})
             miller_ind = MillerIndex(list(crystals[0]['miller']))
@@ -4870,7 +5072,12 @@ text = "--- extra ---"
         row_index = RunningIndex()
 
         def rowList(qu_list: list, typ: str) -> List[RowArguments]:
-            """Converts the qu_list into a list of <RowArguments>"""
+            """
+            Converts the qu_list into a list of <RowArguments>
+
+            :param qu_list: list of atomic fractions
+            :param typ: 'beam' or 'target'
+            """
 
             row_arguments: List[RowArguments] = []
             for qu_i, symbol_i, qumax_i, e0_i, alpha0_i, inel0_i, e_surfb_i, e_displ_i, dns0_i, a_mass_i in zip_longest(qu_list, symbol, qumax, e0, alpha0, inel0, e_surfb, e_displ, dns0, a_mass):
@@ -4988,14 +5195,14 @@ text = "--- extra ---"
         # beam_args data (<GeneralBeamArguments>)
         # distributions of energies and angles from files
         distributions: Dict[str, Any] = {}
-        projectiles = [(number, symbol_i) for number, (symbol_i, qubeam_i) in enumerate(zip(symbol, qubeam), start=1) if qubeam_i and qubeam_i > 0]
-
-        def numbered(name: str, index: int) -> str:
-            return f'{name}.inp' if index == 1 else f'{name}{index:02d}.inp'
+        projectiles = []
+        for number, (symbol_i, qubeam_i) in enumerate(zip(symbol, qubeam), start=1):
+            if qubeam_i and qubeam_i > 0:
+                projectiles.append((number, symbol_i))
 
         if case_e0 == ArgumentValues.KineticEnergy.FILE:
             if Versions.atLeast(version, Versions.V_700):
-                energy_files = [(symbol_i, numbered('energy', index)) for index, symbol_i in projectiles]
+                energy_files = [(symbol_i, numberedFileName('energy', index)) for index, symbol_i in projectiles]
             else:
                 energy_files = [(symbol_i, name) for (_, symbol_i), name in zip(projectiles, ['energy.inp', 'energy2.inp'])]
             for symbol_i, name in energy_files:
@@ -5005,7 +5212,7 @@ text = "--- extra ---"
                     error_list.append(f'Energy distribution "{name}" not found')
         if case_alpha == ArgumentValues.Angle.FILE:
             if Versions.atLeast(version, Versions.V_702):
-                angle_files = [(symbol_i, numbered('angle', index)) for index, symbol_i in projectiles]
+                angle_files = [(symbol_i, numberedFileName('angle', index)) for index, symbol_i in projectiles]
                 # 7.02 reads only angle.inp
                 if version == Versions.V_702 and projectiles and all(name != 'angle.inp' for _, name in angle_files):
                     angle_files.append((projectiles[0][1], 'angle.inp'))
@@ -5023,9 +5230,8 @@ text = "--- extra ---"
         elif case_e0 == ArgumentValues.KineticEnergy.FILE_ENERGY_ANGLE:
             error_list.append('Distribution of energies and angles "ene_ang.inp" not found or not readable')
 
-        # the order of the species in tri.inp is kept (it changes the random numbers and therefore the results):
-        # grouped are the target species first and then the projectiles that are not in the target (every species once),
-        # not grouped are all projectiles first and then all target species
+        # the order of the species in tri.inp is kept (it changes the random numbers): grouped first the target species,
+        # then the other projectiles, not grouped first all projectiles, then all target species
         beam_symbols = [row.symbol for row in beam_rows]
         target_symbols = [row.symbol for row in target_rows]
         file_symbols = [symbol_i for symbol_i, qu_i, qubeam_i in zip(symbol, qu, qubeam) if qu_i or qubeam_i]
@@ -5137,7 +5343,8 @@ text = "--- extra ---"
 
                         try:
                             abundances = [float(a) for a in abundance_texts]
-                            abundances.insert(0, 1 - sum(abundances) - (sum(crystal_layers[-1]['fractions']) if crystal_columns else 0))
+                            crystal_fraction = sum(crystal_layers[-1]['fractions']) if crystal_columns else 0
+                            abundances.insert(0, 1 - sum(abundances) - crystal_fraction)
                             # abundances of the amorphous part are normalized
                             if crystal_columns and sum(abundances) > 1e-12:
                                 abundances = [a / sum(abundances) for a in abundances]
@@ -5153,7 +5360,10 @@ text = "--- extra ---"
 
                         crystal_arguments = {}
                         if crystal_columns:
-                            crystal_arguments = {'crystal_fractions': crystal_layers[-1]['fractions'], 'miller': crystal_layers[-1]['miller']}
+                            crystal_arguments = {
+                                'crystal_fractions': crystal_layers[-1]['fractions'],
+                                'miller': crystal_layers[-1]['miller']
+                            }
                         structure.append(StructureArguments(
                             name=name,
                             segments=segments,
@@ -5331,7 +5541,12 @@ text = "--- extra ---"
         }
 
         def inelasticModel(row) -> int:
-            """inel0 of the row, the automatic model as chosen by SDTrimSP"""
+            """
+            inel0 of the row, the automatic model as chosen by SDTrimSP
+
+            :param row: row of species
+            """
+
             model = row.get('inelastic_loss_model')
             inel0 = dict_lookup.inel0.get(model, default_values.inel0) if model is not None else default_values.inel0
             if inel0 == -1:
@@ -5339,7 +5554,12 @@ text = "--- extra ---"
             return inel0
 
         def validityLimit(row) -> float:
-            """Upper energy limit (in eV) of the models of Lindhard-Scharff and Oen-Robinson: E < 25 Z^(4/3) M keV"""
+            """
+            Upper energy limit (in eV) of the models of Lindhard-Scharff and Oen-Robinson: E < 25 Z^(4/3) M keV
+
+            :param row: row of species
+            """
+
             return 25e3 * row.element.atomic_nr ** (4 / 3) * row.element.atomic_mass
 
         # 1) Lindhard-Scharff and Oen-Robinson are only valid below 25 Z^(4/3) M keV (projectiles and the recoils they create)
@@ -5462,7 +5682,8 @@ text = "--- extra ---"
         errors = []
 
         # crystals from table.crystal in the layers
-        if DefaultValues(version).crystal_table and arguments.target_args.get('crystal_flag', False) and arguments.crystal_args is not None:
+        crystal_flag = arguments.target_args.get('crystal_flag', False)
+        if DefaultValues(version).crystal_table and crystal_flag and arguments.crystal_args is not None:
             layers = crystalLayers(arguments)
             for structure, layer in zip(arguments.structure, layers):
                 if sum(layer['fractions']) > 1 + 1e-6:
@@ -5514,7 +5735,8 @@ text = "--- extra ---"
             errors.append('The distribution of energies and angles from ene_ang.inp (case_e0 = 6) is not implemented in SDTrimSP 7.00 - 7.02')
         elif names['energy_angle'] and not distributions.get('energy_angle'):
             errors.append('The distribution of energies and angles (ene_ang.inp) is not defined, use the "Distributions..." button')
-        if not Versions.atLeast(version, Versions.V_700) and arguments.beam_args.kinetic_energy_mode == ArgumentValues.KineticEnergy.FILE:
+        energy_file = arguments.beam_args.kinetic_energy_mode == ArgumentValues.KineticEnergy.FILE
+        if not Versions.atLeast(version, Versions.V_700) and energy_file:
             if sum(1 for _, beam in speciesList(arguments, group_elements) if beam) > 2:
                 errors.append(f'SDTrimSP {version} reads energy distributions (energy.inp, energy2.inp) for at most two projectiles')
 
@@ -5523,7 +5745,10 @@ text = "--- extra ---"
         if ipot is not None and ipot != ArgumentValues.InteractionPotential.KRC:
             models = [arguments.settings.get('inelastic_loss_model')]
             models += [row.get('inelastic_loss_model') for row in arguments.beam_rows + arguments.target_rows if row.symbol]
-            not_allowed = (ArgumentValues.InelasticLossModel.OEN_ROBINSON, ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON)
+            not_allowed = (
+                ArgumentValues.InelasticLossModel.OEN_ROBINSON,
+                ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON
+            )
             if any(model in not_allowed for model in models):
                 errors.append('The inelastic loss models "Oen-Robinson" (2) and "average of (1) and (2)" (3) are only allowed for the KrC interaction potential')
 
@@ -5704,7 +5929,14 @@ class SimulationOutput(SimulationsOutput):
         super().__init__(plot, element_data, title_label)
 
         # settings of the trajectory plot, changed in HlPlot
-        self.trajectory_args = {'projectile': 1, 'view': 'y', 'color': 'species', 'recoils': True, 'layers': True, 'time_fraction': None}
+        self.trajectory_args = {
+            'projectile': 1,
+            'view': 'y',
+            'color': 'species',
+            'recoils': True,
+            'layers': True,
+            'time_fraction': None
+        }
 
         # settings of the plot of the energy distribution in the target, changed in HlPlot
         self.energy_distribution_args = {'kind': 'all', 'view': 'y', 'log': False}
@@ -5713,7 +5945,11 @@ class SimulationOutput(SimulationsOutput):
         self.animation_export: Optional[AnimationExport] = None
 
     def receive(self, value_dict: dict):
-        """Receives pyqtSignal -> dict"""
+        """
+        Receives pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         trajectories = value_dict.get('trajectories')
         if isinstance(trajectories, dict):
@@ -5758,6 +5994,12 @@ class SimulationOutput(SimulationsOutput):
         """
 
         def nonEmpty(name: str) -> bool:
+            """
+            Returns if a file exists and is not empty
+
+            :param name: name of file
+            """
+
             path = save_folder / name
             return path.is_file() and path.stat().st_size > 0
 
@@ -5774,8 +6016,12 @@ class SimulationOutput(SimulationsOutput):
             if not nonEmpty(name):
                 continue
             for i, species in enumerate(matrixSpecies(save_folder / name)):
-                items.append(ListWidgetItem(f'Energy and polar angle of {title} ({species})', indent=1, function=self.analyse,
-                                            function_args={'plot': 'plotEnergyAngleMatrix', 'plot_args': {'name': name, 'species': i}}))
+                items.append(ListWidgetItem(
+                    f'Energy and polar angle of {title} ({species})',
+                    indent=1,
+                    function=self.analyse,
+                    function_args={'plot': 'plotEnergyAngleMatrix', 'plot_args': {'name': name, 'species': i}}
+                ))
 
         if items:
             list_widget.addItem(ListWidgetItem('Plot distributions in the target and output matrices:', bold=True))
@@ -5785,7 +6031,13 @@ class SimulationOutput(SimulationsOutput):
             list_widget.addItem(ListWidgetItem('Plot distributions in the target (only with energy distribution or matrix output)', bold=True, grey=True))
         list_widget.addItemEmpty()
 
-    def saveTrajectoryAnimation(self, arguments: dict, path: Optional[Path] = None, frames: int = 60, frame_duration: int = 80) -> Optional[Path]:
+    def saveTrajectoryAnimation(
+        self,
+        arguments: dict,
+        path: Optional[Path] = None,
+        frames: int = 60,
+        frame_duration: int = 80
+    ) -> Optional[Path]:
         """
         Saves the animation of the collision cascade as GIF in a background thread (self.animation_export) and returns its
         path. The frames are created first, then they are drawn and saved in the background: the GUI stays usable and the
@@ -5802,6 +6054,13 @@ class SimulationOutput(SimulationsOutput):
         status_bar = main_window.statusBar() if isinstance(main_window, QMainWindow) else None
 
         def showStatus(message: str, timeout: int = 0):
+            """
+            Shows a message in the status bar
+
+            :param message: message
+            :param timeout: (optional) time in ms until message is cleared
+            """
+
             try:
                 if status_bar is not None:
                     status_bar.showMessage(message, timeout)
@@ -5840,7 +6099,8 @@ class SimulationOutput(SimulationsOutput):
 
         # canvas with the size of the plot, a 3D plot keeps its current view
         width, height = self.plot.fig.get_size_inches()
-        canvas = OffscreenCanvas(max(width, 4), max(height, 3), self.plot.fig.dpi, projection='3d' if arguments.get('view') == '3d' else None)
+        projection = '3d' if arguments.get('view') == '3d' else None
+        canvas = OffscreenCanvas(max(width, 4), max(height, 3), self.plot.fig.dpi, projection=projection)
         plot_axes: Any = self.plot.axes
         if arguments.get('view') == '3d' and getattr(plot_axes, 'name', '') == '3d':
             canvas.axes.view_init(plot_axes.elev, plot_axes.azim)
@@ -5848,9 +6108,18 @@ class SimulationOutput(SimulationsOutput):
         durations = [frame_duration] * (len(settings) - 1) + [frame_duration * 25]
         export = AnimationExport(settings, canvas, path, durations)
         name = path.name
-        export.progress.connect(lambda frame, number: showStatus(f'Saving the animation as GIF in the background: frame {frame} of {number} ({name})...'))
+        export.progress.connect(
+            lambda frame, number: showStatus(f'Saving the animation as GIF in the background: frame {frame} of {number} ({name})...')
+        )
 
         def finished(saved: str, error: str):
+            """
+            Shows the result of the export
+
+            :param saved: path of saved animation or empty
+            :param error: error message
+            """
+
             if saved:
                 showStatus(f'Animation saved as {saved}', 8000)
             else:
@@ -6221,7 +6490,11 @@ class SimulationAnalysis(SimulationsAnalysis):
     }
 
     def loadFolder(self, save_folder: Path) -> bool:
-        """Reads the general information of the output in a folder (E0_31_target.dat)"""
+        """
+        Reads the general information of the output in a folder (E0_31_target.dat)
+
+        :param save_folder: folder of the simulation
+        """
 
         self.reset()
         for info_file in ('E0_31_target.dat', 'E0_31_target001.dat'):
@@ -6240,6 +6513,15 @@ class SimulationAnalysis(SimulationsAnalysis):
         result: Dict[str, Dict[str, float]] = {}
 
         def add(quantity: str, values, total=None, skip_zero: bool = True):
+            """
+            Adds a quantity to the results
+
+            :param quantity: name of quantity
+            :param values: values of the elements
+            :param total: (optional) total value
+            :param skip_zero: (optional) skip elements with value 0
+            """
+
             entries = {}
             for element, value in zip(self.elements, values):
                 if not skip_zero or value:
@@ -6373,7 +6655,11 @@ class SimulationAnalysis(SimulationsAnalysis):
     ISOTOPE_MASSES = {'D': 2.014102, 'T': 3.016049}
 
     def elementMass(self, symbol: str) -> float:
-        """Returns the atomic mass of an element (NaN if unknown, e.g. without the tables of SDTrimSP)"""
+        """
+        Returns the atomic mass of an element (NaN if unknown, e.g. without the tables of SDTrimSP)
+
+        :param symbol: symbol of element
+        """
 
         element = self.element_data.elementFromSymbol(symbol)
         if element is not None:
@@ -6381,7 +6667,12 @@ class SimulationAnalysis(SimulationsAnalysis):
         return self.ISOTOPE_MASSES.get(symbol, float('nan'))
 
     def getElementIndex(self, element: str) -> int:
-        """Returns index of element"""
+        """
+        Returns index of element
+
+        :param element: symbol of element
+        """
+
         if element not in self.elements:
             return 0
         return self.elements.index(element)
@@ -6971,7 +7262,9 @@ class SimulationAnalysis(SimulationsAnalysis):
         if time_fraction is not None and float(time_fraction) < 1:
             positive_times = all_points[:, 4][all_points[:, 4] > 0]
             start_time = max(float(positive_times.min()) if positive_times.size else end_time, end_time * 1e-6, 1e-12)
-            time = 0. if float(time_fraction) <= 0 else start_time * (max(end_time, start_time) / start_time) ** float(time_fraction)
+            time = 0.
+            if float(time_fraction) > 0:
+                time = start_time * (max(end_time, start_time) / start_time) ** float(time_fraction)
 
         # visible part of each trajectory at this time and the current positions of the moving particles
         parts: List[Tuple[dict, np.ndarray]] = []
@@ -6992,13 +7285,31 @@ class SimulationAnalysis(SimulationsAnalysis):
             parts.append((trajectory, points))
 
         def speciesName(species: int) -> str:
+            """
+            Returns name of a species
+
+            :param species: index of species
+            """
+
             return str(self.elements[species]) if 0 <= species < len(self.elements) else f'Species {species + 1}'
 
         # colors: species (projectiles and recoils), later generations are darker
         def shade(generation: int) -> float:
+            """
+            Returns darkening of later generations of recoils
+
+            :param generation: generation of recoil
+            """
+
             return 0.6 * (generation - 1) / (max_generation - 1) if max_generation > 1 else 0.
 
         def trajectoryColor(trajectory: dict) -> np.ndarray:
+            """
+            Returns color of a trajectory
+
+            :param trajectory: trajectory
+            """
+
             base = np.array(to_rgb(self.colors[trajectory['species']]))
             if not trajectory['recoil'] or not generation_known:
                 return base
@@ -7019,6 +7330,12 @@ class SimulationAnalysis(SimulationsAnalysis):
             colormap, value_label = paletteColormap(), 'Time [fs]'
 
         def segmentValues(points: np.ndarray) -> np.ndarray:
+            """
+            Returns values of the segments of a trajectory for the color map
+
+            :param points: points of trajectory
+            """
+
             values = points[:-1, value_column]
             return np.clip(values, notNone(norm).vmin, None) if value_column == 3 else values
 
@@ -7034,11 +7351,25 @@ class SimulationAnalysis(SimulationsAnalysis):
         layer_names = list(dict.fromkeys(name for _, _, name in layer_list))
 
         def layerColor(name: str) -> str:
+            """
+            Returns color of a layer
+
+            :param name: name of layer
+            """
+
             return layerHex(layer_names.index(name))
 
         axis_labels = ['Depth x [Å]', 'Lateral position y [Å]', 'Lateral position z [Å]']
 
         def draw2d(axes, horizontal: int, vertical: int):
+            """
+            Draws layers and trajectories in a 2D projection
+
+            :param axes: axes to draw in
+            :param horizontal: index of horizontal coordinate
+            :param vertical: index of vertical coordinate
+            """
+
             if vertical == 0:
                 for top, bottom, name in layer_list:
                     axes.axhspan(top, bottom, color=layerColor(name), alpha=0.2, linewidth=0, zorder=0)
@@ -7053,8 +7384,13 @@ class SimulationAnalysis(SimulationsAnalysis):
                 for (generation, species), segments in sorted(groups.items()):
                     trajectory = next(t for t, _ in parts if t['generation'] == generation and t['species'] == species)
                     lines = np.vstack(segments)
-                    axes.plot(lines[:, 0], lines[:, 1], color=trajectoryColor(trajectory), linewidth=1.6 if generation == 0 else 0.9,
-                              zorder=3 - generation / (max_generation + 1))
+                    axes.plot(
+                        lines[:, 0],
+                        lines[:, 1],
+                        color=trajectoryColor(trajectory),
+                        linewidth=1.6 if generation == 0 else 0.9,
+                        zorder=3 - generation / (max_generation + 1)
+                    )
             else:
                 segments, values, widths = [], [], []
                 for trajectory, points in parts:
@@ -7080,6 +7416,12 @@ class SimulationAnalysis(SimulationsAnalysis):
             axes.set_aspect('equal', adjustable='box')
 
         def draw3d(axes):
+            """
+            Draws layers and trajectories in 3D
+
+            :param axes: axes to draw in
+            """
+
             for top, bottom, name in layer_list:
                 for depth in (top, bottom):
                     corners = [(lower[1], lower[2], depth), (upper[1], lower[2], depth), (upper[1], upper[2], depth), (lower[1], upper[2], depth)]
@@ -7145,7 +7487,8 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         # colorbar: generation (white to black as the recoils get darker), energy or time
         if value_column is not None:
-            mpl_settings.colorbar(ScalarMappable(norm=norm, cmap=colormap), axes_index=colorbar_axes, label=value_label, shrink=0.8)
+            mappable = ScalarMappable(norm=norm, cmap=colormap)
+            mpl_settings.colorbar(mappable, axes_index=colorbar_axes, label=value_label, shrink=0.8)
         elif max_generation > 0 and generation_known:
             grays = [(1 - shade(generation),) * 3 for generation in range(1, max_generation + 1)]
             generation_norm = BoundaryNorm(np.arange(0.5, max_generation + 1.5), max_generation)
@@ -7168,7 +7511,8 @@ class SimulationAnalysis(SimulationsAnalysis):
         # export: all points of the shown trajectories
         data_columns: List[list] = [[] for _ in range(9)]
         for number, (trajectory, points) in enumerate(parts, start=1):
-            for column, value in enumerate([number, trajectory['generation'], trajectory['species'] + 1, int(trajectory['recoil'])]):
+            values = [number, trajectory['generation'], trajectory['species'] + 1, int(trajectory['recoil'])]
+            for column, value in enumerate(values):
                 data_columns[column] += [value] * len(points)
             for column, index in enumerate([0, 1, 2, 3, 4], start=4):
                 data_columns[column] += list(points[:, index])
@@ -7199,7 +7543,12 @@ class SimulationAnalysis(SimulationsAnalysis):
     }
 
     def readCached(self, name: str, reader: Callable):
-        """Returns the content of a file in the save folder read with reader, cached by the modification time"""
+        """
+        Returns the content of a file in the save folder read with reader, cached by the modification time
+
+        :param name: name of file
+        :param reader: function that reads the file
+        """
 
         if self.save_folder is None:
             return None
@@ -7213,7 +7562,13 @@ class SimulationAnalysis(SimulationsAnalysis):
             cache[name] = (key, reader(path))
         return cache[name][1]
 
-    def plotEnergyDistribution(self, kind: str = 'all', view: str = 'y', log: bool = False, **_) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotEnergyDistribution(
+        self,
+        kind: str = 'all',
+        view: str = 'y',
+        log: bool = False,
+        **_
+    ) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """
         Plot and return the energy distribution in the target (lenergy_distr)
 
@@ -7262,7 +7617,14 @@ class SimulationAnalysis(SimulationsAnalysis):
             positive = mapped[mapped > 0]
             norm = LogNorm(vmin=max(float(positive.min()), float(positive.max()) * 1e-6), vmax=float(positive.max()))
             mapped = np.where(mapped > 0, mapped, np.nan)
-        mpl_settings.axes.pcolormesh(edges[horizontal], edges[vertical], mapped, cmap=paletteColormap(), norm=norm, shading='flat')
+        mpl_settings.axes.pcolormesh(
+            edges[horizontal],
+            edges[vertical],
+            mapped,
+            cmap=paletteColormap(),
+            norm=norm,
+            shading='flat'
+        )
         mpl_settings.axes.pcolormesh_label('Energy [eV/Å²/projectile]')
         if vertical == 'x':
             mpl_settings.axes.set_ylim(edges['x'][-1], edges['x'][0])
@@ -7277,7 +7639,10 @@ class SimulationAnalysis(SimulationsAnalysis):
             [labels[vertical], labels[horizontal], 'Energy [eV/Å²/projectile]']
         ), mpl_settings
 
-    def plotEnergyDepthMatrix(self, name: str = 'mpe_ex_p.dat') -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotEnergyDepthMatrix(
+        self,
+        name: str = 'mpe_ex_p.dat'
+    ) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """
         Plot and return the distribution of the depth (summed over the energy) of a matrix over energy and depth
         (mpe_ex_p.dat: maximum penetration depth of backscattered projectiles, morigin_ex_bs.dat, morigin_ex_ts.dat: depth of
@@ -7312,7 +7677,12 @@ class SimulationAnalysis(SimulationsAnalysis):
         mpl_settings.axes.set_title(title)
         return (data, labels), mpl_settings
 
-    def plotEnergyAngleMatrix(self, name: str = 'meagb_p.dat', species: int = 0, log: bool = True) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+    def plotEnergyAngleMatrix(
+        self,
+        name: str = 'meagb_p.dat',
+        species: int = 0,
+        log: bool = True
+    ) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """
         Plot and return the energy and the polar angle (summed over the azimuthal angle) of backscattered or transmitted
         particles (lmatrices: meagb_p.dat, meagb_s.dat, meagt_p.dat, meagt_s.dat)
@@ -7587,6 +7957,8 @@ class SimulationAnalysis(SimulationsAnalysis):
         """
         Returns the width of the depth intervals of each species from the centers of the intervals (depth_*.dat).
         With only one depth interval (nqx = 1) the first interval starts at the surface, so its width is twice its center
+
+        :param depth_x_values: depths of the segments
         """
 
         if depth_x_values.shape[1] >= 2:
@@ -8376,7 +8748,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def plotParticlesPolar(self, particle: Optional[Particle] = None) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return angle data of backscattered particles"""
+        """
+        Plot and return angle data of backscattered particles
+
+        :param particle: (optional) type of particles
+        """
 
         if particle is None:
             particle = self.particle
@@ -8459,7 +8835,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return self.plotParticlesPolar(Particle.Recoil)
 
     def plotParticlesEnergy(self, particle: Optional[Particle] = None) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return energy of backscattered particles"""
+        """
+        Plot and return energy of backscattered particles
+
+        :param particle: (optional) type of particles
+        """
 
         if particle is None:
             particle = self.particle
@@ -8529,7 +8909,12 @@ class SimulationAnalysis(SimulationsAnalysis):
         return self.updateParticlesEnergyPolar(Particle.Recoil, 0, 90)
 
     def plotParticlesEnergyPolar(self, polar_angle: float, polar_angle_delta: float) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return angle and energy data of backscattered particles"""
+        """
+        Plot and return angle and energy data of backscattered particles
+
+        :param polar_angle: polar angle in degree
+        :param polar_angle_delta: width of polar angle interval in degree
+        """
 
         mpl_settings = MplCanvasSettings()
 
@@ -8593,7 +8978,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def updateParticlesEnergyPolar(self, particle: Particle, polar_angle: float, polar_angle_delta: float) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Updates te plot and data of the angle and energy of backscattered particles"""
+        """
+        Updates te plot and data of the angle and energy of backscattered particles
+
+        :param particle: type of particles
+        :param polar_angle: polar angle in degree
+        :param polar_angle_delta: width of polar angle interval in degree
+        """
 
         self.particle = particle
         self.particle_data = self.getParticleData(particle)
@@ -8609,7 +9000,13 @@ class SimulationAnalysis(SimulationsAnalysis):
         return result
 
     def plotPolar(self, element: int, particle: Particle, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return backscattered particles of element"""
+        """
+        Plot and return backscattered particles of element
+
+        :param element: index of element
+        :param particle: type of particles
+        :param n_bins: (optional) number of bins
+        """
 
         if element not in range(len(self.elements)):
             return None
@@ -8935,7 +9332,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return ([fluence_array[1:], surface[1:]], ['Fluence[10^20 ions/m^2]', 'Surface Erosion [Angs]']), mpl_settings
 
     def plotDepthConcentration(self, history_step: int = 0) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
-        """Plot and return the depth concentration"""
+        """
+        Plot and return the depth concentration
+
+        :param history_step: (optional) history step
+        """
 
         if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
             return None
@@ -8964,7 +9365,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def updateDepthConcentration(self, set_to_max: bool = False) -> Optional[Tuple[Tuple[list, list], MplCanvasSettings]]:
-        """Updates the plot and data of the depth concentration"""
+        """
+        Updates the plot and data of the depth concentration
+
+        :param set_to_max: (optional) show the last history step
+        """
 
         e031_data = self.getE031TargetData()
 

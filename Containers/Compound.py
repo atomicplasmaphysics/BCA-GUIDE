@@ -1,4 +1,6 @@
 from typing import Dict, List, Optional
+
+
 from Containers.Element import Element
 
 
@@ -11,7 +13,12 @@ class Compound:
     :param name_save: compound name used in input file
     """
 
-    def __init__(self, name: Optional[str] = None, elements: Optional[Dict[str, int]] = None, name_save: Optional[str] = None):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        elements: Optional[Dict[str, int]] = None,
+        name_save: Optional[str] = None
+    ):
 
         if name_save is None:
             name_save = name

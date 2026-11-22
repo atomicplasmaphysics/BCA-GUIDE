@@ -1,17 +1,15 @@
-"""
-Runs the test cases that come with SDTrimSP (folder "case") directly with their SDTrimSP version and through the GUI
-(the GUI loads the input files of the case, writes its own input files and runs the simulation) and compares the
-results. With the same input and the same random seed both runs must give identical results.
-The same for the samples of TRIDYN 2022 (TRIDYN2022_sample.ZIP).
-
-Only executed with:  python -m pytest tests/test_case_comparison.py --simulations
-With --simulation-data DIR (or --test-dir=DIR) both runs are kept in DIR/cases/<version>-<case>/{native,gui}.
-
-Environment variables:
-  BCA_TEST_CASE_PROJECTILES  cases with more projectiles (histories * projectiles per history) are skipped (default 20000)
-  BCA_TEST_TIMEOUT           timeout per simulation in seconds (default 900)
-  BCA_TEST_TRIDYN_FULL       run the dynamic TRIDYN samples with their full fluence (takes hours), otherwise it is reduced
-"""
+# Runs the test cases that come with SDTrimSP (folder "case") directly with their SDTrimSP version and through the GUI
+# (the GUI loads the input files of the case, writes its own input files and runs the simulation) and compares the
+# results. With the same input and the same random seed both runs must give identical results.
+# The same for the samples of TRIDYN 2022 (TRIDYN2022_sample.ZIP).
+#
+# Only executed with:  python -m pytest tests/test_case_comparison.py --simulations
+# With --simulation-data DIR (or --test-dir=DIR) both runs are kept in DIR/cases/<version>-<case>/{native,gui}.
+#
+# Environment variables:
+#   BCA_TEST_CASE_PROJECTILES  cases with more projectiles (histories * projectiles per history) are skipped (default 20000)
+#   BCA_TEST_TIMEOUT           timeout per simulation in seconds (default 900)
+#   BCA_TEST_TRIDYN_FULL       run the dynamic TRIDYN samples with their full fluence (takes hours), otherwise it is reduced
 
 import os
 import shutil
@@ -21,12 +19,17 @@ from re import findall, sub, IGNORECASE, MULTILINE
 from typing import Dict, List, Optional, Tuple
 from zipfile import ZipFile
 
+
 import pytest
 
+
 from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
-from Simulations.TRIDYN2022 import SimulationInput as TridynInput
-from Utility.Functions import ensureExecutable, inFileList
+
 from test_simulation_runs import INSTALLATIONS, TIMEOUT, runAndCheckOutputs
+
+from Simulations.TRIDYN2022 import SimulationInput as TridynInput
+
+from Utility.Functions import ensureExecutable, inFileList
 
 
 CASE_PROJECTILES = int(os.environ.get('BCA_TEST_CASE_PROJECTILES', 20000))
@@ -50,7 +53,12 @@ LARGE_MEMORY_CASES = {('SDTrimSP_6.06', 'He_Ni')}
 
 
 def triValue(text: str, name: str) -> Optional[str]:
-    """Returns the (first) value of a parameter in tri.inp or None"""
+    """
+    Returns the (first) value of a parameter in tri.inp or None
+
+    :param text: text of the input file
+    :param name: name of the parameter
+    """
 
     for line in text.splitlines():
         line = line.split('!')[0]
@@ -64,6 +72,8 @@ def caseProjectiles(case: Path) -> int:
     """
     Returns the number of projectiles of a case (histories * projectiles per history) as measure of the effort.
     Crystals take about 100 times longer than amorphous targets, so their projectiles count 100 times
+
+    :param case: name of the test case
     """
 
     text = (case / 'tri.inp').read_text(encoding='utf-8', errors='replace')
@@ -97,7 +107,12 @@ def comparisonCases():
 
 
 def withTables(text: str, tables: Path) -> str:
-    """Sets the path of the tables (the default "../../tables" only works inside the case folder)"""
+    """
+    Sets the path of the tables (the default "../../tables" only works inside the case folder)
+
+    :param text: text of the input file
+    :param tables: folder of the tables
+    """
 
     text = sub(r'^\s*tableinp\s*=.*$', '', text, flags=IGNORECASE | MULTILINE)
     lines = text.rstrip().splitlines()
@@ -107,7 +122,11 @@ def withTables(text: str, tables: Path) -> str:
 
 
 def resultLines(path: Path) -> List[str]:
-    """Lines of a result file without the lines that depend on the run (dates, times, paths), whitespace normalized"""
+    """
+    Lines of a result file without the lines that depend on the run (dates, times, paths), whitespace normalized
+
+    :param path: path of the file
+    """
 
     lines = []
     # split only at line feeds: splitlines() also splits at the control characters of uninitialized strings
@@ -129,6 +148,8 @@ def compareResults(native: Path, gui: Path, extra_gui_files: bool = False) -> Li
     Returns the differences of the result files of both runs
 
     :param extra_gui_files: the GUI run may write further files
+    :param native: output folder of the native run
+    :param gui: output folder of the run of the GUI
     """
 
     differences = []
@@ -160,7 +181,12 @@ def compareResults(native: Path, gui: Path, extra_gui_files: bool = False) -> Li
 
 @pytest.fixture
 def case_folder(request, tmp_path) -> Path:
-    """Folder for both runs: in --simulation-data DIR/cases (kept) or temporary"""
+    """
+    Folder for both runs: in --simulation-data DIR/cases (kept) or temporary
+
+    :param request: pytest request
+    :param tmp_path: temporary folder of the test
+    """
 
     data_dir = request.config.getoption('--simulation-data')
     if not data_dir:
@@ -174,6 +200,21 @@ def case_folder(request, tmp_path) -> Path:
 @pytest.mark.simulation
 @pytest.mark.parametrize('folder, binary, version, case', comparisonCases())
 def test_case_native_and_gui(main_window, qapp, case_folder, tmp_path, monkeypatch, errors, folder, binary, version, case):
+    """
+    Case native and gui
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param case_folder: folder of the test case
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    :param folder: folder of the installation of the simulation
+    :param binary: path to binary of the simulation
+    :param version: version of simulation
+    :param case: name of the test case
+    """
+
     monkeypatch.chdir(tmp_path)
     native = case_folder / 'native'
     gui = case_folder / 'gui'
@@ -226,9 +267,19 @@ def tridynSamples() -> List[str]:
 
 
 def reducedFluence(text: str) -> str:
-    """Reduces the fluence (cdat flct) of a TRIDYN input file to TRIDYN_FLUENCE"""
+    """
+    Reduces the fluence (cdat flct) of a TRIDYN input file to TRIDYN_FLUENCE
+
+    :param text: content of tri.inp
+    """
 
     def replace(match):
+        """
+        Returns the line of cdat with a reduced fluence
+
+        :param match: regular expression match
+        """
+
         values = match.group(2).split()
         if len(values) >= 3 and float(values[1]) > TRIDYN_FLUENCE:
             values[1] = f'{TRIDYN_FLUENCE}'
@@ -241,6 +292,18 @@ def reducedFluence(text: str) -> str:
 @pytest.mark.skipif(TridynInput.findBinary(TRIDYN_FOLDER) is None, reason='TRIDYN 2022 not available')
 @pytest.mark.parametrize('sample', tridynSamples())
 def test_tridyn_sample_native_and_gui(main_window, qapp, case_folder, tmp_path, monkeypatch, errors, sample):
+    """
+    Tridyn sample native and gui
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param case_folder: folder of the test case
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    :param sample: name of the TRIDYN sample
+    """
+
     monkeypatch.chdir(tmp_path)
     binary = TridynInput.findBinary(TRIDYN_FOLDER)
     native = case_folder / 'native'

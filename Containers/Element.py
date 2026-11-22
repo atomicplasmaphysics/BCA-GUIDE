@@ -1,6 +1,9 @@
 from __future__ import annotations
 from typing import List, Union, Optional
-from math import isfinite
+import logging
+
+
+from Utility.Functions import isNumber
 
 
 class Element:
@@ -57,8 +60,8 @@ class Element:
 
         **kwargs
     ):
-        # Required arguments (an empty element if one of them is missing)
-        if symbol is None or name is None or atomic_nr is None or period is None or group is None or atomic_mass is None or atomic_density is None:
+        # Check required arguments
+        if None in [symbol, name, atomic_nr, period, group, atomic_mass, atomic_density]:
             symbol = ''
             name = {'en': ''}
             atomic_nr = 0
@@ -68,30 +71,29 @@ class Element:
             atomic_density = 0
 
         try:
-            atomic_nr, period, group = int(atomic_nr), int(period), int(group)  # type: ignore[arg-type]
-            atomic_mass, atomic_density = float(atomic_mass), float(atomic_density)  # type: ignore[arg-type]
-            if not (isfinite(atomic_mass) and isfinite(atomic_density)):
+            atomic_nr = int(atomic_nr)  # type: ignore[arg-type]
+            period = int(period)  # type: ignore[arg-type]
+            group = int(group)  # type: ignore[arg-type]
+            atomic_mass = float(atomic_mass)  # type: ignore[arg-type]
+            atomic_density = float(atomic_density)  # type: ignore[arg-type]
+            if not isNumber(atomic_mass) or not isNumber(atomic_density):
                 raise ValueError
         except (TypeError, ValueError, OverflowError):
-            # damaged data (e.g. of an input.json): an empty element
-            symbol, name, atomic_nr, period, group, atomic_mass, atomic_density = '', {'en': ''}, 0, 0, 0, 0., 0.
+            logging.debug(f'Could not read element "{symbol}"!')
+            symbol = ''
+            name = {'en': ''}
+            atomic_nr = 0
+            period = 0
+            group = 0
+            atomic_mass = 0
+            atomic_density = 0
 
-        def optionalNumber(value):
-            """Optional values are finite numbers or None"""
-            return value if isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value) else None
-
-        mass_density = optionalNumber(mass_density)
-        surface_binding_energy = optionalNumber(surface_binding_energy)
-        displacement_energy = optionalNumber(displacement_energy)
-        cutoff_energy = optionalNumber(cutoff_energy)
-        dissociation_heat = optionalNumber(dissociation_heat)
-        melt_enthalpy = optionalNumber(melt_enthalpy)
-        vaporization_energy = optionalNumber(vaporization_energy)
-        formation_enthalpy = optionalNumber(formation_enthalpy)
-
+        # Required arguments
         self.symbol = str(symbol)
-        # names in different languages, e.g. {'en': 'Gold', 'de': 'Gold'}
-        self.name: dict = {'en': name} if isinstance(name, str) else name if isinstance(name, dict) else {'en': str(name)}
+        if isinstance(name, dict):
+            self.name: dict = name
+        else:
+            self.name = {'en': str(name)}
         self.atomic_nr = int(atomic_nr)
         self.period = int(period)
         self.group = int(group)
@@ -102,14 +104,14 @@ class Element:
         self.periodic_table_symbol = str(periodic_table_symbol)
         if not periodic_table_symbol:
             self.periodic_table_symbol = self.symbol
-        self.mass_density = mass_density
-        self.surface_binding_energy = surface_binding_energy
-        self.displacement_energy = displacement_energy
-        self.cutoff_energy = cutoff_energy
-        self.dissociation_heat = dissociation_heat
-        self.melt_enthalpy = melt_enthalpy
-        self.vaporization_energy = vaporization_energy
-        self.formation_enthalpy = formation_enthalpy
+        self.mass_density = mass_density if isNumber(mass_density) else None
+        self.surface_binding_energy = surface_binding_energy if isNumber(surface_binding_energy) else None
+        self.displacement_energy = displacement_energy if isNumber(displacement_energy) else None
+        self.cutoff_energy = cutoff_energy if isNumber(cutoff_energy) else None
+        self.dissociation_heat = dissociation_heat if isNumber(dissociation_heat) else None
+        self.melt_enthalpy = melt_enthalpy if isNumber(melt_enthalpy) else None
+        self.vaporization_energy = vaporization_energy if isNumber(vaporization_energy) else None
+        self.formation_enthalpy = formation_enthalpy if isNumber(formation_enthalpy) else None
 
         self.modified = bool(modified)
 

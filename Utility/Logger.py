@@ -23,12 +23,24 @@ class CustomFormatter(logging.Formatter):
     }
 
     def format(self, record):
+        """
+        Returns formatted log record
+
+        :param record: log record
+        """
+
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
 
 def setupLogging(level: int):
+    """
+    Sets up colored logging
+
+    :param level: minimum level of logged messages
+    """
+
     logger = logging.getLogger()
     logger.setLevel(level)
 

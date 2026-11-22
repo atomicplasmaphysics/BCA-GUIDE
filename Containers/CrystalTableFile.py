@@ -5,6 +5,7 @@ from pathlib import Path
 from shutil import copy2
 import logging
 
+
 import numpy as np
 
 
@@ -33,8 +34,8 @@ class CrystalStructure:
 
     def matchOrder(self, positions: List[Tuple[float, float, float]], tolerance: float = 1e-4) -> Optional[List[int]]:
         """
-        Returns the order in which the given positions correspond to the positions of this structure, or None if they do not match.
-        Positions are compared modulo 1 (periodic unit cell)
+        Returns order in which the given positions correspond to the positions of this structure (compared modulo 1) or
+        None if they do not match
 
         :param positions: relative coordinates
         :param tolerance: (optional) tolerance for comparing relative coordinates
@@ -195,7 +196,11 @@ class CrystalTableFile:
 
     @staticmethod
     def parseCrystal(line: str) -> Optional[TableCrystal]:
-        """Parses a crystal line, returns None if the line is not a crystal"""
+        """
+        Returns crystal of a line or None if the line is not a crystal
+
+        :param line: line of table.crystal
+        """
 
         values = line.split()
         try:
@@ -219,7 +224,11 @@ class CrystalTableFile:
             return None
 
     def structure(self, number: int) -> Optional[CrystalStructure]:
-        """Returns structure with given number"""
+        """
+        Returns structure with given number
+
+        :param number: number of structure
+        """
 
         for structure in self.structures:
             if structure.number == number:
@@ -227,14 +236,21 @@ class CrystalTableFile:
         return None
 
     def crystal(self, name: str) -> Optional[TableCrystal]:
-        """Returns crystal with given name"""
+        """
+        Returns crystal with given name
+
+        :param name: name of crystal
+        """
 
         for crystal in self.crystals:
             if crystal.name == name:
                 return crystal
         return None
 
-    def findStructure(self, positions: List[Tuple[float, float, float]]) -> Tuple[Optional[CrystalStructure], Optional[List[int]]]:
+    def findStructure(
+        self,
+        positions: List[Tuple[float, float, float]]
+    ) -> Tuple[Optional[CrystalStructure], Optional[List[int]]]:
         """
         Returns an existing structure with the same positions and the order of the given positions in that structure
 
@@ -247,7 +263,11 @@ class CrystalTableFile:
                 return structure, order
         return None, None
 
-    def validateCrystal(self, crystal: TableCrystal, positions: Optional[List[Tuple[float, float, float]]] = None) -> List[str]:
+    def validateCrystal(
+        self,
+        crystal: TableCrystal,
+        positions: Optional[List[Tuple[float, float, float]]] = None
+    ) -> List[str]:
         """
         Returns a list of problems that prevent adding the crystal
 
@@ -256,7 +276,8 @@ class CrystalTableFile:
         """
 
         errors = []
-        if not crystal.name or len(crystal.name) > self.limits.max_name_length or any(char.isspace() for char in crystal.name) or '!' in crystal.name:
+        valid_name = 0 < len(crystal.name) <= self.limits.max_name_length
+        if not valid_name or any(char.isspace() for char in crystal.name) or '!' in crystal.name:
             errors.append(f'The name must have 1 to {self.limits.max_name_length} characters without spaces and "!"')
         if self.crystal(crystal.name) is not None:
             errors.append(f'A crystal with name "{crystal.name}" already exists')
@@ -285,8 +306,8 @@ class CrystalTableFile:
         structure_name: str = ''
     ) -> TableCrystal:
         """
-        Adds a crystal and, if no matching structure exists, a new structure to the file and saves it.
-        Before the first change a backup "table.crystal.bck" is created.
+        Adds a crystal and, if no matching structure exists, a new structure to the file and saves it (with a backup
+        "table.crystal.bck" before the first change)
 
         :param crystal: new crystal, the elements are given in the order of positions
         :param positions: relative coordinates of the atoms
@@ -373,9 +394,8 @@ class CrystalTableFile:
 
 def layerMillerError(miller: list) -> Optional[str]:
     """
-    Returns why SDTrimSP (since 7.02) does not accept the miller index of a layer in layer.inp or None.
-    In layer.inp only the reduced form [1, 0...1, 0...1] of the direction is allowed: h >= 1 after normalization,
-    h >= k and h >= l (k and l are divided by h, negative values are set to 0)
+    Returns why SDTrimSP (since 7.02) does not accept the miller index of a layer in layer.inp or None
+    (only the reduced form [1, 0...1, 0...1] is allowed: h >= 1, h >= k and h >= l)
 
     :param miller: miller index [h, k, l]
     """
@@ -385,8 +405,7 @@ def layerMillerError(miller: list) -> Optional[str]:
     except (TypeError, ValueError):
         return 'it must consist of three numbers'
     if h == k == l == 0:
-        return ('(0 0 0) means a polycrystal (average over the orientations), which SDTrimSP only supports for a target '
-                'with one layer (without layer.inp) and one crystal')
+        return '(0 0 0) means a polycrystal (average over the orientations), which SDTrimSP only supports for a target with one layer (without layer.inp) and one crystal'
     if h <= 0:
         return 'h must be larger than 0'
     if k > h or l > h:
@@ -397,7 +416,11 @@ def layerMillerError(miller: list) -> Optional[str]:
 
 
 def layerMillerSuggestion(miller: list) -> list:
-    """Returns the miller index with sorted absolute values (equivalent for cubic crystals), e.g. [0, 0, 1] -> [1, 0, 0]"""
+    """
+    Returns miller index with sorted absolute values (equivalent for cubic crystals), e.g. [0, 0, 1] -> [1, 0, 0]
+
+    :param miller: miller index [h, k, l]
+    """
 
     values = sorted((abs(float(m)) for m in miller), reverse=True)
     return [int(m) if m.is_integer() else m for m in values]

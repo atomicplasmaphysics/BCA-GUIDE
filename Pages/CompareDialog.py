@@ -1,9 +1,3 @@
-"""
-Dialog to compare the results of several simulations (of the same simulation program), e.g. sputter yields of different
-versions, energies or targets: summary values in a table and plots (lines over a parameter or 2D maps over two parameters
-of a parameter scan), or the same plot of all simulations overlaid
-"""
-
 from __future__ import annotations
 from typing import List, Optional, Tuple, Iterable, Dict, Any
 from json import load
@@ -11,7 +5,9 @@ from pathlib import Path
 from re import findall
 import csv
 
+
 import numpy as np
+
 from matplotlib.colors import Normalize
 
 from PyQt6.QtCore import Qt
@@ -20,46 +16,40 @@ from PyQt6.QtWidgets import (
     QTabWidget, QTableWidget, QTableWidgetItem, QFileDialog, QWidget, QAbstractItemView, QHeaderView, QCheckBox, QGridLayout
 )
 
+
 from Containers.MplCanvasSettings import MplCanvasSettings
+
+from Utility.GlobalConf import GlobalConf
 from Utility.Layouts import MplCanvas, PlotToolbar
 from Utility.Dialogs import selectFileDialog
-from Utility.Functions import pathToStr
+from Utility.Functions import pathToStr, isNumber
 from Utility.Icons import getIcon
 from Utility.Styles import paletteRgb, paletteColormap
 from Utility.Typing import notNone
 
 
-# calls of the plots that draw data (they are copied for each simulation) and that set up the axes (copied once)
-DRAWING_CALLS = ('plot', 'step', 'stairs', 'scatter', 'errorbar', 'fill_between', 'bar', 'hist', 'semilogx', 'semilogy', 'loglog')
-LINE_CALLS = ('plot', 'step', 'stairs', 'errorbar', 'semilogx', 'semilogy', 'loglog')
-STYLE_CALLS = (
-    'set_xlabel', 'set_ylabel', 'set_xscale', 'set_yscale', 'set_title', 'set_thetamin', 'set_thetamax',
-    'set_theta_zero_location', 'set_theta_direction', 'set_rlabel_position', 'set_rmin', 'set_rmax'
-)
-LINE_STYLES = ['-', '--', ':', '-.']
-MARKERS = ['o', 's', '^', 'D', 'v', 'P', 'X']
-
-# file in the folder of a parameter scan that describes the scan (parameters and values of each simulation)
-SCAN_FILE = 'scan.json'
-# parameter of the numbers in the folder names
-NAME_NUMBER = 'Number in the folder name'
-# x axis without parameter: the simulations side by side
-SIDE_BY_SIDE = 'Simulations (side by side)'
-ALL_VALUES = 'all (one line each)'
-
-
 def numberInLabel(label: str) -> Optional[float]:
-    """Returns the last number in a label (e.g. the value of a scan in the folder name "e0_1000") or None"""
+    """
+    Returns last number in a label or None
+
+    :param label: label, e.g. the folder name "e0_1000" of a scan
+    """
 
     numbers = findall(r'[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?', label)
-    return float(numbers[-1]) if numbers else None
+    if not numbers:
+        return None
+    return float(numbers[-1])
 
 
 def readScanFile(folder: Path) -> Optional[Dict[str, dict]]:
-    """Returns the description of a parameter scan (scan.json) as {folder name: {parameter: value}} or None"""
+    """
+    Returns description of a parameter scan (scan.json) as {folder name: {parameter: value}} or None
+
+    :param folder: folder of the parameter scan
+    """
 
     try:
-        with open(folder / SCAN_FILE, 'r', encoding='utf-8') as file:
+        with open(folder / GlobalConf.scan_file, 'r', encoding='utf-8') as file:
             scan = load(file)
         names = scan['parameters']
         return {run['folder']: dict(zip(names, run['values'])) for run in scan['runs']}
@@ -67,23 +57,32 @@ def readScanFile(folder: Path) -> Optional[Dict[str, dict]]:
         return None
 
 
-def isNumber(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
 def formatParameter(value: Any) -> str:
-    return f'{value:g}' if isNumber(value) else str(value)
+    """
+    Returns value of a parameter as text
+
+    :param value: value of parameter
+    """
+
+    if isNumber(value):
+        return f'{value:g}'
+    return str(value)
 
 
 def intervalEdges(values: List[float]) -> Tuple[np.ndarray, bool]:
     """
-    Returns the edges of cells around sorted values and if the values are logarithmically spaced (then the edges are the
+    Returns edges of cells around sorted values and if the values are logarithmically spaced (then the edges are the
     geometric means)
+
+    :param values: sorted values
     """
 
     array = np.array(values, dtype=float)
     if len(array) == 1:
-        return np.array([array[0] - 0.5, array[0] + 0.5]) if array[0] <= 0 else np.array([array[0] / 1.5, array[0] * 1.5]), bool(array[0] > 0)
+        if array[0] <= 0:
+            return np.array([array[0] - 0.5, array[0] + 0.5]), False
+        return np.array([array[0] / 1.5, array[0] * 1.5]), True
+
     logarithmic = bool(np.all(array > 0) and array[-1] / array[0] > 20)
     if logarithmic:
         logs = np.log(array)
@@ -94,10 +93,24 @@ def intervalEdges(values: List[float]) -> Tuple[np.ndarray, bool]:
     return np.concatenate([[2 * array[0] - middles[0]], middles, [2 * array[-1] - middles[-1]]]), False
 
 
+def cellCenters(edges: np.ndarray, logarithmic: bool) -> List[float]:
+    """
+    Returns centers of cells (geometric means for logarithmic axes)
+
+    :param edges: edges of cells
+    :param logarithmic: if axis is logarithmic
+    """
+
+    if logarithmic:
+        return [float(np.sqrt(edges[i] * edges[i + 1])) for i in range(len(edges) - 1)]
+    return [float((edges[i] + edges[i + 1]) / 2) for i in range(len(edges) - 1)]
+
+
 class CompareWidget(QWidget):
     """
-    Widget to compare the results of several simulations (in the window <CompareDialog> or in the results tab of a
-    parameter scan)
+    Widget to compare the results of several simulations of the same simulation program (in the window <CompareDialog>
+    or in the results tab of a parameter scan): summary values in a table and plots (lines over a parameter or 2D maps
+    over two parameters), or the same plot of all simulations overlaid
 
     :param parent: parent widget
     :param analysis_class: class of the analysis of the simulation program (<SimulationsAnalysis>)
@@ -108,8 +121,32 @@ class CompareWidget(QWidget):
     :param parameters: (optional) values of the scanned parameters of each folder as {parameter: value}
     """
 
-    def __init__(self, parent, analysis_class, element_data, folders: Iterable[Path] = (), values: Optional[List[float]] = None,
-                 parameter: str = '', parameters: Optional[List[dict]] = None):
+    # calls of the plots that draw data (copied for each simulation) and that set up the axes (copied once)
+    drawingCalls = ('plot', 'step', 'stairs', 'scatter', 'errorbar', 'fill_between', 'bar', 'hist', 'semilogx', 'semilogy', 'loglog')
+    lineCalls = ('plot', 'step', 'stairs', 'errorbar', 'semilogx', 'semilogy', 'loglog')
+    styleCalls = (
+        'set_xlabel', 'set_ylabel', 'set_xscale', 'set_yscale', 'set_title', 'set_thetamin', 'set_thetamax',
+        'set_theta_zero_location', 'set_theta_direction', 'set_rlabel_position', 'set_rmin', 'set_rmax'
+    )
+    lineStyles = ['-', '--', ':', '-.']
+    markers = ['o', 's', '^', 'D', 'v', 'P', 'X']
+
+    # parameter of the numbers in the folder names
+    nameNumber = 'Number in the folder name'
+    # x axis without parameter
+    sideBySide = 'Simulations (side by side)'
+    allValues = 'all (one line each)'
+
+    def __init__(
+        self,
+        parent,
+        analysis_class,
+        element_data,
+        folders: Iterable[Path] = (),
+        values: Optional[List[float]] = None,
+        parameter: str = '',
+        parameters: Optional[List[dict]] = None
+    ):
         super().__init__(parent)
 
         self.analysis_class = analysis_class
@@ -134,8 +171,7 @@ class CompareWidget(QWidget):
         left_layout.addWidget(self.list)
         buttons = QHBoxLayout()
         self.button_add = QPushButton(getIcon('add'), 'Add...', self)
-        self.button_add.setToolTip('Add the folder of a simulation. If the folder contains no output, all its subfolders with output are '
-                                   'added (e.g. a parameter scan, its parameters are read from scan.json)')
+        self.button_add.setToolTip('Add the folder of a simulation. If the folder contains no output, all its subfolders with output are added (e.g. a parameter scan, its parameters are read from scan.json)')
         self.button_add.clicked.connect(self.selectFolder)
         self.button_remove = QPushButton(getIcon('close'), 'Remove', self)
         self.button_remove.setToolTip('Remove the selected simulations from the comparison')
@@ -184,8 +220,13 @@ class CompareWidget(QWidget):
         self.plot_type.currentIndexChanged.connect(lambda _: self.updateFilters())
         self.x_parameter.currentIndexChanged.connect(lambda _: self.updateFilters())
         self.y_parameter.currentIndexChanged.connect(lambda _: self.updateFilters())
-        for column, (label, widget) in enumerate((('Plot:', self.plot_type), ('x axis:', self.x_parameter),
-                                                  ('y axis:', self.y_parameter), ('Species:', self.species))):
+        parameter_widgets = [
+            ('Plot:', self.plot_type),
+            ('x axis:', self.x_parameter),
+            ('y axis:', self.y_parameter),
+            ('Species:', self.species)
+        ]
+        for column, (label, widget) in enumerate(parameter_widgets):
             self.parameter_layout.addWidget(QLabel(label), 0, 2 * column)
             self.parameter_layout.addWidget(widget, 0, 2 * column + 1)
         self.filter_layout = QHBoxLayout()
@@ -213,8 +254,6 @@ class CompareWidget(QWidget):
             parameters = [{parameter or 'Value': value} for value in values]
         self.addFolders(folders, parameters)
 
-    # --- simulations ---
-
     def addFolders(self, folders: List[Path], parameters: Optional[List[dict]] = None):
         """
         Adds simulations to the comparison
@@ -233,17 +272,28 @@ class CompareWidget(QWidget):
             if not analysis.loadFolder(folder):
                 skipped.append(folder.name)
                 continue
-            values = parameters[i] if parameters is not None and i < len(parameters) else None
+
+            values = None
+            if parameters is not None and i < len(parameters):
+                values = parameters[i]
             if values is None:
                 # parameters of a scan from scan.json in the folder of the scan
                 if folder.parent not in scans:
                     scans[folder.parent] = readScanFile(folder.parent)
                 values = (scans[folder.parent] or {}).get(folder.name)
-            entry = {'folder': folder, 'label': folder.name, 'parameters': dict(values or {}), 'name_value': numberInLabel(folder.name),
-                     'analysis': analysis, 'summary': analysis.summary()}
+
+            entry = {
+                'folder': folder,
+                'label': folder.name,
+                'parameters': dict(values or {}),
+                'name_value': numberInLabel(folder.name),
+                'analysis': analysis,
+                'summary': analysis.summary()
+            }
             self.entries.append(entry)
             item = QListWidgetItem(folder.name)
-            item.setToolTip(pathToStr(folder) + ''.join(f'\n{name} = {formatParameter(value)}' for name, value in entry['parameters'].items()))
+            parameter_lines = ''.join(f'\n{name} = {formatParameter(value)}' for name, value in entry['parameters'].items())
+            item.setToolTip(pathToStr(folder) + parameter_lines)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Checked)
             self.list.addItem(item)
@@ -290,20 +340,26 @@ class CompareWidget(QWidget):
     def checkedEntries(self) -> List[dict]:
         """Returns the checked simulations"""
 
-        return [entry for i, entry in enumerate(self.entries) if notNone(self.list.item(i)).checkState() == Qt.CheckState.Checked]
-
-    # --- parameters ---
+        checked = []
+        for i, entry in enumerate(self.entries):
+            if notNone(self.list.item(i)).checkState() == Qt.CheckState.Checked:
+                checked.append(entry)
+        return checked
 
     def parameterValues(self, entry: dict) -> dict:
-        """Returns the parameters of a simulation (also the number in the folder name if selected)"""
+        """
+        Returns parameters of a simulation (also the number in the folder name if selected)
+
+        :param entry: simulation
+        """
 
         values = dict(entry['parameters'])
         if self.numbers_from_names.isChecked() and entry['name_value'] is not None:
-            values[NAME_NUMBER] = entry['name_value']
+            values[self.nameNumber] = entry['name_value']
         return values
 
     def parameterNames(self) -> List[str]:
-        """Returns the parameters of all simulations"""
+        """Returns parameters of all simulations"""
 
         names: List[str] = []
         for entry in self.entries:
@@ -313,9 +369,16 @@ class CompareWidget(QWidget):
         return names
 
     def uniqueValues(self, name: str, entries: Optional[List[dict]] = None) -> list:
-        """Returns the sorted values of a parameter"""
+        """
+        Returns sorted values of a parameter
 
-        values = [self.parameterValues(entry).get(name) for entry in (entries if entries is not None else self.entries)]
+        :param name: name of parameter
+        :param entries: (optional) simulations, by default all simulations
+        """
+
+        if entries is None:
+            entries = self.entries
+        values = [self.parameterValues(entry).get(name) for entry in entries]
         values = [value for value in dict.fromkeys(values) if value is not None]
         if all(isNumber(value) for value in values):
             return sorted(values)
@@ -326,13 +389,16 @@ class CompareWidget(QWidget):
 
         names = self.parameterNames()
         self.parameter_widget.setHidden(not names)
-        for combobox, items in ((self.x_parameter, [SIDE_BY_SIDE] + names), (self.y_parameter, names)):
+        for combobox, items in ((self.x_parameter, [self.sideBySide] + names), (self.y_parameter, names)):
             current = combobox.currentText()
             combobox.blockSignals(True)
             combobox.clear()
             combobox.addItems(items)
             index = combobox.findText(current)
-            combobox.setCurrentIndex(index if index >= 0 else (1 if combobox is self.x_parameter and names else 0))
+            if index < 0:
+                # the x axis shows the first parameter
+                index = 1 if combobox is self.x_parameter and names else 0
+            combobox.setCurrentIndex(index)
             combobox.blockSignals(False)
         if self.y_parameter.currentText() == self.x_parameter.currentText() and len(names) > 1:
             self.y_parameter.setCurrentIndex(1 if self.y_parameter.currentIndex() == 0 else 0)
@@ -341,11 +407,13 @@ class CompareWidget(QWidget):
         self.updatePlot()
 
     def updateFilters(self):
-        """Selection of the values of the parameters that are not on an axis"""
+        """Updates selection of the values of the parameters that are not on an axis"""
 
         map_plot = self.plot_type.currentIndex() == 1
         self.y_parameter.setEnabled(map_plot)
-        axes = {self.x_parameter.currentText()} | ({self.y_parameter.currentText()} if map_plot else set())
+        axes = {self.x_parameter.currentText()}
+        if map_plot:
+            axes.add(self.y_parameter.currentText())
         current = {name: combobox.currentText() for name, combobox in self.filters.items()}
         while self.filter_layout.count():
             item = self.filter_layout.takeAt(0)
@@ -359,7 +427,7 @@ class CompareWidget(QWidget):
                 continue
             combobox = QComboBox(self)
             if not map_plot:
-                combobox.addItem(ALL_VALUES)
+                combobox.addItem(self.allValues)
             combobox.addItems([formatParameter(value) for value in self.uniqueValues(name)])
             index = combobox.findText(current.get(name, ''))
             combobox.setCurrentIndex(max(index, 0))
@@ -369,8 +437,6 @@ class CompareWidget(QWidget):
             self.filters[name] = combobox
         self.filter_layout.addStretch(1)
         self.updatePlot()
-
-    # --- quantities, table and plots ---
 
     def quantities(self) -> List[str]:
         """Returns all quantities of the summaries (in the order of their first occurrence)"""
@@ -396,7 +462,11 @@ class CompareWidget(QWidget):
         self.quantity.blockSignals(False)
 
     def indexOf(self, selection) -> int:
-        """Returns the index of a selection ('summary', quantity) or ('plot', function) or -1"""
+        """
+        Returns index of a selection or -1
+
+        :param selection: ('summary', quantity) or ('plot', function)
+        """
 
         for i in range(self.quantity.count()):
             if tuple(self.quantity.itemData(i) or ()) == tuple(selection or ()):
@@ -404,7 +474,12 @@ class CompareWidget(QWidget):
         return -1
 
     def select(self, kind: str, name: str):
-        """Selects a quantity of the summaries ('summary') or a plot ('plot')"""
+        """
+        Selects a quantity of the summaries or a plot
+
+        :param kind: 'summary' or 'plot'
+        :param name: name of quantity or plot function
+        """
 
         self.quantity.setCurrentIndex(self.indexOf((kind, name)))
 
@@ -415,17 +490,24 @@ class CompareWidget(QWidget):
         self.updatePlot()
 
     def speciesOf(self, quantity: str, entries: Optional[List[dict]] = None) -> List[str]:
-        """Returns the species of a quantity in the simulations"""
+        """
+        Returns species of a quantity in the simulations
 
+        :param quantity: quantity of the summaries
+        :param entries: (optional) simulations, by default all simulations
+        """
+
+        if entries is None:
+            entries = self.entries
         species: List[str] = []
-        for entry in (entries if entries is not None else self.entries):
+        for entry in entries:
             for name in entry['summary'].get(quantity, {}):
                 if name not in species:
                     species.append(name)
         return species
 
     def updateTable(self):
-        """Table of the results of all simulations"""
+        """Updates table of the results of all simulations"""
 
         names = self.parameterNames()
         columns = [(quantity, species) for quantity in self.quantities() for species in self.speciesOf(quantity)]
@@ -456,7 +538,7 @@ class CompareWidget(QWidget):
         elif selection[0] == 'summary':
             quantity = selection[1]
             self.updateSpecies(quantity, entries)
-            if self.x_parameter.currentText() in ('', SIDE_BY_SIDE):
+            if self.x_parameter.currentText() in ('', self.sideBySide):
                 settings = self.sideBySidePlot(quantity, entries)
             elif self.plot_type.currentIndex() == 1:
                 settings = self.mapPlot(quantity, entries)
@@ -467,7 +549,12 @@ class CompareWidget(QWidget):
         settings.apply(self.canvas)
 
     def updateSpecies(self, quantity: str, entries: List[dict]):
-        """Species of the selected quantity"""
+        """
+        Updates selection of the species of the selected quantity
+
+        :param quantity: quantity of the summaries
+        :param entries: simulations
+        """
 
         species = self.reducedSpecies(quantity, entries)
         if [self.species.itemText(i) for i in range(self.species.count())] == ['all'] + species:
@@ -477,39 +564,66 @@ class CompareWidget(QWidget):
         self.species.clear()
         self.species.addItems(['all'] + species)
         index = self.species.findText(current)
-        self.species.setCurrentIndex(index if index >= 0 else 0)
+        self.species.setCurrentIndex(max(index, 0))
         self.species.blockSignals(False)
 
     def reducedSpecies(self, quantity: str, entries: List[dict]) -> List[str]:
-        """Species of a quantity, without "total" if it equals the only species"""
+        """
+        Returns species of a quantity, without "total" if it equals the only species
 
-        species = [name for name in self.speciesOf(quantity, entries) if any(name in entry['summary'].get(quantity, {}) for entry in entries)]
+        :param quantity: quantity of the summaries
+        :param entries: simulations
+        """
+
+        species = []
+        for name in self.speciesOf(quantity, entries):
+            if any(name in entry['summary'].get(quantity, {}) for entry in entries):
+                species.append(name)
         if len(species) == 2 and 'total' in species:
             single = species[0] if species[1] == 'total' else species[1]
-            if all(entry['summary'].get(quantity, {}).get(single) == entry['summary'].get(quantity, {}).get('total') for entry in entries):
+            values = [entry['summary'].get(quantity, {}) for entry in entries]
+            if all(value.get(single) == value.get('total') for value in values):
                 species = [single]
         return species
 
     def selectedSpecies(self, quantity: str, entries: List[dict]) -> List[str]:
+        """
+        Returns selected species of a quantity (all species if 'all' is selected)
+
+        :param quantity: quantity of the summaries
+        :param entries: simulations
+        """
+
         species = self.reducedSpecies(quantity, entries)
         selected = self.species.currentText()
-        return [selected] if selected in species else species
+        if selected in species:
+            return [selected]
+        return species
 
     def filteredEntries(self, entries: List[dict]) -> Tuple[List[dict], List[str]]:
-        """Returns the simulations with the selected values of the parameters that are not on an axis and the parameters
-        with all values (one line each)"""
+        """
+        Returns simulations with the selected values of the parameters that are not on an axis and the parameters with
+        all values (one line each)
+
+        :param entries: simulations
+        """
 
         varying = []
         for name, combobox in self.filters.items():
             text = combobox.currentText()
-            if text == ALL_VALUES:
+            if text == self.allValues:
                 varying.append(name)
                 continue
             entries = [entry for entry in entries if formatParameter(self.parameterValues(entry).get(name)) == text]
         return entries, varying
 
     def sideBySidePlot(self, quantity: str, entries: List[dict]) -> MplCanvasSettings:
-        """Bars of a quantity of the simulations side by side"""
+        """
+        Returns bars of a quantity of the simulations side by side
+
+        :param quantity: quantity of the summaries
+        :param entries: simulations
+        """
 
         settings = MplCanvasSettings()
         species = self.selectedSpecies(quantity, entries)
@@ -519,7 +633,8 @@ class CompareWidget(QWidget):
         columns: List[list] = [[entry['label'] for entry in entries]]
         for j, name in enumerate(species):
             y = np.array([entry['summary'].get(quantity, {}).get(name, np.nan) for entry in entries], dtype=float)
-            settings.axes.bar(x + (j - (len(species) - 1) / 2) * width, y, width=width, color=paletteRgb(j), label=name)
+            offset = (j - (len(species) - 1) / 2) * width
+            settings.axes.bar(x + offset, y, width=width, color=paletteRgb(j), label=name)
             labels.append(f'{quantity} ({name})')
             columns.append(list(y))
         settings.axes.set_xticks(x, [entry['label'] for entry in entries], rotation=20, ha='right')
@@ -532,7 +647,12 @@ class CompareWidget(QWidget):
         return settings
 
     def linePlot(self, quantity: str, entries: List[dict]) -> MplCanvasSettings:
-        """Lines of a quantity over the parameter of the x axis, one line per species and value of the other parameters"""
+        """
+        Returns lines of a quantity over the parameter of the x axis, one line per species and value of the other parameters
+
+        :param quantity: quantity of the summaries
+        :param entries: simulations
+        """
 
         settings = MplCanvasSettings()
         x_name = self.x_parameter.currentText()
@@ -552,16 +672,24 @@ class CompareWidget(QWidget):
         for key, group in groups.items():
             group = sorted(group, key=lambda entry: x_values.index(self.parameterValues(entry)[x_name]))
             x = [self.parameterValues(entry)[x_name] for entry in group]
-            x_plot = np.array(x, dtype=float) if numeric else np.array([x_values.index(value) for value in x], dtype=float)
+            if numeric:
+                x_plot = np.array(x, dtype=float)
+            else:
+                x_plot = np.array([x_values.index(value) for value in x], dtype=float)
             # the legend shows the values of the other parameters, their names are the title of the legend
             description = ', '.join(formatParameter(value) for value in key)
             for j, name in enumerate(species):
                 y = np.array([entry['summary'].get(quantity, {}).get(name, np.nan) for entry in group], dtype=float)
-                label = (f'{name}: {description}' if len(species) > 1 else description) if description else name
-                settings.axes.plot(x_plot, y, marker=MARKERS[j % len(MARKERS)], color=paletteRgb(line), label=label)
+                label = name
+                if description and len(species) > 1:
+                    label = f'{name}: {description}'
+                elif description:
+                    label = description
+                settings.axes.plot(x_plot, y, marker=self.markers[j % len(self.markers)], color=paletteRgb(line), label=label)
                 labels += [f'{x_name} ({label})', f'{quantity} ({label})']
                 columns += [list(x), list(y)]
                 line += 1
+
         if not numeric:
             settings.axes.set_xticks(np.arange(len(x_values)), [formatParameter(value) for value in x_values], rotation=20, ha='right')
         elif x_values and all(value > 0 for value in x_values) and x_values[-1] / x_values[0] > 20:
@@ -578,7 +706,12 @@ class CompareWidget(QWidget):
         return settings
 
     def mapPlot(self, quantity: str, entries: List[dict]) -> MplCanvasSettings:
-        """2D map of a quantity (one species) over two parameters, the other parameters have the selected values"""
+        """
+        Returns 2D map of a quantity (one species) over two parameters, the other parameters have the selected values
+
+        :param quantity: quantity of the summaries
+        :param entries: simulations
+        """
 
         settings = MplCanvasSettings()
         x_name, y_name = self.x_parameter.currentText(), self.y_parameter.currentText()
@@ -586,12 +719,15 @@ class CompareWidget(QWidget):
             settings.axes.set_title('Select two different parameters for the x and y axis')
             self.data = ([], [])
             return settings
-        entries, _ = self.filteredEntries([entry for entry in entries if x_name in self.parameterValues(entry) and y_name in self.parameterValues(entry)])
+
+        entries = [entry for entry in entries if x_name in self.parameterValues(entry) and y_name in self.parameterValues(entry)]
+        entries, _ = self.filteredEntries(entries)
         species = self.selectedSpecies(quantity, entries)
         if not entries or not species:
             settings.axes.set_title('No simulations with these parameters')
             self.data = ([], [])
             return settings
+
         name = species[0]
         x_values, y_values = self.uniqueValues(x_name, entries), self.uniqueValues(y_name, entries)
         z = np.full((len(y_values), len(x_values)), np.nan)
@@ -599,7 +735,13 @@ class CompareWidget(QWidget):
             values = self.parameterValues(entry)
             z[y_values.index(values[y_name]), x_values.index(values[x_name])] = entry['summary'].get(quantity, {}).get(name, np.nan)
 
-        def axis(values: list):
+        def axis(values: list) -> Tuple[np.ndarray, bool, Optional[List[str]]]:
+            """
+            Returns edges of the cells, if the axis is logarithmic and the tick labels of non-numeric values
+
+            :param values: values of parameter
+            """
+
             if all(isNumber(value) for value in values):
                 edges, logarithmic = intervalEdges(values)
                 return edges, logarithmic, None
@@ -608,10 +750,11 @@ class CompareWidget(QWidget):
         x_edges, x_log, x_ticks = axis(x_values)
         y_edges, y_log, y_ticks = axis(y_values)
         finite = z[np.isfinite(z)]
-        norm = Normalize(vmin=float(finite.min()) if finite.size else 0., vmax=float(finite.max()) if finite.size else 1.)
-        colormap = paletteColormap()
+        norm = Normalize(vmin=0., vmax=1.)
+        if finite.size:
+            norm = Normalize(vmin=float(finite.min()), vmax=float(finite.max()))
         # the canvas adds the colorbar of the pcolormesh
-        settings.axes.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(z), cmap=colormap, norm=norm, shading='flat')
+        settings.axes.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(z), cmap=paletteColormap(), norm=norm, shading='flat')
         settings.axes.pcolormesh_label(f'{quantity} ({name})')
         if x_log:
             settings.axes.set_xscale('log')
@@ -624,25 +767,38 @@ class CompareWidget(QWidget):
 
         # values in the cells of small maps
         if z.size <= 144:
-            x_centers = [np.sqrt(x_edges[i] * x_edges[i + 1]) if x_log else (x_edges[i] + x_edges[i + 1]) / 2 for i in range(len(x_values))]
-            y_centers = [np.sqrt(y_edges[i] * y_edges[i + 1]) if y_log else (y_edges[i] + y_edges[i + 1]) / 2 for i in range(len(y_values))]
-            for i, y_center in enumerate(y_centers):
-                for k, x_center in enumerate(x_centers):
-                    if np.isfinite(z[i, k]):
-                        bright = norm(z[i, k]) > 0.6
-                        settings.axes.text(x_center, y_center, f'{z[i, k]:.3g}', ha='center', va='center', fontsize='small',
-                                           color='#202020' if bright else 'white')
+            for i, y_center in enumerate(cellCenters(y_edges, y_log)):
+                for k, x_center in enumerate(cellCenters(x_edges, x_log)):
+                    if not np.isfinite(z[i, k]):
+                        continue
+                    settings.axes.text(
+                        x_center,
+                        y_center,
+                        f'{z[i, k]:.3g}',
+                        ha='center',
+                        va='center',
+                        fontsize='small',
+                        color='#202020' if norm(z[i, k]) > 0.6 else 'white'
+                    )
         settings.axes.set_xlabel(x_name)
         settings.axes.set_ylabel(y_name)
+        title = f'{quantity} ({name})'
         fixed = ', '.join(f'{n} = {combobox.currentText()}' for n, combobox in self.filters.items())
-        settings.axes.set_title(f'{quantity} ({name})' + (f'\n{fixed}' if fixed else ''))
+        if fixed:
+            title += f'\n{fixed}'
+        settings.axes.set_title(title)
 
         x_grid, y_grid = np.meshgrid(x_values, y_values)
         self.data = ([x_name, y_name, f'{quantity} ({name})'], [list(x_grid.ravel()), list(y_grid.ravel()), list(z.ravel())])
         return settings
 
     def overlayPlot(self, function: str, entries: List[dict]) -> MplCanvasSettings:
-        """The same plot of all simulations in one axes: one color per simulation, one line style per curve of a simulation"""
+        """
+        Returns the same plot of all simulations in one axes: one color per simulation, one line style per curve
+
+        :param function: plot function of the analysis
+        :param entries: simulations
+        """
 
         settings = MplCanvasSettings()
         labels: List[str] = []
@@ -653,6 +809,7 @@ class CompareWidget(QWidget):
             try:
                 result = getattr(entry['analysis'], function)()
             except Exception as error:
+                # plots of damaged outputs can fail in many ways
                 self.status.setText(f'{entry["label"]}: {error}')
                 continue
             if result is None or result[1] is None:
@@ -664,20 +821,20 @@ class CompareWidget(QWidget):
                     if call[0] == 'func' and call[1] == 'add_subplot':
                         settings.fig.add_subplot(*call[2], **call[3])
                 for call in axes_calls:
-                    if call[0] == 'func' and call[1] in STYLE_CALLS:
+                    if call[0] == 'func' and call[1] in self.styleCalls:
                         getattr(settings.axes, call[1])(*call[2], **call[3])
                 first = False
 
             series = 0
             for call in axes_calls:
-                if call[0] != 'func' or call[1] not in DRAWING_CALLS:
+                if call[0] != 'func' or call[1] not in self.drawingCalls:
                     continue
                 kwargs = dict(call[3])
                 label = kwargs.get('label')
                 kwargs['color'] = paletteRgb(i)
                 kwargs.pop('c', None)
-                if call[1] in LINE_CALLS:
-                    kwargs['linestyle'] = LINE_STYLES[series % len(LINE_STYLES)]
+                if call[1] in self.lineCalls:
+                    kwargs['linestyle'] = self.lineStyles[series % len(self.lineStyles)]
                 if label and not str(label).startswith('_'):
                     kwargs['label'] = f'{entry["label"]}: {label}'
                 else:
@@ -719,10 +876,26 @@ class CompareWidget(QWidget):
 class CompareDialog(CompareWidget):
     """
     Window to compare the results of several simulations, see <CompareWidget>
+
+    :param parent: parent widget
+    :param analysis_class: class of the analysis of the simulation program (<SimulationsAnalysis>)
+    :param element_data: <Elements> of the simulation
+    :param folders: (optional) folders of the simulations
+    :param values: (optional) values of one scanned parameter for each folder (x axis)
+    :param parameter: (optional) name of the scanned parameter of values
+    :param parameters: (optional) values of the scanned parameters of each folder as {parameter: value}
     """
 
-    def __init__(self, parent, analysis_class, element_data, folders: Iterable[Path] = (), values: Optional[List[float]] = None,
-                 parameter: str = '', parameters: Optional[List[dict]] = None):
+    def __init__(
+        self,
+        parent,
+        analysis_class,
+        element_data,
+        folders: Iterable[Path] = (),
+        values: Optional[List[float]] = None,
+        parameter: str = '',
+        parameters: Optional[List[dict]] = None
+    ):
         super().__init__(parent, analysis_class, element_data, folders, values, parameter, parameters)
 
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinMaxButtonsHint | Qt.WindowType.WindowCloseButtonHint)

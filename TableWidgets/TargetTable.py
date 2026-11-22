@@ -1,12 +1,13 @@
 from typing import List, Optional, Dict, Any
-from math import isfinite
+
 
 from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtCore import pyqtSignal, QRegularExpression
 from PyQt6.QtWidgets import QLineEdit, QPushButton, QWidget, QHBoxLayout, QVBoxLayout, QAbstractSpinBox
 
+
 from Utility.ModifyWidget import setWidgetHighlight
-from Utility.Functions import limitSum
+from Utility.Functions import limitSum, isNumber
 from Utility.Layouts import SpinBox, DoubleSpinBox, SpinBoxRange
 from Utility.Icons import getIcon
 from Utility.Typing import notNone
@@ -158,8 +159,9 @@ class TargetLayersRow(CustomRow):
 
         try:
             if self.crystal_cells:
-                # values of further crystals (without cells yet, e.g. while loading) are kept
-                self.crystal_values = [cell.value() for cell in self.crystal_cells] + self.crystal_values[len(self.crystal_cells):]
+                # values of further crystals without cells (e.g. while loading) are kept
+                further_values = self.crystal_values[len(self.crystal_cells):]
+                self.crystal_values = [cell.value() for cell in self.crystal_cells] + further_values
             if self.miller_cells:
                 self.miller_values = [cell.value() for cell in self.miller_cells]
         except RuntimeError:
@@ -174,7 +176,10 @@ class TargetLayersRow(CustomRow):
         """
 
         self.storeCrystalValues()
-        for widget in self.crystal_cells + ([self.miller_widget] if self.miller_widget is not None else []):
+        old_widgets: List[QWidget] = list(self.crystal_cells)
+        if self.miller_widget is not None:
+            old_widgets.append(self.miller_widget)
+        for widget in old_widgets:
             if widget in self.row_widgets:
                 self.row_widgets.remove(widget)
         self.crystal_cells = []
@@ -211,22 +216,26 @@ class TargetLayersRow(CustomRow):
         self.row_widgets.insert(position + crystal_count, self.miller_widget)
 
     def setCrystalValues(self, fractions: Optional[list], miller: Optional[list]):
-        """Sets the fractions of the crystals and the miller index of the layer"""
+        """
+        Sets the fractions of the crystals and the miller index of the layer
+
+        :param fractions: fraction of each crystal
+        :param miller: miller index [h, k, l]
+        """
 
         if isinstance(fractions, list):
-            # finite numbers only (e.g. of a damaged input.json)
-            fractions = [float(f) for f in fractions if isinstance(f, (int, float)) and not isinstance(f, bool) and isfinite(f)]
+            fractions = [float(fraction) for fraction in fractions if isNumber(fraction)]
             self.crystal_values = fractions
             for cell, value in zip(self.crystal_cells, fractions):
                 cell.setValue(value)
-        if isinstance(miller, list) and len(miller) == 3 \
-                and all(isinstance(m, (int, float)) and not isinstance(m, bool) and isfinite(m) for m in miller):
+        if isinstance(miller, list) and len(miller) == 3 and all(isNumber(m) for m in miller):
             self.miller_values = [float(m) for m in miller]
             for cell, value in zip(self.miller_cells, self.miller_values):
                 cell.setValue(value)
 
     def getRowData(self):
         """Returns data of row (CompEntry)"""
+
         return TargetLayerEntry(
             self.segment_count.value(),
             self.segment_thickness,
@@ -538,11 +547,11 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
         # Limit the total amount of segments
         limitSum([r.row_widgets[1] for r in self.rows], self.target_segments_count)
 
-        # layer.inp (with the miller indices of the layers) is only written for several layers, several crystals or a layer
-        # that is not completely crystalline (as usesCrystalLayerFile() of SDTrimSP), otherwise (0 0 0) is a polycrystal
-        layer_file = len(self.rows) > 1 or len(self.crystal_names) > 1 or any(
-            abs(cell.value() - 1) > 1e-9 for r in self.rows for cell in r.crystal_cells
-        )
+        # layer.inp with the miller indices is only written for several layers, several crystals or a layer that is not
+        # completely crystalline (as usesCrystalLayerFile() of SDTrimSP), otherwise (0 0 0) is a polycrystal
+        crystal_fractions = [cell.value() for r in self.rows for cell in r.crystal_cells]
+        partly_crystalline = any(abs(fraction - 1) > 1e-9 for fraction in crystal_fractions)
+        layer_file = len(self.rows) > 1 or len(self.crystal_names) > 1 or partly_crystalline
 
         # Update the abundance input fields of all target layers or optionally just the given layer (=row)
         rows = self.rows if row is None else [row]
@@ -559,20 +568,23 @@ class TargetLayersTable(CustomTable[TargetLayersRow]):
         # miller indices of all layers (depend on the number of layers)
         for row in self.rows:
             # SDTrimSP only accepts miller indices [1, 0...1, 0...1] in layer.inp (amorphous layers are written as [1, 0, 0])
-            if row.miller_cells:
+            if not row.miller_cells:
+                continue
+            miller_error = None
+            if layer_file and any(cell.value() > 0 for cell in row.crystal_cells):
                 miller_error = layerMillerError([cell.value() for cell in row.miller_cells])
-                miller_error = miller_error if layer_file and any(cell.value() > 0 for cell in row.crystal_cells) else None
-                for cell in row.miller_cells:
-                    setWidgetHighlight(cell, miller_error is not None)
-                    cell.setToolTip(
-                        f'Not accepted by SDTrimSP: {miller_error}.\nOnly the form [1, 0...1, 0...1] is allowed in layer.inp, '
-                        f'e.g. (1 0 0) instead of (0 0 1)' if miller_error is not None else self.millerTooltip
-                    )
+            tooltip = self.millerTooltip
+            if miller_error is not None:
+                tooltip = f'Not accepted by SDTrimSP: {miller_error}.\nOnly the form [1, 0...1, 0...1] is allowed in layer.inp, e.g. (1 0 0) instead of (0 0 1)'
+            for cell in row.miller_cells:
+                setWidgetHighlight(cell, miller_error is not None)
+                cell.setToolTip(tooltip)
 
         # Highlight all abundance cells of an element if its abundance is zero in all of them
         # (not with crystals, elements might only be part of the crystals)
         element_indices = []
-        for i in range(len(self.elements) if not self.crystal_names else 0):
+        checked_elements = 0 if self.crystal_names else len(self.elements)
+        for i in range(checked_elements):
             for j, row in enumerate(self.rows):
                 if row.element_cells[i].value() > 0:
                     break

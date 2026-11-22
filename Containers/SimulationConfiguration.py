@@ -1,14 +1,17 @@
 from __future__ import annotations
 from typing import Any, Dict, Literal, Optional, Union, TYPE_CHECKING
 from pathlib import Path
+import logging
+
 
 from PyQt6.QtCore import QDir
 
+
 from Utility.GlobalConf import GlobalConf
+from Utility.Functions import pathToStr, bestVersion
 
 from Simulations.SimulationsList import SimulationsList
 
-from Utility.Functions import pathToStr, bestVersion
 
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
@@ -24,7 +27,7 @@ class SimulationConfiguration:
     :param folder: path to main folder for simulation
     :param binary: path to binary file for simulation
     :param version: version number of simulation
-    :param base_save_folder: (optional) general save folder, if None the default save folder from the preferences is used
+    :param base_save_folder: (optional) general save folder (default save folder of the preferences if None)
     :param save_folder: (optional) specific save folder
     """
 
@@ -61,13 +64,13 @@ class SimulationConfiguration:
         self.unsaved_changes = False
         self.base_save_folder = base_save_folder
         self.save_folder = save_folder
-        # version found in the folder, if it differs from the version (see load)
+        # version found in the folder if it differs from version
         self.detected_version: Optional[str] = None
-        # parameter scan of the tab: shown, its settings and its folder (see ParameterScanPage.state)
+        # parameter scan of the tab (see ParameterScan.state)
         self.scan_enabled = False
         self.scan_state: dict = {}
 
-    def edit(self, title: str, folder: Path, binary: Path, version: str, base_save_folder: Path | None):
+    def edit(self, title: str, folder: Path, binary: Path, version: str, base_save_folder: Optional[Path]):
         """
         Sets main parameters of simulation
 
@@ -86,7 +89,7 @@ class SimulationConfiguration:
         self.changed = True
 
     def getBaseSaveFolder(self) -> Path:
-        """Returns the base save folder of this configuration, or the default save folder from the preferences if none is set"""
+        """Returns base save folder or the default save folder of the preferences"""
 
         if self.base_save_folder is not None:
             return self.base_save_folder
@@ -107,7 +110,7 @@ class SimulationConfiguration:
             'version': str(self.version)
         }
 
-        # current settings of the parameter scan of the tab
+        # parameter scan of the tab
         if self.tab_widget is not None:
             self.scan_enabled, self.scan_state = self.tab_widget.scanState()
         save_dict['scan_enabled'] = bool(self.scan_enabled)
@@ -176,24 +179,30 @@ class SimulationConfiguration:
         else:
             save_folder = None
 
-        # base save folders that equal an automatic default are not stored, so that the preferences are used
+        # default base save folders are not stored, so that the preferences are used
+        program_class = SimulationsList().simulation_program_list[program_idx]
         if base_save_folder is not None:
-            save_folder_name = SimulationsList().simulation_program_list[program_idx].SaveFolder
-            default_folders = [GlobalConf.save_path / save_folder_name, Path(QDir.currentPath()) / 'saves' / save_folder_name]
+            default_folders = [
+                GlobalConf.save_path / program_class.SaveFolder,
+                Path(QDir.currentPath()) / 'saves' / program_class.SaveFolder
+            ]
             if any(base_save_folder.resolve() == default_folder.resolve() for default_folder in default_folders):
                 base_save_folder = None
 
-        # version detected in the folder: old version groups (e.g. "6.01, 6.06") are replaced, a different version group is
-        # only remembered (the user decides whether it is changed)
-        program_class = SimulationsList().simulation_program_list[program_idx]
+        # unknown versions (e.g. old version groups like "6.01, 6.06") are replaced by the detected version, a different
+        # known version is only remembered, so that the user decides
         detected_version = None
         versions = list(getattr(program_class, 'Versions', []) or [])
         if versions:
             try:
                 version_name = program_class.getVersionName(folder, binary)
-            except Exception:
+            except Exception as error:
+                # damaged installations can fail in many ways
+                logging.info(f'Could not detect version of "{folder}": {error}')
                 version_name = False
-            index, exact = bestVersion(versions, version_name) if isinstance(version_name, str) and version_name else (-1, False)
+            index, exact = -1, False
+            if isinstance(version_name, str) and version_name:
+                index, exact = bestVersion(versions, version_name)
             if version not in versions:
                 if index < 0:
                     index, exact = bestVersion(versions, version)

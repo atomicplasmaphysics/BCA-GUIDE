@@ -1,14 +1,14 @@
-"""
-Loads simulation data that was created with  python -m pytest --simulations --simulation-data DIR  and checks that all
-outputs can be shown and plotted in the GUI, without running the simulations again.
-
-Usage:  python -m pytest tests/test_simulation_data.py --simulation-data DIR
-"""
+# Loads simulation data that was created with  python -m pytest --simulations --simulation-data DIR  and checks that all
+# outputs can be shown and plotted in the GUI, without running the simulations again.
+#
+# Usage:  python -m pytest tests/test_simulation_data.py --simulation-data DIR
 
 import json
 from pathlib import Path
 
+
 import pytest
+
 
 from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
 
@@ -16,6 +16,12 @@ from test_simulation_runs import checkOutputs
 
 
 def pytest_generate_tests(metafunc):
+    """
+    Creates a test for each folder of simulation data
+
+    :param metafunc: pytest metafunc of the test
+    """
+
     if 'data_folder' not in metafunc.fixturenames:
         return
     data_dir = metafunc.config.getoption('--simulation-data')
@@ -36,6 +42,15 @@ def pytest_generate_tests(metafunc):
 
 
 def test_simulation_data(main_window, qapp, errors, data_folder):
+    """
+    Simulation data
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param errors: list of logged errors
+    :param data_folder: folder with the data of the simulation
+    """
+
     meta = json.loads((data_folder / 'bca_test.json').read_text(encoding='utf-8'))
     if meta['program'] == 'SDTrimSP' and not any(data_folder.glob('output*.dat')):
         pytest.skip('the simulation of this folder failed (no output*.dat)')

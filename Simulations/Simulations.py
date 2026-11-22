@@ -3,14 +3,16 @@ from pathlib import Path
 from re import findall, sub
 import logging
 
+
 import numpy as np
 
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QObject, QThread
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication
 
+
 from Utility.Layouts import ListWidget, MplCanvas, VBoxTitleLayout, InputHBoxLayout
 from Utility.Indexing import ElementList
-from Utility.Styles import Palette, paletteRgb, FIRST_COLOR_INDEX
+from Utility.Styles import Styles, Palette, paletteRgb
 from Utility.Functions import getFileNameFromFileList, fileToNpArray, pathToStr, findExecutables
 
 from TableWidgets.CompTable import CompRow
@@ -18,7 +20,9 @@ from TableWidgets.CrystalTable import CrystalRow
 
 from Containers.MplCanvasSettings import MplCanvasSettings
 from Containers.Element import Element, Elements
-from Containers.Arguments import GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments, saveSimulationArguments
+from Containers.Arguments import (
+    GeneralBeamArguments, GeneralTargetArguments, GeneralArguments, SimulationArguments, RowArguments, saveSimulationArguments
+)
 from Containers.Compound import Compound
 
 
@@ -76,14 +80,21 @@ class GeneralSettings(SettingsBase):
 
     def reset(self):
         """Resets all input fields"""
+
         pass
 
     def getArguments(self):
         """Returns container of parameters for settings"""
+
         raise NotImplementedError
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
-        """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
+        """
+        Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)
+
+        :param arguments: arguments of simulation
+        """
+
         return []
 
 
@@ -126,6 +137,13 @@ class HlGeneralTargetSettings(GeneralSettings, QHBoxLayout):
         return GeneralTargetArguments()
 
     def insertCrystalCheckbox(self, checkbox: Optional[bool] = None, tooltip: Optional[str] = None):
+        """
+        Inserts the checkbox for the crystal file
+
+        :param checkbox: (optional) initial state of checkbox
+        :param tooltip: (optional) tooltip of checkbox
+        """
+
         if not self.include_crystal:
             raise ValueError('Cannot create Crystal checkbox is not allowed in default values')
 
@@ -1868,8 +1886,8 @@ class SimulationsInput:
     @classmethod
     def findBinary(cls, folder: Optional[Path]) -> Optional[Path]:
         """
-        Searches the most likely binary of the simulation in folder.
-        Binaries containing BinaryKeywords in their name, sequential builds (*.SEQ folders), plain names and higher numbers in the name are preferred
+        Searches the most likely binary of the simulation in folder (binaries with BinaryKeywords in their name, sequential
+        builds in *.SEQ folders, plain names and higher numbers in the name are preferred)
 
         :param folder: main folder of simulation
 
@@ -1883,7 +1901,13 @@ class SimulationsInput:
         if not executables:
             return None
 
-        def rank(binary: Path):
+        def rank(binary: Path) -> tuple:
+            """
+            Returns rank of a binary (higher is more likely)
+
+            :param binary: path to binary
+            """
+
             name = binary.name.lower()
             parent = binary.parent.name.lower()
             score = 0
@@ -1896,7 +1920,8 @@ class SimulationsInput:
             if any(word in name for word in ('ncp', 'test', 'debug')):
                 score -= 2
             numbers = [int(number) for number in findall(r'\d+', name)]
-            name_length = len(sub(r'\d+', '', binary.stem))  # prefer plain names over variants, e.g. SDTrimSP over SDTrimSP_nqxm5000
+            # plain names are preferred over variants, e.g. SDTrimSP over SDTrimSP_nqxm5000
+            name_length = len(sub(r'\d+', '', binary.stem))
             return score, -name_length, max(numbers, default=0), -len(binary.relative_to(folder).parts)
 
         return max(executables, key=rank)
@@ -2148,7 +2173,13 @@ class SimulationsInput:
         return -1
 
 
-def writeInputFiles(simulation: 'SimulationsInput', arguments: SimulationArguments, save_folder: Path, simulation_folder: Path, version: str) -> List[str]:
+def writeInputFiles(
+    simulation: 'SimulationsInput',
+    arguments: SimulationArguments,
+    save_folder: Path,
+    simulation_folder: Path,
+    version: str
+) -> List[str]:
     """
     Writes all input files of a simulation (input.json, input file, layer file, distributions, crystal file) into a folder
     and returns the names of the written files. Layer and crystal files that are not needed are removed
@@ -2165,6 +2196,13 @@ def writeInputFiles(simulation: 'SimulationsInput', arguments: SimulationArgumen
     files = ['input.json']
 
     def write(name: str, text: Optional[str]):
+        """
+        Writes a file or removes it if text is None
+
+        :param name: name of file
+        :param text: content of file
+        """
+
         if not name:
             return
         path = save_folder / name
@@ -2175,14 +2213,17 @@ def writeInputFiles(simulation: 'SimulationsInput', arguments: SimulationArgumen
             file.write(text)
         files.append(name)
 
-    write(simulation.nameInputFile(arguments, version), simulation.makeInputFile(arguments, simulation_folder, version))
-    write(simulation.nameLayerFile(arguments, version), simulation.makeLayerFile(arguments, simulation_folder, version) or None)
+    input_file = simulation.makeInputFile(arguments, simulation_folder, version)
+    write(simulation.nameInputFile(arguments, version), input_file)
+    layer_file = simulation.makeLayerFile(arguments, simulation_folder, version)
+    write(simulation.nameLayerFile(arguments, version), layer_file or None)
     for name, text in simulation.makeDistributionFiles(arguments, version).items():
         write(name, text)
     # without crystals in the GUI (e.g. SDTrimSP before 7.00) a crystal file of the user is kept (l_crystal in the
     # additional settings), SDTrimSP 6.09 stops with "End of file" if it is removed
     if simulation.default_values.enable_crystal:
-        write(simulation.nameCrystalFile(arguments, version), simulation.makeCrystalFile(arguments, simulation_folder, version) or None)
+        crystal_file = simulation.makeCrystalFile(arguments, simulation_folder, version)
+        write(simulation.nameCrystalFile(arguments, version), crystal_file or None)
     return files
 
 
@@ -2348,8 +2389,8 @@ class SimulationsOutput(QObject):
 
     def getReturnData(self, precision: int = 7, separator: str = '\t') -> Optional[str]:
         """
-        Returns data from plot as string ready to be written in file or None if no data is available.
-        Columns of different lengths are filled with empty values
+        Returns data from plot as string ready to be written in file or None if no data is available (columns of
+        different lengths are filled with empty values)
 
         :param precision: precision of floats
         :param separator: separator of the columns, e.g. tab or ',' (CSV)
@@ -2365,12 +2406,24 @@ class SimulationsOutput(QObject):
             return None
 
         def formatValue(value) -> str:
+            """
+            Returns value as text in scientific notation
+
+            :param value: value of data
+            """
+
             try:
                 return f'{float(value):.{precision}E}'
             except (TypeError, ValueError):
                 return str(value)
 
         def formatLabel(label) -> str:
+            """
+            Returns label as text (quoted in CSV files if needed)
+
+            :param label: label of data
+            """
+
             label = str(label)
             if separator == ',' and (',' in label or '"' in label):
                 label = '"' + label.replace('"', '""') + '"'
@@ -2379,7 +2432,8 @@ class SimulationsOutput(QObject):
         columns = [np.ravel(np.asarray(column)) for column in data]
         output = separator.join(formatLabel(label) for label in labels) + '\n'
         for i in range(max(len(column) for column in columns)):
-            output += separator.join(formatValue(column[i]) if i < len(column) else '' for column in columns) + '\n'
+            values = [formatValue(column[i]) if i < len(column) else '' for column in columns]
+            output += separator.join(values) + '\n'
         return output
 
 
@@ -2409,7 +2463,7 @@ class SimulationsAnalysis(QObject):
 
         # colors for plots (hypercorporateAF design, see Utility/Styles.py)
         self.colors = Palette()
-        self.first_color = paletteRgb(FIRST_COLOR_INDEX)
+        self.first_color = paletteRgb(Styles.first_color_index)
 
     def reset(self):
         """Reset class"""
@@ -2493,7 +2547,16 @@ class SimulationsAnalysis(QObject):
 
     @staticmethod
     def ecksteinAngleFit(angles, y0, alpha0, b, c, f):
-        """Eckstein angle fit function"""
+        """
+        Eckstein angle fit function
+
+        :param angles: angles of incidence in degree
+        :param y0: value at normal incidence
+        :param alpha0: fit parameter (angle in degree)
+        :param b: fit parameter
+        :param c: fit parameter
+        :param f: fit parameter
+        """
 
         out_value = np.zeros(len(angles))
 

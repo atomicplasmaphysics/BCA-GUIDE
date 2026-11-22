@@ -1,6 +1,7 @@
-"""Tests of reading and plotting the trajectories (trajec_all.dat) of SDTrimSP"""
+# Tests of reading and plotting the trajectories (trajec_all.dat) of SDTrimSP
 
 import numpy as np
+
 
 from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
 
@@ -63,6 +64,12 @@ LAYER_INP = """! number of    thick-    target composition 2...ncp    name of la
 
 
 def test_read_trajectories(tmp_path):
+    """
+    Read trajectories
+
+    :param tmp_path: temporary folder of the test
+    """
+
     path = tmp_path / 'trajec_all.dat'
     path.write_text(TRAJECTORIES_707)
     trajectories = readTrajectoryFile(path)
@@ -90,6 +97,12 @@ def test_read_trajectories(tmp_path):
 
 
 def test_read_layers(tmp_path):
+    """
+    Read layers
+
+    :param tmp_path: temporary folder of the test
+    """
+
     (tmp_path / 'tri.inp').write_text('&TRI_INP\n    ttarget = 2000.0\n    nqx = 200\n/\n')
     assert readLayers(tmp_path) == [(0., 2000., 'Target')]
     (tmp_path / 'layer.inp').write_text(LAYER_INP)
@@ -97,6 +110,15 @@ def test_read_layers(tmp_path):
 
 
 def test_plot_trajectories(main_window, qapp, tmp_path, errors):
+    """
+    Plot trajectories
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
+
     folder = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
     save = tmp_path / 'save'
     save.mkdir()

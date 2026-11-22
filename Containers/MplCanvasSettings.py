@@ -3,17 +3,20 @@ from pathlib import Path
 import logging
 import threading
 
+
 import numpy as np
+
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QApplication
 
-from Utility.Layouts import MplCanvas
-from Utility.Functions import setDictIfNotExists, pathToStr
-
 from matplotlib import rc_context
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
+
+
+from Utility.Layouts import MplCanvas
+from Utility.Functions import setDictIfNotExists, pathToStr
 
 
 class Logger:
@@ -27,11 +30,13 @@ class Logger:
 
     def __getattr__(self, item):
         """Called if some attribute is accessed"""
+
         self._getattr_item = item
         return self._get_attr
 
     def __setattr__(self, key, value):
         """Called if some attribute is set"""
+
         if key in ['_getattr_item', '_calls']:
             super().__setattr__(key, value)
             return
@@ -39,12 +44,14 @@ class Logger:
 
     def _get_attr(self, *args, **kwargs):
         """Gets parameters passed to function"""
+
         self._calls.append(('func', self._getattr_item, args, kwargs))
         self._getattr_item = None
         return None
 
     def get_calls(self) -> list:
         """Returns list of all function calls and variable assignments"""
+
         return self._calls
 
 
@@ -56,18 +63,19 @@ class MplCanvasSettings:
     def __init__(self):
         # Logger() has wrong data type, but the python editor will suggest hints for Figure and Axes
         self.fig: Union[Figure, Logger] = Logger()
-        # the axes are typed as Any, because the calls can also be the ones of polar and 3D axes and the calls of the canvas
-        # (e.g. pcolormesh_label)
+        # Any, since also calls of polar and 3D axes and of the canvas (e.g. pcolormesh_label) are logged
         self.axes: Any = Logger()
 
-        # further axes (args and kwargs of fig.add_subplot, calls) and colorbars (mappable, kwargs, index of axes)
+        # further axes as (args and kwargs of fig.add_subplot, calls) and colorbars as (mappable, kwargs, index of axes)
         self.extra_axes: List[Tuple[tuple, dict, Logger]] = []
         self.colorbars: List[Tuple[Any, dict, int]] = []
 
     def addAxes(self, *args, **kwargs) -> Any:
         """
-        Adds a further axes (arguments of Figure.add_subplot) and returns its call logger.
-        The first axes is self.axes (created with self.fig.add_subplot(...) or as a single axes)
+        Adds a further axes after self.axes and returns its call logger
+
+        :param args: arguments of Figure.add_subplot
+        :param kwargs: keyword arguments of Figure.add_subplot
         """
 
         axes = Logger()
@@ -87,6 +95,7 @@ class MplCanvasSettings:
 
     def get_calls(self) -> Tuple[list, list]:
         """Returns list of all function calls and variable assignments for .fig and .axes"""
+
         return cast(Logger, self.fig).get_calls(), cast(Logger, self.axes).get_calls()
 
     def apply(self, canvas: Union[MplCanvas, 'OffscreenCanvas']):
@@ -96,11 +105,11 @@ class MplCanvasSettings:
         :param canvas: initialized MplCanvas() (or OffscreenCanvas()) to draw to
         """
 
-        # get all call lists (copies, so that the settings can be applied more than once)
+        # get all call lists (copies, so that the settings can be applied again)
         fig_calls: list = list(cast(Logger, self.fig).get_calls())
         axes_calls: list = list(cast(Logger, self.axes).get_calls())
 
-        # the view of a 3D plot is kept when it is redrawn (e.g. while animating)
+        # keep view of 3D plots (e.g. while animating)
         old_view: Optional[Tuple[float, float]] = None
         if getattr(canvas.axes, 'name', '') == '3d':
             axes_3d: Any = canvas.axes
@@ -114,7 +123,13 @@ class MplCanvasSettings:
             call_list = [f_c[1] for f_c in fig_calls]
             if 'add_subplot' in call_list:
                 add_subplot_idx = call_list.index('add_subplot')
-                canvas.axes = canvas.fig.add_subplot(*fig_calls[add_subplot_idx][2], **fig_calls[add_subplot_idx][3], **canvas.axes_kwargs, **canvas.palette_kwargs)
+                _, _, subplot_args, subplot_kwargs = fig_calls[add_subplot_idx]
+                canvas.axes = canvas.fig.add_subplot(
+                    *subplot_args,
+                    **subplot_kwargs,
+                    **canvas.axes_kwargs,
+                    **canvas.palette_kwargs
+                )
                 del fig_calls[add_subplot_idx]
             else:
                 canvas.axes = canvas.fig.add_subplot(projection='rectilinear', **canvas.palette_kwargs)
@@ -147,7 +162,8 @@ class MplCanvasSettings:
             for call in fig_calls:
                 self.apply_call(canvas.fig, call)
 
-            for axes, calls in zip(axes_list, [axes_calls] + [list(logger.get_calls()) for _, _, logger in self.extra_axes]):
+            calls_list = [axes_calls] + [list(logger.get_calls()) for _, _, logger in self.extra_axes]
+            for axes, calls in zip(axes_list, calls_list):
                 for call in calls:
                     # tick_params() overwrites labelcolor
                     if call[0] == 'func' and call[1] == 'tick_params':
@@ -160,7 +176,7 @@ class MplCanvasSettings:
                     axes = cast(Any, axes)
                     if old_view is not None and not any(call[1] == 'view_init' for call in calls):
                         axes.view_init(*old_view)
-                    # transparent panes, so that the background follows the theme
+                    # transparent panes for the background of the theme
                     for axis in (axes.xaxis, axes.yaxis, axes.zaxis):
                         axis.set_pane_color((1., 1., 1., 0.))
 
@@ -169,8 +185,7 @@ class MplCanvasSettings:
                 if 0 <= index < len(axes_list):
                     canvas.fig.colorbar(mappable, ax=axes_list[index], **kwargs)
 
-            # draw to canvas
-            # the tight layout is applied at each drawing (also after resizing), tight_layout() only once (matplotlib < 3.6)
+            # draw to canvas (layout engine applies the tight layout also after resizing, since matplotlib 3.6)
             if hasattr(canvas.fig, 'set_layout_engine'):
                 canvas.fig.set_layout_engine('tight')
             else:
@@ -201,18 +216,20 @@ class MplCanvasSettings:
             raise
 
 
-
-class _AggCanvas(FigureCanvasAgg):
-    """Agg canvas that is only drawn explicitly (MplCanvasSettings.apply() requests a drawing)"""
+class AggCanvas(FigureCanvasAgg):
+    """
+    Agg canvas that is only drawn explicitly
+    """
 
     def draw_idle(self, *args, **kwargs):
+        """Ignores drawing requests of MplCanvasSettings.apply()"""
+
         pass
 
 
 class OffscreenCanvas:
     """
-    Canvas without widget (matplotlib Agg) with the colors of MplCanvas, plots can be drawn in a background thread.
-    Has to be created in the GUI thread (the colors are taken from the application palette)
+    Canvas without widget with the colors of MplCanvas to draw in a background thread (has to be created in the GUI thread)
 
     :param width: width of the figure in inches
     :param height: height of the figure in inches
@@ -229,24 +246,29 @@ class OffscreenCanvas:
 
         with rc_context(self.get_rc_context()):
             self.fig = Figure(figsize=(width, height), dpi=dpi, **self.palette_kwargs)
-            self.canvas = _AggCanvas(self.fig)
-            self.axes: Any = self.fig.add_subplot(**self.palette_kwargs, **({'projection': projection} if projection else {}))
+            self.canvas = AggCanvas(self.fig)
+            projection_kwargs = {'projection': projection} if projection else {}
+            self.axes: Any = self.fig.add_subplot(**self.palette_kwargs, **projection_kwargs)
 
     def get_rc_context(self) -> dict:
         """Returns matplotlib rc parameter dictionary (the same as of MplCanvas)"""
+
         return MplCanvas.get_rc_context(cast(Any, self))
 
     def draw(self):
+        """Draws the figure"""
+
         self.canvas.draw()
 
     def image(self) -> np.ndarray:
-        """Returns the drawn figure as RGBA array"""
+        """Returns drawn figure as RGBA array"""
+
         return np.asarray(self.canvas.buffer_rgba())
 
 
 class AnimationExport(QObject):
     """
-    Saves an animation (one MplCanvasSettings per frame) as GIF in a background thread, the GUI stays usable
+    Saves an animation as GIF in a background thread
 
     :param frames: settings of the frames
     :param canvas: canvas to draw the frames to (only used by the export)
@@ -254,9 +276,9 @@ class AnimationExport(QObject):
     :param durations: duration of each frame in ms
     """
 
-    # number of the frame that is drawn and number of frames
+    # (number of drawn frame, number of frames)
     progress = pyqtSignal(int, int)
-    # path of the saved GIF ('' if it could not be saved) and error message
+    # (path of saved GIF or '', error message)
     finished = pyqtSignal(str, str)
 
     def __init__(self, frames: List[MplCanvasSettings], canvas: OffscreenCanvas, path: Path, durations: List[int]):
@@ -266,22 +288,36 @@ class AnimationExport(QObject):
         self.path = path
         self.durations = durations
         self.cancelled = False
-        # daemon thread: an export does not delay closing the program
+        # daemon thread, so that an export does not delay closing the program
         self.worker = threading.Thread(target=self.run, name='AnimationExport', daemon=True)
 
     def start(self):
+        """Starts the export"""
+
         self.worker.start()
 
     def isRunning(self) -> bool:
+        """Returns if the export is running"""
+
         return self.worker.is_alive()
 
     def wait(self, timeout: Optional[float] = None):
+        """
+        Waits until the export is finished
+
+        :param timeout: (optional) maximum waiting time in seconds
+        """
+
         self.worker.join(timeout)
 
     def cancel(self):
+        """Cancels the export"""
+
         self.cancelled = True
 
     def run(self):
+        """Draws the frames and saves the GIF"""
+
         from PIL import Image
 
         try:

@@ -4,6 +4,26 @@ All notable changes of the BCA-GUIDE, newest first. The version is shown in the 
 (`GlobalConf.version`). The programs without Python are attached to the
 [releases](https://github.com/atomicplasmaphysics/BCA-GUIDE/releases) since v1.6.00.
 
+## v1.7.00 (2026-11-22)
+
+Cleanup of the whole code in one code style (`CODESTYLE.md`, based on the code of v1.5.02), no new features:
+
+- Code style guide `CODESTYLE.md` (formatting, naming, docstrings, comments, type hints, errors, imports) and
+  `CLAUDE.md` (read the code style before changing code)
+- Docstrings with `:param:` lines for every function and method, no module docstrings (scripts and tests start with a
+  describing comment), few and short comments
+- Module constants moved to `GlobalConf` (global) or to class attributes (local), e.g. `Styles.palette`,
+  `ThemeIconEngine.icons`, `ImportedCrystal.angle_tolerance`, `CompareDialog.allValues`, `ScanParameter.scales`
+- Central checks of numbers `isNumber` and `toNumber` (`Utility/Functions.py`) instead of scattered checks
+- Imports grouped in all files: standard library, external libraries (one block per library), own modules (one block
+  per folder), separated by two blank lines
+- Type hints of all Qt event handlers (`Optional[QPaintEvent]`, ...), long definitions and calls with one parameter per
+  line, nested conditional expressions as if blocks
+- Unused empty class `Crystal` removed, `setLayoutVisible` moved to `Utility/ModifyWidget.py`, small helpers for
+  repeated code (`firstTableCrystal`, `openWorkingDirectory`, `sourceFiles`, `numberedFileName`, `cellCenters`)
+- Errors are handled like in v1.5.02: specific exceptions, `logging.info` with the file or value, early return
+- Full test run with all simulations: 724 passed, 1 timeout of a parallel run (passes alone)
+
 ## v1.6.07 (2026-10-21)
 
 Robustness against broken, extreme and unknown input (found with the new fuzz test `tests/test_fuzz_inputs.py`):

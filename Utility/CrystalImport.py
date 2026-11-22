@@ -1,13 +1,3 @@
-"""
-Import of crystal structures from standard file formats:
-
-- CIF (Crystallographic Information File, *.cif): symmetry operations are applied to get all atoms of the unit cell
-- VASP POSCAR/CONTCAR (*.vasp, POSCAR, CONTCAR)
-
-SDTrimSP describes crystals with an orthogonal unit cell (dx, dy, dz) and relative coordinates of the atoms,
-so only structures with an orthogonal unit cell can be used.
-"""
-
 from __future__ import annotations
 from typing import List, Tuple, Dict
 from dataclasses import dataclass, field
@@ -16,11 +6,8 @@ from re import sub, findall, match
 from fractions import Fraction
 import shlex
 
+
 import numpy as np
-
-
-ANGLE_TOLERANCE = 1e-3  # degree
-POSITION_TOLERANCE = 1e-4  # relative coordinates
 
 
 class CrystalImportError(Exception):
@@ -30,7 +17,7 @@ class CrystalImportError(Exception):
 @dataclass
 class ImportedCrystal:
     """
-    Crystal structure read from a file
+    Crystal structure read from a file (SDTrimSP only supports orthogonal unit cells)
 
     :param name: suggested name
     :param lengths: lattice constants (a, b, c) in Angstrom
@@ -40,6 +27,10 @@ class ImportedCrystal:
     :param warnings: problems that do not prevent the import
     """
 
+    # tolerances of angles in degree and of relative coordinates
+    angle_tolerance = 1e-3
+    position_tolerance = 1e-4
+
     name: str
     lengths: Tuple[float, float, float]
     angles: Tuple[float, float, float] = (90., 90., 90.)
@@ -48,20 +39,24 @@ class ImportedCrystal:
     warnings: List[str] = field(default_factory=list)
 
     def isOrthogonal(self) -> bool:
-        """Returns True if all lattice angles are 90 degree"""
+        """Returns if all lattice angles are 90 degree"""
 
-        return all(abs(angle - 90) < ANGLE_TOLERANCE for angle in self.angles)
+        return all(abs(angle - 90) < self.angle_tolerance for angle in self.angles)
 
 
-def _triple(values) -> Tuple[float, float, float]:
-    """Returns three values as tuple"""
+def triple(values) -> Tuple[float, float, float]:
+    """
+    Returns first three values as tuple of floats
+
+    :param values: list of values
+    """
 
     return float(values[0]), float(values[1]), float(values[2])
 
 
 def importCrystal(path: Path) -> ImportedCrystal:
     """
-    Imports a crystal file, the format is chosen by the file name
+    Imports a CIF (*.cif) or VASP (POSCAR, CONTCAR, *.vasp) file, the format is chosen by the file name
 
     :param path: path to file
     """
@@ -75,19 +70,26 @@ def importCrystal(path: Path) -> ImportedCrystal:
     except CrystalImportError:
         raise
     except (OSError, ValueError, IndexError, KeyError, TypeError, ZeroDivisionError, OverflowError) as error:
-        # damaged or incomplete files (e.g. a column of the atom sites is missing): shown as import error by the GUI
         raise CrystalImportError(f'Could not read "{path.name}": {error}') from error
     raise CrystalImportError(f'Unknown file format of "{path.name}". Supported are CIF (*.cif) and VASP (POSCAR, CONTCAR, *.vasp) files')
 
 
-def _number(value: str) -> float:
-    """Converts a CIF number, e.g. "5.4310(2)", to float"""
+def cifNumber(value: str) -> float:
+    """
+    Returns number of CIF file as float
+
+    :param value: CIF number, e.g. "5.4310(2)"
+    """
 
     return float(sub(r'\(\d+\)', '', value))
 
 
-def _elementFromLabel(label: str) -> str:
-    """Returns the element symbol of a CIF type symbol or label, e.g. "Na1+" -> "Na", "O2" -> "O" """
+def elementFromLabel(label: str) -> str:
+    """
+    Returns element symbol of a CIF type symbol or label
+
+    :param label: type symbol or label, e.g. "Na1+" -> "Na", "O2" -> "O"
+    """
 
     found = match(r'([A-Z][a-z]?)', label.strip())
     if found is None:
@@ -95,16 +97,20 @@ def _elementFromLabel(label: str) -> str:
     return found.group(1)
 
 
-def _wrap(position: np.ndarray) -> np.ndarray:
-    """Returns relative coordinates in [0, 1)"""
+def wrapPosition(position: np.ndarray) -> np.ndarray:
+    """
+    Returns relative coordinates in [0, 1)
+
+    :param position: relative coordinates
+    """
 
     position = np.mod(position, 1.)
-    position[np.isclose(position, 1., atol=POSITION_TOLERANCE)] = 0.
-    position[np.isclose(position, 0., atol=POSITION_TOLERANCE)] = 0.
+    position[np.isclose(position, 1., atol=ImportedCrystal.position_tolerance)] = 0.
+    position[np.isclose(position, 0., atol=ImportedCrystal.position_tolerance)] = 0.
     return position
 
 
-def _symmetryOperation(operation: str):
+def symmetryOperation(operation: str):
     """
     Returns a function that applies a symmetry operation like "-x+1/2, y, z" to relative coordinates
 
@@ -130,8 +136,12 @@ def _symmetryOperation(operation: str):
     return lambda position: matrix @ position + offset
 
 
-def _cifTokens(path: Path) -> List[str]:
-    """Returns the tokens of a CIF file (comments removed, multi-line texts skipped)"""
+def cifTokens(path: Path) -> List[str]:
+    """
+    Returns tokens of a CIF file (without comments and multi-line texts)
+
+    :param path: path to file
+    """
 
     tokens = []
     in_text = False
@@ -152,14 +162,25 @@ def _cifTokens(path: Path) -> List[str]:
     return tokens
 
 
+def isCifKeyword(token: str) -> bool:
+    """
+    Returns if token of a CIF file is a tag, loop or data block and no value
+
+    :param token: token of CIF file
+    """
+
+    lower = token.lower()
+    return token.startswith('_') or lower == 'loop_' or lower.startswith('data_')
+
+
 def importCif(path: Path) -> ImportedCrystal:
     """
-    Imports a CIF file. The first data block is used
+    Imports a CIF file (first data block), symmetry operations are applied to get all atoms of the unit cell
 
     :param path: path to file
     """
 
-    tokens = _cifTokens(path)
+    tokens = cifTokens(path)
     values: Dict[str, str] = {}
     loops: List[Tuple[List[str], List[List[str]]]] = []
     name = path.stem
@@ -181,9 +202,8 @@ def importCif(path: Path) -> ImportedCrystal:
                 headers.append(tokens[i].lower())
                 i += 1
             rows = []
-            # a loop without headers (damaged file) has no rows: without this check the loop below never advanced and
-            # filled the memory with empty rows
-            while headers and i < len(tokens) and not tokens[i].startswith('_') and tokens[i].lower() not in ('loop_',) and not tokens[i].lower().startswith('data_'):
+            # a loop without headers (damaged file) would never advance
+            while headers and i < len(tokens) and not isCifKeyword(tokens[i]):
                 rows.append(tokens[i:i + len(headers)])
                 i += len(headers)
             loops.append((headers, [row for row in rows if len(row) == len(headers)]))
@@ -197,8 +217,8 @@ def importCif(path: Path) -> ImportedCrystal:
             i += 1
 
     try:
-        lengths = _triple([_number(values[f'_cell_length_{axis}']) for axis in 'abc'])
-        angles = _triple([_number(values.get(f'_cell_angle_{angle}', '90')) for angle in ('alpha', 'beta', 'gamma')])
+        lengths = triple([cifNumber(values[f'_cell_length_{axis}']) for axis in 'abc'])
+        angles = triple([cifNumber(values.get(f'_cell_angle_{angle}', '90')) for angle in ('alpha', 'beta', 'gamma')])
     except (KeyError, ValueError) as error:
         raise CrystalImportError(f'Could not read the unit cell of "{path.name}": {error}')
 
@@ -225,13 +245,13 @@ def importCif(path: Path) -> ImportedCrystal:
     asymmetric_atoms = []
     for row in rows:
         try:
-            position = np.array([_number(row[column_x]), _number(row[column_y]), _number(row[column_z])])
+            position = np.array([cifNumber(row[column_x]), cifNumber(row[column_y]), cifNumber(row[column_z])])
         except ValueError as error:
             raise CrystalImportError(f'Could not read the position of atom "{row[column_element]}": {error}')
         if column_occupancy is not None and row[column_occupancy] not in ('.', '?'):
-            if abs(_number(row[column_occupancy]) - 1) > 1e-3:
+            if abs(cifNumber(row[column_occupancy]) - 1) > 1e-3:
                 warnings.append(f'Atom "{row[column_element]}" has a partial occupancy of {row[column_occupancy]}, it is treated as fully occupied')
-        asymmetric_atoms.append((_elementFromLabel(row[column_element]), position))
+        asymmetric_atoms.append((elementFromLabel(row[column_element]), position))
 
     # symmetry operations
     operations = ['x, y, z']
@@ -241,18 +261,18 @@ def importCif(path: Path) -> ImportedCrystal:
                 column = headers.index(key)
                 operations = [row[column] for row in rows]
                 break
-    symmetry_operations = [_symmetryOperation(operation) for operation in operations]
+    symmetry_operations = [symmetryOperation(operation) for operation in operations]
 
     # apply symmetry and remove duplicates
     elements = []
     positions: List[np.ndarray] = []
     for element, position in asymmetric_atoms:
         for operation in symmetry_operations:
-            new_position = _wrap(operation(position))
+            new_position = wrapPosition(operation(position))
             duplicate = False
             for other in positions:
                 difference = np.abs(other - new_position)
-                if np.all(np.minimum(difference, 1 - difference) < POSITION_TOLERANCE):
+                if np.all(np.minimum(difference, 1 - difference) < ImportedCrystal.position_tolerance):
                     duplicate = True
                     break
             if not duplicate:
@@ -263,7 +283,7 @@ def importCif(path: Path) -> ImportedCrystal:
         name=name,
         lengths=lengths,
         angles=angles,
-        positions=[_triple([float(round(value, 6)) for value in position]) for position in positions],
+        positions=[triple([float(round(value, 6)) for value in position]) for position in positions],
         elements=elements,
         warnings=warnings
     )
@@ -306,21 +326,29 @@ def importPoscar(path: Path) -> ImportedCrystal:
                 index += 1
                 if cartesian:
                     position = np.linalg.solve(lattice.T, position * scale)
-                positions.append(_wrap(position))
-                elements.append(_elementFromLabel(symbol.split('/')[0].split('_')[0]))
+                positions.append(wrapPosition(position))
+                elements.append(elementFromLabel(symbol.split('/')[0].split('_')[0]))
     except (IndexError, ValueError) as error:
         raise CrystalImportError(f'Could not read "{path.name}": {error}')
 
     a, b, c = lattice
-    lengths = _triple([float(np.linalg.norm(vector)) for vector in (a, b, c)])
+    lengths = triple([float(np.linalg.norm(vector)) for vector in (a, b, c)])
 
-    def angle(u, v):
-        return float(np.degrees(np.arccos(np.clip(u @ v / np.linalg.norm(u) / np.linalg.norm(v), -1, 1))))
+    def angle(u: np.ndarray, v: np.ndarray) -> float:
+        """
+        Returns angle between two vectors in degree
+
+        :param u: first vector
+        :param v: second vector
+        """
+
+        cos_angle = u @ v / np.linalg.norm(u) / np.linalg.norm(v)
+        return float(np.degrees(np.arccos(np.clip(cos_angle, -1, 1))))
 
     return ImportedCrystal(
         name=name.split()[0] if name.split() else path.stem,
         lengths=lengths,
         angles=(angle(b, c), angle(a, c), angle(a, b)),
-        positions=[_triple([float(round(value, 6)) for value in position]) for position in positions],
+        positions=[triple([float(round(value, 6)) for value in position]) for position in positions],
         elements=elements
     )

@@ -1,12 +1,7 @@
-"""
-Builds assets/resources.py from assets/resources.qrc
-
-pyside6-rcc is used, since PyQt6 does not provide a resource compiler anymore.
-The generated file is changed to import QtCore from PyQt6, so that PySide6 is not needed to run the GUI.
-
-Usage: python setup/build_resources.py
-Requires: pip install pyside6
-"""
+# Builds assets/resources.py from assets/resources.qrc (python setup/build_resources.py, requires: pip install pyside6)
+#
+# pyside6-rcc is used, since PyQt6 does not provide a resource compiler anymore. The generated file is changed to import
+# QtCore from PyQt6, so that PySide6 is not needed to run the GUI.
 
 from pathlib import Path
 from shutil import which
@@ -15,6 +10,8 @@ import sys
 
 
 def main():
+    """Compiles the resources"""
+
     root = Path(__file__).resolve().parent.parent
     qrc_file = root / 'assets' / 'resources.qrc'
     py_file = root / 'assets' / 'resources.py'

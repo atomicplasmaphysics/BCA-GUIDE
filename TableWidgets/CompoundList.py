@@ -76,8 +76,13 @@ class CompoundList(QListWidget):
             self.addItem(item)
             self.setItemWidget(item, item_widget)
 
-    def itemWidget(self, item: Optional[QListWidgetItem]) -> ListItemWidget:  # type: ignore[override]  # the widgets are always ListItemWidget
-        """Call is passed to original itemWidget() function, but the return type should be ListItemWidget"""
+    def itemWidget(self, item: Optional[QListWidgetItem]) -> ListItemWidget:  # type: ignore[override]
+        """
+        Call is passed to original itemWidget() function, but the return type should be ListItemWidget
+
+        :param item: item of list
+        """
+
         return cast(ListItemWidget, super().itemWidget(item))
 
     def disableItem(self, compound: Compound, disable: bool):
@@ -144,6 +149,7 @@ class CompoundList(QListWidget):
 
     def selectedToTop(self):
         """Moves selected compounds to top"""
+
         selected_items = []
 
         for index in range(self.count()):
@@ -171,6 +177,7 @@ class CompoundList(QListWidget):
 
     def elementChanged(self):
         """Gets called if an element was changed"""
+
         self.available_elements = []
 
         for row in self.table_beam.rows + self.table_target.rows:
@@ -180,6 +187,7 @@ class CompoundList(QListWidget):
 
     def getCompounds(self) -> List[Compound]:
         """Returns list of selected <Compound> containers"""
+
         selected_compounds = []
 
         for index in range(self.count()):

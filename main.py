@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License along with this program. If not, see
 # https://www.gnu.org/licenses/.
 
-
 import sys
 from sys import argv
 import logging
@@ -25,14 +24,16 @@ from PyQt6.QtCore import Qt, QSize, QRect, QPoint, QTimer
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QIcon, QColor, QGuiApplication
 
+
 import assets.resources  # noqa: F401 (registers the resources of Qt)
 
 from Utility.GlobalConf import GlobalConf
-from Pages.MainWindow import MainWindow
-
 from Utility.Layouts import SplashPixmap
 from Utility.Logger import setupLogging
 from Utility.Typing import notNone
+
+from Pages.MainWindow import MainWindow
+
 
 # TODO: make tabs detachable -> open them in their own window, such that multiple simulations can be seen at the same time
 
@@ -66,7 +67,7 @@ def main():
     # set up logging level
     setupLogging(logging.WARNING)
 
-    # ctypes.windll only works in Windows (sys.platform is understood by mypy, which checks for Linux in the CI)
+    # ctypes.windll only works in Windows (mypy understands sys.platform)
     if sys.platform == 'win32':
         import ctypes
         # create unique app-id to show taskbar icon (Windows only)
@@ -78,7 +79,7 @@ def main():
     app = QApplication(argv)
     app.setWindowIcon(QIcon(':/assets/tu_logo.png'))
 
-    # the splash screen is shown on the display of the main window (saved center of the window), otherwise on the primary one
+    # splash screen on the display of the main window
     x, y = GlobalConf.getWindowCenter()
     display = QGuiApplication.screenAt(QPoint(x, y)) if (x, y) != (0, 0) else None
     if display is None:

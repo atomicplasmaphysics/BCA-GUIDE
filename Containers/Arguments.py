@@ -4,9 +4,10 @@ from enum import Enum, auto
 from json import dump as json_dump, JSONEncoder, load as json_load
 from json.decoder import JSONDecodeError
 import logging
-from math import isfinite
+
 
 from Utility.Indexing import RunningIndex, DefaultAssumed
+from Utility.Functions import toNumber
 
 from Containers.Element import Element
 from Containers.Compound import Compound
@@ -57,7 +58,7 @@ class ArgumentValues:
         ZIEGLER = auto()
         LINDHARD_SCHARFF_AND_ZIEGLER = auto()
         TABULATED = auto()
-        AUTOMATIC = auto()  # chosen by SDTrimSP for each element (inel0 not given or -1)
+        AUTOMATIC = auto()  # chosen by SDTrimSP for each element
 
     class InteractionPotential(Enum):
         """Interaction potential"""
@@ -215,6 +216,9 @@ class RowArguments(Arguments):
     :param angle: incidence angle of row (beam only)
     :param modified_element: if element is modified
     """
+
+    # parameters that can not be replaced by optional values of a row
+    checked_parameters = {'index', 'symbol', 'element', 'abundance', 'max_atomic_fraction', 'energy', 'angle', 'assumed'}
 
     def __init__(
         self,
@@ -443,7 +447,13 @@ class ArgumentEncoderJSON(JSONEncoder):
     """Json encoder for <Arguments> classes"""
 
     def default(self, obj):
-        # copy, the arguments must not be changed by saving them
+        """
+        Returns serializable object
+
+        :param obj: object to serialize
+        """
+
+        # copy, saving must not change the arguments
         obj_dict = dict(obj.__dict__)
         if obj_dict.get('optional') == {}:
             del obj_dict['optional']
@@ -485,10 +495,6 @@ def saveSimulationArguments(arguments: SimulationArguments, file: Path):
         json_dump(config, conf_file, indent=4, cls=ArgumentEncoderJSON)
 
 
-# parameters of <RowArguments> that are checked when input.json is loaded (optional values of a row can not replace them)
-ROW_PARAMETERS = {'index', 'symbol', 'element', 'abundance', 'max_atomic_fraction', 'energy', 'angle', 'assumed'}
-
-
 def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArguments]:
     """
     Load all simulation arguments from file
@@ -501,14 +507,22 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
     assumed = DefaultAssumed()
 
     def getDict(possible_dict) -> dict:
-        """Returns an empty dict if possible_dict is not a dict, otherwise possible_dict is returned"""
+        """
+        Returns possible_dict if it is a dict, otherwise an empty dict
+
+        :param possible_dict: value to check
+        """
 
         if not isinstance(possible_dict, dict):
             return {}
         return possible_dict
 
     def getList(possible_list) -> list:
-        """Returns an empty list if possible_list is not a list, otherwise possible_list is returned"""
+        """
+        Returns possible_list if it is a list, otherwise an empty list
+
+        :param possible_list: value to check
+        """
 
         if not isinstance(possible_list, list):
             return []
@@ -516,26 +530,38 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
 
     def getValue(value, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
         """
-        Returns value if value has type value_type, otherwise return default_value. Integers are also accepted for floats
-        (e.g. "energy": 1000 of a file written by hand), booleans are no numbers and NaN or infinite values are not accepted
+        Returns value if value has type value_type, otherwise default_value (integers are accepted for floats, booleans
+        and NaN are no numbers)
+
+        :param value: value to check
+        :param value_type: required type
+        :param default_value: returned if value has wrong type
+        :param item: (optional) name of value, noted as assumed if default_value is returned
+        :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
         """
 
         if assumed_cls is None:
             assumed_cls = DefaultAssumed()
-        if value_type is float and isinstance(value, int) and not isinstance(value, bool):
-            try:
-                value = float(value)
-            except OverflowError:
-                value = None
-        invalid_number = (isinstance(value, bool) and value_type is not bool) or (isinstance(value, float) and not isfinite(value))
-        if invalid_number or not isinstance(value, value_type):
+        if value_type is float:
+            value = toNumber(value)
+        elif isinstance(value, bool) and value_type is not bool:
+            value = None
+        if not isinstance(value, value_type):
             if item is not None:
                 assumed_cls.assumed(item)
             return default_value
         return value
 
     def getValueCls(value, cls, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
-        """Returns class member with name value if is class member, otherwise return default_value"""
+        """
+        Returns class member with name value if is class member, otherwise default_value
+
+        :param value: name of class member
+        :param cls: class with members
+        :param default_value: returned if value is no class member
+        :param item: (optional) name of value, noted as assumed if default_value is returned
+        :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+        """
 
         if assumed_cls is None:
             assumed_cls = DefaultAssumed()
@@ -600,13 +626,19 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
     crystal_args = GeneralCrystalArguments(**crystal_args_parameters)
 
     def rowList(rows_data, typ: str) -> List[RowArguments]:
-        """Converts the rows_list into a list of <RowArguments>"""
+        """
+        Converts rows_data into a list of <RowArguments>
+
+        :param rows_data: list of row dictionaries
+        :param typ: 'beam' or 'target'
+        """
 
         rows_list = getList(rows_data)
         rows = []
         for row_dict in [getDict(i) for i in rows_list]:
             # only accept rows with set symbols
-            if not isinstance(row_dict.get('symbol'), str) or not isinstance(row_dict.get('element'), dict) or getDict(row_dict.get('element')).get('symbol') is None:
+            element_symbol = getDict(row_dict.get('element')).get('symbol')
+            if not isinstance(row_dict.get('symbol'), str) or element_symbol is None:
                 assumed.assumed(f'{typ} row not convertible')
                 continue
             assumed_row = DefaultAssumed()
@@ -627,8 +659,14 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
                 })
             optional = getDict(row_dict.get('optional'))
             if optional.get('inelastic_loss_model') is not None:
-                optional['inelastic_loss_model'] = getValueCls(optional.get('inelastic_loss_model'), ArgumentValues.InelasticLossModel, ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON, 'inelastic_loss_model_row', assumed_cls=assumed)
-            row_parameters.update({key: value for key, value in optional.items() if key not in ROW_PARAMETERS})
+                optional['inelastic_loss_model'] = getValueCls(
+                    optional.get('inelastic_loss_model'),
+                    ArgumentValues.InelasticLossModel,
+                    ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON,
+                    'inelastic_loss_model_row',
+                    assumed_cls=assumed
+                )
+            row_parameters.update({key: value for key, value in optional.items() if key not in RowArguments.checked_parameters})
             row_parameters.update({
                 'assumed': assumed_row
             })
@@ -636,13 +674,18 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
         return rows
 
     def crystalRowList(rows_data, typ: str) -> List[CrystalRowArguments]:
-        """Converts the rows_list into a list of <RowArguments>"""
+        """
+        Converts rows_data into a list of <CrystalRowArguments>
+
+        :param rows_data: list of row dictionaries
+        :param typ: name of rows
+        """
 
         rows_list = getList(rows_data)
         rows = []
         for row_dict in [getDict(i) for i in rows_list]:
             # only accept rows with set symbols
-            if not isinstance(row_dict.get('symbol'), str): # or not isinstance(row_dict.get('element'), dict) or getDict(row_dict.get('element')).get('symbol') is None:
+            if not isinstance(row_dict.get('symbol'), str):
                 assumed.assumed(f'{typ} row not convertible')
                 continue
             assumed_row = DefaultAssumed()
@@ -704,29 +747,36 @@ def loadSimulationArguments(file: Path) -> Union[Literal[False], SimulationArgum
 
     # settings data (<GeneralArguments>)
     data_settings = getDict(data.get('settings'))
+    compounds = []
+    for compound in [getDict(compound) for compound in getList(data_settings.get('compounds'))]:
+        name = compound.get('name')
+        name_save = compound.get('name_save')
+        elements = compound.get('elements')
+        if not isinstance(name, (str, type(None))) or not isinstance(name_save, (str, type(None))):
+            continue
+        if not isinstance(elements, (dict, type(None))):
+            continue
+        compounds.append(Compound(name=name, elements=elements, name_save=name_save))
     settings_parameters = {
         'title': getValue(data_settings.get('title'), str, general_title, 'title', assumed_cls=assumed),
         'comment': getValue(data_settings.get('comment'), str, '', 'comment', assumed_cls=assumed),
         'mode': getValueCls(data_settings.get('mode'), ArgumentValues.Mode, ArgumentValues.Mode.STATIC, 'mode', assumed_cls=assumed),
         'fluence': getValue(data_settings.get('fluence'), float, 1.0, 'fluence', assumed_cls=assumed),
         'threads': getValue(data_settings.get('threads'), int, 0, 'threads', assumed_cls=assumed),
-        'compounds': [
-            Compound(name=compound.get('name'), elements=compound.get('elements'), name_save=compound.get('name_save'))
-            for compound in [getDict(compound) for compound in getList(data_settings.get('compounds'))]
-            if isinstance(compound.get('name'), (str, type(None))) and isinstance(compound.get('name_save'), (str, type(None)))
-            and isinstance(compound.get('elements'), (dict, type(None)))
-        ]
+        'compounds': compounds
     }
     optional_settings = data_settings.get('optional')
     if isinstance(optional_settings, dict):
-        if optional_settings.get('interaction_potential') is not None:
-            optional_settings['interaction_potential'] = getValueCls(optional_settings.get('interaction_potential'), ArgumentValues.InteractionPotential, ArgumentValues.InteractionPotential.KRC, 'interaction_potential', assumed_cls=assumed)
-        if optional_settings.get('integration_method') is not None:
-            optional_settings['integration_method'] = getValueCls(optional_settings.get('integration_method'), ArgumentValues.IntegrationMethod, ArgumentValues.IntegrationMethod.GAUSS_LEGENDRE, 'integration_method', assumed_cls=assumed)
-        if optional_settings.get('surface_binding_model') is not None:
-            optional_settings['surface_binding_model'] = getValueCls(optional_settings.get('surface_binding_model'), ArgumentValues.SurfaceBindingModel, ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC, 'surface_binding_model', assumed_cls=assumed)
-        if optional_settings.get('inelastic_loss_model') is not None:
-            optional_settings['inelastic_loss_model'] = getValueCls(optional_settings.get('inelastic_loss_model'), ArgumentValues.InelasticLossModel, ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON, 'inelastic_loss_model', assumed_cls=assumed)
+        # optional settings with their class and default value
+        enum_settings = {
+            'interaction_potential': (ArgumentValues.InteractionPotential, ArgumentValues.InteractionPotential.KRC),
+            'integration_method': (ArgumentValues.IntegrationMethod, ArgumentValues.IntegrationMethod.GAUSS_LEGENDRE),
+            'surface_binding_model': (ArgumentValues.SurfaceBindingModel, ArgumentValues.SurfaceBindingModel.ELEMENT_SPECIFIC),
+            'inelastic_loss_model': (ArgumentValues.InelasticLossModel, ArgumentValues.InelasticLossModel.LINDHARD_SCHARFF_AND_OEN_ROBINSON)
+        }
+        for key, (cls, default_value) in enum_settings.items():
+            if optional_settings.get(key) is not None:
+                optional_settings[key] = getValueCls(optional_settings.get(key), cls, default_value, key, assumed_cls=assumed)
     settings_parameters.update(getDict(optional_settings))
     settings = GeneralArguments(**settings_parameters)
 

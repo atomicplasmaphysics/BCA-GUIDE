@@ -1,7 +1,9 @@
 from typing import List, Union, Optional
 
+
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QComboBox, QPushButton, QDoubleSpinBox, QSpinBox
+
 
 from Utility.ModifyWidget import setWidgetHighlight, widgetGetValue, widgetSetValue
 from Utility.Functions import limitSum
@@ -14,7 +16,12 @@ from Containers.Element import Element, Elements
 
 
 def setSpinboxValue(spinbox: Union[QSpinBox, QDoubleSpinBox], value: float):
-    """Sets the value of a spinbox (integer spinboxes need an int)"""
+    """
+    Sets value of a spinbox (integer spinboxes need an int)
+
+    :param spinbox: spinbox to set
+    :param value: new value
+    """
 
     if isinstance(spinbox, QSpinBox):
         spinbox.setValue(int(round(value)))
@@ -450,7 +457,13 @@ class CompTable(CustomTable[CompRow]):
 
         return [row.getArguments() for row in self.rows]
 
-    def setArguments(self, arguments: List[RowArguments], general_arguments: Union[SimulationArguments, GeneralArguments], elements: Elements, connect: bool = True) -> list:
+    def setArguments(
+        self,
+        arguments: List[RowArguments],
+        general_arguments: Union[SimulationArguments, GeneralArguments],
+        elements: Elements,
+        connect: bool = True
+    ) -> list:
         """
         Sets list of <RowArguments> containers of parameters for each row
 

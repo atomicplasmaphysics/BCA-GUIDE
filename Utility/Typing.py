@@ -1,5 +1,3 @@
-"""Helpers for type checking (mypy)"""
-
 from typing import Optional, TypeVar
 
 
@@ -8,8 +6,7 @@ T = TypeVar('T')
 
 def notNone(value: Optional[T]) -> T:
     """
-    Returns the value and raises a RuntimeError if it is None.
-    Many functions of PyQt6 are typed to return None in error cases (e.g. QMenuBar.addMenu), which does not happen here
+    Returns value and raises a RuntimeError if it is None (for PyQt6 functions typed as optional, e.g. QMenuBar.addMenu)
 
     :param value: value that is not None
     """

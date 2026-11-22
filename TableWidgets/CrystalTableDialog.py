@@ -1,19 +1,20 @@
 from typing import List, Optional, Tuple, cast
 from pathlib import Path
 
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QDoubleSpinBox,
     QPushButton, QTableWidget, QHeaderView, QDialogButtonBox, QFileDialog, QAbstractItemView
 )
 
+
 from Utility.Styles import Styles
-
-from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError
-
 from Utility.CrystalImport import importCrystal, CrystalImportError, ImportedCrystal
 from Utility.Icons import getIcon
 from Utility.Typing import notNone
+
+from Containers.CrystalTableFile import CrystalTableFile, TableCrystal, CrystalTableError
 
 
 class NewCrystalDialog(QDialog):
@@ -27,7 +28,8 @@ class NewCrystalDialog(QDialog):
     :param element_symbols: symbols of all elements that can be used
     """
 
-    NEW_STRUCTURE = -1
+    # data of the combobox entry for a new structure
+    newStructure = -1
 
     def __init__(self, parent, table_file: CrystalTableFile, element_symbols: List[str]):
         super().__init__(parent)
@@ -67,7 +69,7 @@ class NewCrystalDialog(QDialog):
         self.structure = QComboBox()
         for structure in self.table_file.structures:
             self.structure.addItem(f'{structure.number}: {structure.name} ({len(structure.positions)} atoms)', structure.number)
-        self.structure.addItem('New structure', self.NEW_STRUCTURE)
+        self.structure.addItem('New structure', self.newStructure)
         self.structure.setToolTip('Crystal structure (relative positions of the atoms in the unit cell)')
         grid.addWidget(QLabel('Structure:'), 1, 0)
         grid.addWidget(self.structure, 1, 1, 1, 3)
@@ -78,6 +80,16 @@ class NewCrystalDialog(QDialog):
         grid.addWidget(self.structure_name, 2, 1, 1, 3)
 
         def spinbox(value: float, decimals: int, minimum: float, maximum: float, tooltip: str) -> QDoubleSpinBox:
+            """
+            Returns a spinbox for a parameter
+
+            :param value: initial value
+            :param decimals: number of decimals
+            :param minimum: minimum value
+            :param maximum: maximum value
+            :param tooltip: tooltip of spinbox
+            """
+
             box = QDoubleSpinBox()
             box.setDecimals(decimals)
             box.setRange(minimum, maximum)
@@ -153,7 +165,13 @@ class NewCrystalDialog(QDialog):
         self.structureChanged()
 
     def addAtom(self, element: str = '', position: Tuple[float, float, float] = (0., 0., 0.), editable: bool = True):
-        """Adds a row for an atom"""
+        """
+        Adds a row for an atom
+
+        :param element: (optional) symbol of element
+        :param position: (optional) relative coordinates of atom
+        :param editable: (optional) if the coordinates can be changed
+        """
 
         row = self.atoms.rowCount()
         self.atoms.insertRow(row)
@@ -180,7 +198,9 @@ class NewCrystalDialog(QDialog):
     def removeAtom(self):
         """Removes the selected atom"""
 
-        rows = sorted({index.row() for index in self.atoms.selectedIndexes()}, reverse=True) or [self.atoms.rowCount() - 1]
+        rows = sorted({index.row() for index in self.atoms.selectedIndexes()}, reverse=True)
+        if not rows:
+            rows = [self.atoms.rowCount() - 1]
         for row in rows:
             if row >= 0:
                 self.atoms.removeRow(row)
@@ -198,10 +218,14 @@ class NewCrystalDialog(QDialog):
         return elements, positions
 
     def structureChanged(self, elements: Optional[List[str]] = None):
-        """Updates the atoms table if another structure is selected"""
+        """
+        Updates the atoms table if another structure is selected
+
+        :param elements: (optional) symbols of the atoms of the structure, by default the current ones
+        """
 
         number = self.structure.currentData()
-        new_structure = number == self.NEW_STRUCTURE
+        new_structure = number == self.newStructure
         self.structure_name.setEnabled(new_structure)
         self.add_atom.setEnabled(new_structure)
         self.remove_atom.setEnabled(new_structure)
@@ -242,7 +266,7 @@ class NewCrystalDialog(QDialog):
             deltahf=self.deltahf.value(),
             p_max=self.p_max.value(),
             matrix_id=self.matrix_id.currentData(),
-            structure=structure if structure != self.NEW_STRUCTURE else 0,
+            structure=structure if structure != self.newStructure else 0,
             elements=elements
         )
         crystal.density = crystal.calculatedDensity()
@@ -290,16 +314,17 @@ class NewCrystalDialog(QDialog):
         self.applyImported(imported)
 
     def applyImported(self, imported: ImportedCrystal):
-        """Fills the dialog with an imported crystal"""
+        """
+        Fills the dialog with an imported crystal
+
+        :param imported: imported crystal
+        """
 
         messages = list(imported.warnings)
         a, b, c = imported.lengths
         if not imported.isOrthogonal():
-            self.import_label.setText(
-                f'<span style="color: {Styles.red_hex};">The unit cell of "{imported.name}" is not orthogonal '
-                f'(angles {imported.angles[0]:.1f}°, {imported.angles[1]:.1f}°, {imported.angles[2]:.1f}°). '
-                f'SDTrimSP only supports orthogonal unit cells.</span>'
-            )
+            alpha, beta, gamma = imported.angles
+            self.import_label.setText(f'<span style="color: {Styles.red_hex};">The unit cell of "{imported.name}" is not orthogonal (angles {alpha:.1f}°, {beta:.1f}°, {gamma:.1f}°). SDTrimSP only supports orthogonal unit cells.</span>')
             return
         if abs(a - b) > 1e-6:
             messages.append(f'a = {a:.4f} Å and b = {b:.4f} Å differ, but SDTrimSP uses dx for x and y. dx is set to a')
@@ -321,7 +346,7 @@ class NewCrystalDialog(QDialog):
             messages.insert(0, f'Imported {len(imported.positions)} atoms, the existing structure "{structure.name}" is used')
         else:
             self.structure.blockSignals(True)
-            self.structure.setCurrentIndex(self.structure.findData(self.NEW_STRUCTURE))
+            self.structure.setCurrentIndex(self.structure.findData(self.newStructure))
             self.structure.blockSignals(False)
             self.atoms.setRowCount(0)
             for element, position in zip(imported.elements, imported.positions):
@@ -342,7 +367,7 @@ class NewCrystalDialog(QDialog):
         elements, positions = self.atomsList()
         crystal = self.crystal()
         try:
-            if self.structure.currentData() == self.NEW_STRUCTURE:
+            if self.structure.currentData() == self.newStructure:
                 self.created_crystal = self.table_file.addCrystal(crystal, positions, self.structure_name.text().strip())
             else:
                 structure = self.table_file.structure(crystal.structure)

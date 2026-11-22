@@ -1,8 +1,9 @@
-"""Start time of the GUI: profile of the start with a tab for every example (see startup_profile.py)"""
+# Start time of the GUI: profile of the start with a tab for every example (see startup_profile.py)
 
 import subprocess
 import sys
 from pathlib import Path
+
 
 from conftest import SAVES
 
@@ -12,6 +13,8 @@ def test_startup_profile(request):
     Starts the GUI in a new process (imports included) and writes the report of the slowest functions to
     tests/startup_profile.txt (or DIR/startup_profile.txt with --test-dir=DIR). The time is not checked strictly (it
     depends on the computer), only that the start works and does not take minutes
+
+    :param request: pytest request
     """
 
     test_dir = request.config.getoption('--test-dir')

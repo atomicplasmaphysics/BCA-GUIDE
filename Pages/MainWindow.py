@@ -1,11 +1,12 @@
 from typing import List, Optional
 
+
 from PyQt6.QtCore import Qt, QCoreApplication, QUrl, QPoint, QTimer, QElapsedTimer, QProcess
 from PyQt6.QtGui import QIcon, QKeySequence, QCloseEvent, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QApplication
 
-from Utility.GlobalConf import GlobalConf
 
+from Utility.GlobalConf import GlobalConf
 from Utility.Dialogs import AboutDialog, ManualDialog, PreferencesDialog, DownloadDialog, selectFileDialog, showMessageBox
 from Utility.Layouts import ProgressTabBar, TimeProgressBar
 from Utility.Icons import getIcon
@@ -184,7 +185,7 @@ class MainWindow(QMainWindow):
 
         # apply the theme from the preferences, also react to theme changes of the operating system
         self.applyTheme()
-        # a method, not a lambda: a lambda connected to the application (which lives longer) would keep the window alive
+        # a method, since a lambda connected to the application would keep the window alive
         notNone(self.app.styleHints()).colorSchemeChanged.connect(self.colorSchemeChanged)
 
         #
@@ -199,7 +200,7 @@ class MainWindow(QMainWindow):
 
         self.tab_simulations.currentChanged.connect(lambda index: self.writeWindowTitleTab(index))
 
-        # the saved geometry contains the display and the maximized state, the window opens on the same display again
+        # the saved geometry contains the display and the maximized state
         width, height = GlobalConf.getWindowSize()
         x, y = GlobalConf.getWindowCenter()
         geometry = GlobalConf.getWindowGeometry()
@@ -225,6 +226,7 @@ class MainWindow(QMainWindow):
         :param widget: widget to add in new tab
         :param title: title of tab
         """
+
         self.tab_simulations.addTab(widget, title)
         self.tab_simulations.setCurrentIndex(0)
         return widget
@@ -289,6 +291,7 @@ class MainWindow(QMainWindow):
 
         :param index: index of active tab
         """
+
         update_widget = getattr(self.tab_simulations.widget(index), 'updateWidget', None)
         if update_widget is not None:
             update_widget()
@@ -318,7 +321,7 @@ class MainWindow(QMainWindow):
         """
         Writes title to main window based on index of tab
 
-        :param: index: index of tab
+        :param index: index of tab
         """
 
         widget = self.tab_simulations.widget(index)
@@ -337,6 +340,7 @@ class MainWindow(QMainWindow):
 
     def updateTabs(self):
         """Updates tabs if simulation configuration changed"""
+
         for sc in self.simulation_configs:
             if sc not in self.old_simulation_configs:
                 self.old_simulation_configs.append(sc)
@@ -484,7 +488,11 @@ class MainWindow(QMainWindow):
         return page if isinstance(page, SimulationPage) else None
 
     def openComparison(self, page: Optional[SimulationPage] = None):
-        """Opens the comparison of simulations (of the program of the current tab, starting with its folder)"""
+        """
+        Opens the comparison of simulations of the program of a tab, starting with its folder
+
+        :param page: (optional) page of the simulation, by default the current tab
+        """
 
         from Pages.CompareDialog import CompareDialog
 
@@ -497,10 +505,13 @@ class MainWindow(QMainWindow):
         dialog.show()
 
     def setMaxParallelRuns(self, value: int):
-        """Sets the maximum number of simultaneous simulations and starts waiting simulations"""
+        """
+        Sets the maximum number of simultaneous simulations and starts waiting simulations
+
+        :param value: maximum number of simultaneous simulations
+        """
 
         GlobalConf.max_parallel_runs = int(value)
-        GlobalConf.setValue(GlobalConf.max_parallel_runs_name, GlobalConf.max_parallel_runs)
         self.startQueuedSimulations()
 
     def runSimulations(self, configurations: List[SimulationConfiguration], detached: bool = False):
@@ -620,7 +631,11 @@ class MainWindow(QMainWindow):
                 sc.tab_widget.scan.startJobs()
 
     def simulationFinished(self, page: SimulationPage):
-        """A simulation has finished: the next simulations of the queue are started"""
+        """
+        Called when a simulation has finished, starts the next simulations of the queue
+
+        :param page: page of the finished simulation
+        """
 
         if page in self.run_active:
             self.run_active.remove(page)

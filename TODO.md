@@ -32,6 +32,11 @@ Open ideas, known limitations and suggestions for BCA-GUIDE. Done items are remo
 - [ ] tbsp_ascii (tabulated stopping power as text file, since 7.07) is not shown in the GUI, tbsp.db is always used
       (same data). A loaded tri.inp with tbsp_ascii = .true. is written with tbsp_binary.
 
+## Code
+
+- [ ] The docstrings of the test functions were generated from their names during the cleanup (v1.7.00), some are
+      short and could describe better what is checked.
+
 ## Build
 
 - [ ] macOS with Intel processors: the release only contains an Apple silicon (arm64) build (macos-latest), an

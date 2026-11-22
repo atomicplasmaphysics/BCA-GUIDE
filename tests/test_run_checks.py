@@ -1,15 +1,14 @@
-"""
-Checks before a run: warnings about the parameters (the user decides), unknown additional settings, miller indices of
-layer files, version groups of configurations and the queue of "Run all"
-"""
-
+# Checks before a run: warnings about the parameters (the user decides), unknown additional settings, miller indices of
+# layer files, version groups of configurations and the queue of "Run all"
 
 import pytest
+
 
 from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
 
 from Containers.CrystalTableFile import layerMillerError, layerMillerSuggestion
 from Containers.SimulationConfiguration import SimulationConfiguration
+
 from Simulations.SDTrimSP import SimulationInput, Versions, estimateRange, maxElements, namelistParameters, stoppingTableSymbols
 
 
@@ -19,7 +18,14 @@ pytestmark = pytest.mark.skipif(not (FOLDER / 'tables').is_dir(), reason='SDTrim
 
 
 def load(tmp_path, tri: str, version: str = Versions.V_707, folder=FOLDER):
-    """Loads tri.inp and returns the arguments"""
+    """
+    Loads tri.inp and returns the arguments
+
+    :param tmp_path: temporary folder of the test
+    :param tri: content of tri.inp
+    :param version: version of simulation
+    :param folder: folder of the installation of the simulation
+    """
 
     (tmp_path / 'tri.inp').write_text(tri)
     simulation = SimulationInput()
@@ -31,6 +37,16 @@ def load(tmp_path, tri: str, version: str = Versions.V_707, folder=FOLDER):
 
 
 def tri(symbols: str, e0: str, inel0: str = '', extra: str = '', ttarget: float = 1000.) -> str:
+    """
+    Returns tri.inp with the given parameters
+
+    :param symbols: symbols of the elements
+    :param e0: energy of the projectile
+    :param inel0: inelastic loss models
+    :param extra: further lines of the input file
+    :param ttarget: thickness of the target
+    """
+
     return f"""test
 &TRI_INP
      ncp = 2
@@ -52,6 +68,8 @@ def tri(symbols: str, e0: str, inel0: str = '', extra: str = '', ttarget: float 
 
 def test_range_estimate():
     # path lengths (upper limits of the projected ranges): 1 keV Ar in Si some nm, 1 MeV He in Si some um
+    """Range estimate"""
+
     assert 30 < estimateRange(1000, 18, 39.95, 14, 28.09, 0.04994) < 100
     assert 2e4 < estimateRange(1e6, 2, 4.0, 14, 28.09, 0.04994) < 1e5
     assert estimateRange(0, 18, 39.95, 14, 28.09, 0.04994) == 0
@@ -59,6 +77,12 @@ def test_range_estimate():
 
 def test_warning_inelastic_model(tmp_path):
     # Lindhard-Scharff (inel0 = 1) is only valid below 25 Z^(4/3) M keV (He: 25 * 2.52 * 4 keV = 252 keV)
+    """
+    Warning inelastic model
+
+    :param tmp_path: temporary folder of the test
+    """
+
     simulation, arguments = load(tmp_path, tri('"He", "Si"', '1e6', '1, 1'))
     warnings = simulation.checkWarnings(arguments, Versions.V_707)
     assert any(warning.startswith('He: the inelastic loss model 1') for warning in warnings), warnings
@@ -73,6 +97,12 @@ def test_warning_inelastic_model(tmp_path):
 
 
 def test_warning_transmission_700(tmp_path):
+    """
+    Warning transmission 700
+
+    :param tmp_path: temporary folder of the test
+    """
+
     folder = SDTRIMSP / 'SDTrimSP_7.00'
     if not (folder / 'tables').is_dir():
         pytest.skip('SDTrimSP 7.00 not available')
@@ -89,6 +119,12 @@ def test_warning_transmission_700(tmp_path):
 
 def test_warning_max_elements(tmp_path):
     # SDTrimSP 6.01 is compiled for 3 elements (ncpm = 3 in src/param.F90), 4 elements stop it while reading tri.inp
+    """
+    Warning max elements
+
+    :param tmp_path: temporary folder of the test
+    """
+
     installation = tmp_path / 'installation'
     (installation / 'src').mkdir(parents=True)
     (installation / 'src' / 'param.F90').write_text('module param\n   integer, parameter :: ncpm = 1   ! elements\nend module\n')
@@ -106,6 +142,12 @@ def test_warning_max_elements(tmp_path):
 
 def test_warning_stopping_table(tmp_path):
     # inel0 = 4 (H, D, T) reads tables/table3 for all species, SDTrimSP 7.01 has no C_a there (here: no Cu)
+    """
+    Warning stopping table
+
+    :param tmp_path: temporary folder of the test
+    """
+
     installation = tmp_path / 'installation'
     (installation / 'tables').mkdir(parents=True)
     (installation / 'tables' / 'table3').write_text('table3\nc symbol  a1  a2\nH      1  1.262  1.44\nSi    14  2.1  3.2\n')
@@ -132,6 +174,12 @@ def test_warning_stopping_table(tmp_path):
 
 
 def test_warning_large_files(tmp_path):
+    """
+    Warning large files
+
+    :param tmp_path: temporary folder of the test
+    """
+
     simulation, arguments = load(tmp_path, tri('"Ar", "Si"', '1e5', '', '     ltraj_p = .true.\n     ltraj_r = .true.\n     numb_hist = 1000'))
     warnings = simulation.checkWarnings(arguments, Versions.V_707)
     assert any('trajec_' in warning for warning in warnings), warnings
@@ -139,6 +187,12 @@ def test_warning_large_files(tmp_path):
 
 def test_additional_settings_of_version(tmp_path):
     # the namelist of the source code: beta0 since 7.00, tbsp_binary since 7.07
+    """
+    Additional settings of version
+
+    :param tmp_path: temporary folder of the test
+    """
+
     names_601 = namelistParameters(SDTRIMSP / 'SDTrimSP_6.01')
     names_707 = namelistParameters(FOLDER)
     if names_601 is not None:
@@ -156,6 +210,15 @@ def test_additional_settings_of_version(tmp_path):
 
 
 def test_unknown_settings_are_marked(main_window, qapp, tmp_path, errors):
+    """
+    Unknown settings are marked
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
+
     sc, page = addSimulationPage(main_window, 'marks', 0, FOLDER, SimulationInput.findBinary(FOLDER) or FOLDER / 'SDTrimSP.exe', Versions.V_707, tmp_path)
     pump(qapp)
     page.additional_settings.setPlainText('k_start = 0\nunknown = 1')
@@ -169,6 +232,8 @@ def test_unknown_settings_are_marked(main_window, qapp, tmp_path, errors):
 
 
 def test_layer_miller_index():
+    """Layer miller index"""
+
     assert layerMillerError([1, 0, 0]) is None
     assert layerMillerError([2, 1, 1]) is None
     assert layerMillerError([0, 0, 1]) is not None
@@ -179,6 +244,13 @@ def test_layer_miller_index():
 
 
 def configuration(folder, version: str) -> dict:
+    """
+    Returns a configuration of an SDTrimSP installation
+
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    """
+
     binary = SimulationInput.findBinary(folder)
     return {'title': 'test', 'program': 'SDTrimSP', 'folder': str(folder), 'binary': str(binary), 'version': version,
             'base_save_folder': '', 'save_folder': ''}
@@ -186,6 +258,8 @@ def configuration(folder, version: str) -> dict:
 
 def test_version_groups_of_configurations():
     # old version group "6.01, 6.06" is replaced by the version found in the folder
+    """Version groups of configurations"""
+
     folder = SDTRIMSP / 'SDTrimSP_6.06'
     if SimulationInput.findBinary(folder) is not None:
         sc = SimulationConfiguration.load(configuration(folder, '6.01, 6.06'))
@@ -209,14 +283,20 @@ class StubProgress:
         self.elapsed_timer_final = 0
 
     def value(self):
+        """Returns the progress"""
+
         return self.progress
 
     @property
     def elapsed_timer(self):
+        """Returns a stand-in of the elapsed timer"""
+
         stub = self
 
         class Timer:
             def elapsed(self):
+                """Returns the elapsed time in ms"""
+
                 return 1000 * max(stub.progress, 1)
         return Timer()
 
@@ -232,12 +312,28 @@ class StubPage:
         self.started = started
 
     def runWarnings(self):
+        """Returns the warnings of the stand-in simulation"""
+
         return ['energy too high'] if self.simulation_configuration.title == 'b' else []
 
     def setRunStatus(self, status):
+        """
+        Sets the run status
+
+        :param status: run status
+        """
+
         self.run_status = status
 
     def runSimulation(self, detached=False, check_warnings=True, ask_delete=True):
+        """
+        Starts the stand-in simulation
+
+        :param detached: (optional) run detached
+        :param check_warnings: (optional) show warnings
+        :param ask_delete: (optional) ask before files are deleted
+        """
+
         assert not check_warnings and not ask_delete
         self.started.append(self.simulation_configuration.title)
         self.simulation_configuration.running = True
@@ -245,6 +341,14 @@ class StubPage:
 
 
 def test_run_all_queue(main_window, qapp, monkeypatch):
+    """
+    Run all queue
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param monkeypatch: pytest monkeypatch
+    """
+
     from Utility.GlobalConf import GlobalConf
     from Pages.ProgramPage import SimulationPage
     monkeypatch.setattr(GlobalConf, 'max_parallel_runs', 2)

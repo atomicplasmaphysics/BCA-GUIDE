@@ -1,16 +1,20 @@
-"""Tests of dialogs, the configuration page, themes and the crystal editor (with stubbed file dialogs)"""
+# Tests of dialogs, the configuration page, themes and the crystal editor (with stubbed file dialogs)
 
 import shutil
+
 
 import pytest
 
 from PyQt6.QtWidgets import QFileDialog, QGraphicsDropShadowEffect
 
+
 from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
 from Utility.Functions import findExecutables
 from Utility.GlobalConf import GlobalConf
+
 from Containers.SimulationConfiguration import SimulationConfiguration
+
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, Versions
 from Simulations.SimulationsList import SimulationsList
 
@@ -21,7 +25,11 @@ SDTRIMSP = SIMULATION_PROGRAMS / 'SDTrimSP'
 
 @pytest.fixture
 def dialogs(monkeypatch):
-    """Stubbed file dialogs: set answers['dir'] and answers['file'] to the paths that are returned"""
+    """
+    Stubbed file dialogs: set answers['dir'] and answers['file'] to the paths that are returned
+
+    :param monkeypatch: pytest monkeypatch
+    """
 
     answers = {'dir': '', 'file': ''}
     monkeypatch.setattr(QFileDialog, 'getExistingDirectory', staticmethod(lambda *args, **kwargs: answers['dir']))
@@ -31,11 +39,27 @@ def dialogs(monkeypatch):
 
 
 def highlighted(widget) -> bool:
+    """
+    Returns if a widget is highlighted
+
+    :param widget: widget to check
+    """
+
     return isinstance(widget.graphicsEffect(), QGraphicsDropShadowEffect)
 
 
 @pytest.mark.skipif(not TRIDYN.is_dir(), reason='TRIDYN not available')
 def test_program_page_dialogs(main_window, qapp, tmp_path, dialogs, errors):
+    """
+    Program page dialogs
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param dialogs: list of shown dialogs
+    :param errors: list of logged errors
+    """
+
     source = copySave(TEST_SAVES / 'TRIDYN' / 'Ar_on_W', tmp_path / 'src')
     (tmp_path / 'target').mkdir()
     sc, page = addSimulationPage(main_window, 't', 1, TRIDYN, TRIDYN / 'tridyn2022w.exe', '2022')
@@ -59,6 +83,15 @@ def test_program_page_dialogs(main_window, qapp, tmp_path, dialogs, errors):
 
 
 def test_configuration_dialogs(main_window, tmp_path, dialogs, errors):
+    """
+    Configuration dialogs
+
+    :param main_window: main window of the GUI
+    :param tmp_path: temporary folder of the test
+    :param dialogs: list of shown dialogs
+    :param errors: list of logged errors
+    """
+
     page = main_window.simulation_configuration_page
 
     dialogs['file'] = str(tmp_path / 'config.json')
@@ -78,6 +111,15 @@ def test_configuration_dialogs(main_window, tmp_path, dialogs, errors):
 
 @pytest.mark.skipif(not (SDTRIMSP / 'SDTrimSP_7.07').is_dir(), reason='SDTrimSP 7.07 not available')
 def test_binary_detection_and_version_highlight(main_window, qapp, dialogs, errors):
+    """
+    Binary detection and version highlight
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param dialogs: list of shown dialogs
+    :param errors: list of logged errors
+    """
+
     page = main_window.simulation_configuration_page
     pump(qapp)
     page.program.setCurrentIndex(0)
@@ -107,6 +149,14 @@ def test_binary_detection_and_version_highlight(main_window, qapp, dialogs, erro
 
 
 def test_reorder_configurations(main_window, qapp, errors):
+    """
+    Reorder configurations
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param errors: list of logged errors
+    """
+
     if not (SDTRIMSP / 'SDTrimSP_7.00').is_dir():
         pytest.skip('SDTrimSP 7.00 not available')
     folder = SDTRIMSP / 'SDTrimSP_7.00'
@@ -131,7 +181,11 @@ def test_reorder_configurations(main_window, qapp, errors):
 
 
 def test_stay_open_menu(qapp):
-    """A checkable entry of the menu is toggled without closing the menu, other entries close it"""
+    """
+    A checkable entry of the menu is toggled without closing the menu, other entries close it
+
+    :param qapp: QApplication of the tests
+    """
 
     from PyQt6.QtCore import QPoint, Qt
     from PyQt6.QtTest import QTest
@@ -162,6 +216,12 @@ def test_stay_open_menu(qapp):
 
 
 def test_base_save_folder_follows_preferences(tmp_path):
+    """
+    Base save folder follows preferences
+
+    :param tmp_path: temporary folder of the test
+    """
+
     folder = SDTRIMSP / 'SDTrimSP_7.00'
     if not folder.is_dir():
         pytest.skip('SDTrimSP 7.00 not available')
@@ -182,7 +242,12 @@ def test_base_save_folder_follows_preferences(tmp_path):
 
 
 def test_theme_switch(main_window, qapp):
-    """Switching the theme while running updates widgets with palette dependent colors"""
+    """
+    Switching the theme while running updates widgets with palette dependent colors
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    """
 
     from matplotlib.colors import to_hex
     from Utility.Layouts import MplCanvas
@@ -194,11 +259,15 @@ def test_theme_switch(main_window, qapp):
     canvas.axes.set_xlabel('x')
 
     def updated() -> bool:
+        """Returns if the canvas has the colors of the palette"""
+
         palette = qapp.palette()
         return to_hex(canvas.fig.get_facecolor()) == palette.color(QPalette.ColorRole.Window).name()             and canvas.axes.xaxis.label.get_color() == palette.color(QPalette.ColorRole.WindowText).name()
 
     def check():
         # the canvases update after the palette change event (slower with many canvases of earlier tests in the process)
+        """Checks the colors of the canvas"""
+
         pump(qapp, 10, until=updated)
         palette = qapp.palette()
         assert to_hex(canvas.fig.get_facecolor()) == palette.color(QPalette.ColorRole.Window).name()
@@ -230,6 +299,15 @@ def test_theme_switch(main_window, qapp):
 @pytest.mark.skipif(not (SDTRIMSP / 'SDTrimSP_7.05').is_dir(), reason='SDTrimSP 7.05 not available')
 def test_crystal_editor_table_mode(main_window, qapp, tmp_path, errors):
     # copy of the simulation folder with its own table.crystal
+    """
+    Crystal editor table mode
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
+
     folder = tmp_path / 'SDTrimSP_7.05'
     shutil.copytree(SDTRIMSP / 'SDTrimSP_7.05' / 'tables', folder / 'tables')
     binary = SDTrimSPInput.findBinary(SDTRIMSP / 'SDTrimSP_7.05') or folder / 'SDTrimSP.exe'
@@ -272,7 +350,13 @@ LAYERED_EXAMPLE = SDTRIMSP / 'SDTrimSP_7.05' / 'case' / 'Ar_2_Cu_W_layer_crystal
 
 
 def loadLayeredCrystalExample(main_window, qapp, tmp_path):
-    """Loads the example with two crystals in layers (Cu_fcc and W_bcc) from tri.inp and layer.inp"""
+    """
+    Loads the example with two crystals in layers (Cu_fcc and W_bcc) from tri.inp and layer.inp
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    """
 
     folder = SDTRIMSP / 'SDTrimSP_7.05'
     binary = SDTrimSPInput.findBinary(folder) or folder / 'SDTrimSP.exe'
@@ -290,7 +374,14 @@ def loadLayeredCrystalExample(main_window, qapp, tmp_path):
 
 @pytest.mark.skipif(not LAYERED_EXAMPLE.is_dir(), reason='layered crystal example not available')
 def test_polycrystal_without_layer_file(main_window, qapp, tmp_path, errors):
-    """(0 0 0) is a polycrystal: it is only marked if layer.inp is written (several layers, crystals or a partly crystalline layer)"""
+    """
+    (0 0 0) is a polycrystal: it is only marked if layer.inp is written (several layers, crystals or a partly crystalline layer)
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
 
     sc, page = loadLayeredCrystalExample(main_window, qapp, tmp_path)
     layers = page.target_layers
@@ -311,7 +402,13 @@ def test_polycrystal_without_layer_file(main_window, qapp, tmp_path, errors):
 
 
 def test_documentation_of_other_version(tmp_path, qapp, monkeypatch):
-    """SDTrimSP versions without pdf use the documentation of another installed version, a failed download is shown"""
+    """
+    SDTrimSP versions without pdf use the documentation of another installed version, a failed download is shown
+
+    :param tmp_path: temporary folder of the test
+    :param qapp: QApplication of the tests
+    :param monkeypatch: pytest monkeypatch
+    """
 
     from Utility.Dialogs import DownloadDialog
     import Utility.Dialogs
@@ -327,6 +424,8 @@ def test_documentation_of_other_version(tmp_path, qapp, monkeypatch):
 
     # the server refuses the download: the dialog shows the error instead of crashing
     def refuse(*args, **kwargs):
+        """Refuses the download"""
+
         raise OSError('HTTP Error 403: Forbidden')
 
     monkeypatch.setattr(Utility.Dialogs, 'urlretrieve', refuse)
@@ -337,6 +436,15 @@ def test_documentation_of_other_version(tmp_path, qapp, monkeypatch):
 
 @pytest.mark.skipif(not LAYERED_EXAMPLE.is_dir(), reason='layered crystal example not available')
 def test_layered_crystals(main_window, qapp, tmp_path, errors):
+    """
+    Layered crystals
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
+
     sc, page = loadLayeredCrystalExample(main_window, qapp, tmp_path)
     dialog = page.crystal_editor_dialog
     layers = page.target_layers
@@ -406,7 +514,15 @@ DISTRIBUTION_EXAMPLE = SDTRIMSP / 'SDTrimSP_7.07' / 'case' / 'He_Ar_Si_distribut
 
 @pytest.mark.skipif(not DISTRIBUTION_EXAMPLE.is_dir(), reason='distribution example of SDTrimSP 7.07 not available')
 def test_distribution_files(main_window, qapp, tmp_path, monkeypatch, errors):
-    """The distributions of the example are loaded, edited in the dialog and written again when saving"""
+    """
+    The distributions of the example are loaded, edited in the dialog and written again when saving
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    """
 
     from Containers.Arguments import ArgumentValues
     import TableWidgets.DistributionEditor as DistributionEditor
@@ -427,6 +543,12 @@ def test_distribution_files(main_window, qapp, tmp_path, monkeypatch, errors):
 
     # the dialog changes the distribution of He
     def accept(dialog):
+        """
+        Sets the distribution and accepts the dialog
+
+        :param dialog: dialog to accept
+        """
+
         dialog.energy_tables['He'].setRows([[100., 1.], [300., 2.]])
         dialog.accept()
         return 1
@@ -460,7 +582,15 @@ def test_distribution_files(main_window, qapp, tmp_path, monkeypatch, errors):
 
 
 def test_search_simulations(main_window, qapp, tmp_path, dialogs, errors):
-    """The search adds all installations below the selected folder once, with versions and binaries"""
+    """
+    The search adds all installations below the selected folder once, with versions and binaries
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param dialogs: list of shown dialogs
+    :param errors: list of logged errors
+    """
 
     if not any(SDTRIMSP.glob('SDTrimSP_*')):
         pytest.skip('no SDTrimSP installation available')
@@ -495,7 +625,13 @@ def test_search_simulations(main_window, qapp, tmp_path, dialogs, errors):
 
 @pytest.mark.skipif(not (SDTRIMSP / 'SDTrimSP_7.07').is_dir(), reason='SDTrimSP 7.07 not available')
 def test_composition_table_columns(main_window, qapp, errors):
-    """Delete button, index and element stay visible when the composition tables are scrolled horizontally"""
+    """
+    Delete button, index and element stay visible when the composition tables are scrolled horizontally
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param errors: list of logged errors
+    """
 
     folder = SDTRIMSP / 'SDTrimSP_7.07'
     sc, page = addSimulationPage(main_window, 'cols', 0, folder, SDTrimSPInput.findBinary(folder), Versions.V_707)
@@ -540,7 +676,11 @@ def test_composition_table_columns(main_window, qapp, errors):
 
 
 def test_crystal_preview_not_clipped(qapp):
-    """Lines and atoms of the crystal preview are not clipped to the square 3D axes (only the texts were visible outside)"""
+    """
+    Lines and atoms of the crystal preview are not clipped to the square 3D axes (only the texts were visible outside)
+
+    :param qapp: QApplication of the tests
+    """
 
     from Utility.Layouts import CrystalPreview
     preview = CrystalPreview(None, show_beam=True, show_basis_vecs=True, show_surface=True, disable_interaction=False)

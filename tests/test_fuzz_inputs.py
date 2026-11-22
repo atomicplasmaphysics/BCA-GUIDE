@@ -1,14 +1,12 @@
-"""
-Robustness of the GUI against broken, extreme and unknown input: hand-written cases (many and unknown elements, unknown
-parameters, Fortran syntax, invalid numbers and types, binary garbage, other encodings) and random mutations of the
-examples for tri.inp, layer.inp and crystal.inp of SDTrimSP, the input file of TRIDYN, input.json and scan.json, and
-damaged output files. The GUI may refuse a file (with a message), but it never raises an exception: the files are
-loaded, previewed, checked, saved, loaded again and scanned, the outputs are listed and plotted.
-
-Without installations the simulation programs are replaced by stand-in folders (the GUI then uses its default element
-data). BCA_TEST_FUZZ sets the number of random mutations per file (default 5: every test keeps about 20 MB of memory,
-see TODO.md, run more mutations in several runs), BCA_TEST_FUZZ_SEED the random seed.
-"""
+# Robustness of the GUI against broken, extreme and unknown input: hand-written cases (many and unknown elements, unknown
+# parameters, Fortran syntax, invalid numbers and types, binary garbage, other encodings) and random mutations of the
+# examples for tri.inp, layer.inp and crystal.inp of SDTrimSP, the input file of TRIDYN, input.json and scan.json, and
+# damaged output files. The GUI may refuse a file (with a message), but it never raises an exception: the files are
+# loaded, previewed, checked, saved, loaded again and scanned, the outputs are listed and plotted.
+#
+# Without installations the simulation programs are replaced by stand-in folders (the GUI then uses its default element
+# data). BCA_TEST_FUZZ sets the number of random mutations per file (default 5: every test keeps about 20 MB of memory,
+# see TODO.md, run more mutations in several runs), BCA_TEST_FUZZ_SEED the random seed.
 
 import json
 import os
@@ -17,7 +15,9 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+
 import pytest
+
 
 from conftest import SAVES, SIMULATION_PROGRAMS, TEST_SAVES, addSimulationPage, pump
 
@@ -46,11 +46,29 @@ GARBAGE = ['abc', '-1', '0', '-0', '1e308', '-1e308', '1e-320', 'NaN', 'nan', 'i
 
 
 def program(name: str, version: Optional[str] = None) -> Tuple[str, int, Optional[Path], str]:
+    """
+    Returns the program as (name, index, folder, version)
+
+    :param name: name of the file or case
+    :param version: version of simulation
+    """
+
     return next(p for p in PROGRAMS if p[0] == name and (version is None or p[3] == version))
 
 
 def openPage(main_window, qapp, tmp_path: Path, name: str, index: int, folder: Optional[Path], version: str, save: Path):
-    """Simulation tab of the program for the save folder (a stand-in program folder without installation)"""
+    """
+    Simulation tab of the program for the save folder (a stand-in program folder without installation)
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param name: name of the file or case
+    :param index: index of the mutation or case
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    :param save: folder of the example save
+    """
 
     if folder is None:
         folder = tmp_path / f'stand-in {name}'
@@ -69,6 +87,10 @@ def exercise(qapp, page, save: Path):
     """
     Loads the save folder (input files and input.json), and if the GUI accepts it: preview, checks, run warnings,
     saving, loading again and the parameter scan. Returns if the input was accepted
+
+    :param qapp: QApplication of the tests
+    :param page: page of the simulation
+    :param save: folder of the example save
     """
 
     from Utility.GlobalConf import GlobalConf
@@ -115,6 +137,13 @@ def exercise(qapp, page, save: Path):
 
 
 def tri(body: str, title: str = 'fuzz') -> str:
+    """
+    Returns the content of tri.inp with a title and the parameters
+
+    :param body: parameters of the input file
+    :param title: title of the input file
+    """
+
     return f'{title}\n&TRI_INP\n{body}\n/\n'
 
 
@@ -134,6 +163,13 @@ MANY = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 
 
 
 def many(count: int, symbols: Optional[List[str]] = None) -> str:
+    """
+    Returns tri.inp with many elements
+
+    :param count: number of elements
+    :param symbols: symbols of the elements
+    """
+
     symbols = symbols or [MANY[i % len(MANY)] for i in range(count)]
     qubeam = ['1.0'] + ['0.0'] * (count - 1)
     qu = ['0.0'] + [f'{1 / max(count - 1, 1):.4f}'] * (count - 1)
@@ -248,6 +284,13 @@ JSON_CASES: Dict[str, str] = {
 
 
 def writeFiles(folder: Path, files: Dict[str, Any]):
+    """
+    Writes files into a folder
+
+    :param folder: folder of the installation of the simulation
+    :param files: files as {name: content}
+    """
+
     folder.mkdir(parents=True, exist_ok=True)
     for name, content in files.items():
         if isinstance(content, bytes):
@@ -259,6 +302,17 @@ def writeFiles(folder: Path, files: Dict[str, Any]):
 @pytest.mark.parametrize('case', list(SDTRIMSP_CASES), ids=list(SDTRIMSP_CASES))
 @pytest.mark.parametrize('version', [p[3] for p in PROGRAMS if p[0] == 'SDTrimSP'])
 def test_sdtrimsp_cases(main_window, qapp, tmp_path, errors, case, version):
+    """
+    Sdtrimsp cases
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param case: damaged content of tri.inp
+    :param version: version of simulation
+    """
+
     save = tmp_path / 'save'
     writeFiles(save, SDTRIMSP_CASES[case])
     _, index, folder, version = program('SDTrimSP', version)
@@ -269,6 +323,16 @@ def test_sdtrimsp_cases(main_window, qapp, tmp_path, errors, case, version):
 
 @pytest.mark.parametrize('case', list(TRIDYN_CASES), ids=list(TRIDYN_CASES))
 def test_tridyn_cases(main_window, qapp, tmp_path, errors, case):
+    """
+    Tridyn cases
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param case: damaged content of the input file
+    """
+
     save = tmp_path / 'save'
     content = TRIDYN_CASES[case]
     writeFiles(save, {'fuzz.in': content})
@@ -281,6 +345,17 @@ def test_tridyn_cases(main_window, qapp, tmp_path, errors, case):
 @pytest.mark.parametrize('case', list(JSON_CASES), ids=list(JSON_CASES))
 @pytest.mark.parametrize('name', ['SDTrimSP', 'TRIDYN'])
 def test_json_cases(main_window, qapp, tmp_path, errors, case, name):
+    """
+    Json cases
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param case: damaged content of input.json
+    :param name: name of the file or case
+    """
+
     save = tmp_path / 'save'
     writeFiles(save, {'input.json': JSON_CASES[case]})
     _, index, folder, version = program(name)
@@ -293,7 +368,12 @@ def test_json_cases(main_window, qapp, tmp_path, errors, case, name):
 
 
 def mutateText(text: str, rng: random.Random) -> str:
-    """A few random changes of the lines and values of an input file"""
+    """
+    A few random changes of the lines and values of an input file
+
+    :param text: text of the input file
+    :param rng: random number generator
+    """
 
     lines = text.splitlines()
     for _ in range(rng.randint(1, 4)):
@@ -324,14 +404,32 @@ def mutateText(text: str, rng: random.Random) -> str:
 
 
 def garbageValue(rng: random.Random) -> Any:
+    """
+    Returns a random value of a wrong type or out of range
+
+    :param rng: random number generator
+    """
+
     return rng.choice([None, True, False, 0, -1, 1e308, -1e308, float('nan'), '', 'abc', 'Xx', [], {}, [1, 'a', None],
                        {'symbol': 'Xx'}, 10 ** 30, -0.0, 'NaN', '1e5', 999999999])
 
 
 def mutateJson(data: Any, rng: random.Random) -> Any:
-    """Changes, removes or adds a random value of the JSON data"""
+    """
+    Changes, removes or adds a random value of the JSON data
+
+    :param data: content of input.json
+    :param rng: random number generator
+    """
 
     def containers(value, path=()):
+        """
+        Returns all dictionaries and lists of the JSON data with their paths
+
+        :param value: value to search in
+        :param path: path of the value
+        """
+
         if isinstance(value, (dict, list)):
             yield path, value
             items = value.items() if isinstance(value, dict) else enumerate(value)
@@ -365,11 +463,25 @@ def mutateJson(data: Any, rng: random.Random) -> Any:
 
 
 def exampleSaves(name: str, with_file: str) -> List[Path]:
+    """
+    Returns the example saves of a program that contain a file
+
+    :param name: name of the file or case
+    :param with_file: name of a file the save must contain
+    """
+
     saves = sorted((SAVES / name).glob('example_*')) + sorted((TEST_SAVES / name).glob('*'))
     return [save for save in saves if save.is_dir() and any(save.glob(with_file))]
 
 
 def mutationCases(name: str, pattern: str) -> list:
+    """
+    Returns the cases of the mutation tests (save and seed)
+
+    :param name: name of the file or case
+    :param pattern: pattern of the file names
+    """
+
     rng = random.Random(f'{SEED}-{name}-{pattern}')
     saves = exampleSaves(name, pattern)
     if not saves:
@@ -378,6 +490,14 @@ def mutationCases(name: str, pattern: str) -> list:
 
 
 def copyInputs(source: Path, save: Path, input_files: Callable[[Path], bool]):
+    """
+    Copies the input files of a save
+
+    :param source: source file or folder
+    :param save: folder of the example save
+    :param input_files: names of the input files
+    """
+
     save.mkdir(parents=True)
     for path in source.iterdir():
         if path.is_file() and input_files(path):
@@ -385,11 +505,28 @@ def copyInputs(source: Path, save: Path, input_files: Callable[[Path], bool]):
 
 
 def isInput(path: Path) -> bool:
+    """
+    Returns if a file is an input file
+
+    :param path: path of the file
+    """
+
     return path.suffix in ('.inp', '.in', '.json') or path.name.endswith('.json')
 
 
 @pytest.mark.parametrize('source, seed', mutationCases('SDTrimSP', 'tri.inp'))
 def test_sdtrimsp_mutations(main_window, qapp, tmp_path, errors, source, seed):
+    """
+    Sdtrimsp mutations
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param source: source file or folder
+    :param seed: seed of the random numbers
+    """
+
     rng = random.Random(seed)
     save = tmp_path / 'save'
     copyInputs(source, save, lambda path: path.suffix == '.inp')
@@ -404,6 +541,17 @@ def test_sdtrimsp_mutations(main_window, qapp, tmp_path, errors, source, seed):
 
 @pytest.mark.parametrize('source, seed', mutationCases('TRIDYN', '*.in'))
 def test_tridyn_mutations(main_window, qapp, tmp_path, errors, source, seed):
+    """
+    Tridyn mutations
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param source: source file or folder
+    :param seed: seed of the random numbers
+    """
+
     rng = random.Random(seed)
     save = tmp_path / 'save'
     copyInputs(source, save, lambda path: path.suffix == '.in')
@@ -418,6 +566,17 @@ def test_tridyn_mutations(main_window, qapp, tmp_path, errors, source, seed):
 @pytest.mark.parametrize('name', ['SDTrimSP', 'TRIDYN'])
 @pytest.mark.parametrize('index', range(MUTATIONS))
 def test_json_mutations(main_window, qapp, tmp_path, errors, name, index):
+    """
+    Json mutations
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param name: name of the file or case
+    :param index: index of the mutation or case
+    """
+
     saves = exampleSaves(name, 'input.json')
     if not saves:
         pytest.skip('no example')
@@ -439,7 +598,13 @@ def test_json_mutations(main_window, qapp, tmp_path, errors, name, index):
 
 
 def scanDescription(main_window, qapp, tmp_path: Path) -> Tuple[Path, dict]:
-    """Writes scan.json of a scan of example 1 (two parameters, a combo box and another version) with the GUI"""
+    """
+    Writes scan.json of a scan of example 1 (two parameters, a combo box and another version) with the GUI
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    """
 
     source = SAVES / 'SDTrimSP' / 'example_01_Ar_on_Au'
     save = tmp_path / 'scan base'
@@ -475,7 +640,15 @@ SCAN_CASES: Dict[str, Any] = {
 
 @pytest.mark.parametrize('case', list(SCAN_CASES) + [f'mutation {i}' for i in range(MUTATIONS)])
 def test_scan_json(main_window, qapp, tmp_path, errors, case):
-    """scan.json of a folder is read when the folder is loaded, also a broken or manipulated one"""
+    """
+    scan.json of a folder is read when the folder is loaded, also a broken or manipulated one
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param case: damaged content of scan.json
+    """
 
     base, description = scanDescription(main_window, qapp, tmp_path)
     save = tmp_path / 'save'
@@ -496,6 +669,8 @@ def test_scan_json(main_window, qapp, tmp_path, errors, case):
 
 
 def outputCases() -> list:
+    """Returns the cases of the tests with damaged outputs"""
+
     rng = random.Random(f'{SEED}-outputs')
     cases = []
     for name in ('SDTrimSP', 'TRIDYN'):
@@ -506,6 +681,13 @@ def outputCases() -> list:
 
 
 def damage(path: Path, rng: random.Random):
+    """
+    Damages a file randomly
+
+    :param path: path of the file
+    :param rng: random number generator
+    """
+
     data = path.read_bytes()
     operation = rng.randrange(5)
     if operation == 0:
@@ -525,7 +707,17 @@ def damage(path: Path, rng: random.Random):
 
 @pytest.mark.parametrize('name, source, seed', outputCases())
 def test_damaged_outputs(main_window, qapp, tmp_path, errors, name, source, seed):
-    """Output files that are damaged (e.g. a run that was killed): the lists and all plots never raise exceptions"""
+    """
+    Output files that are damaged (e.g. a run that was killed): the lists and all plots never raise exceptions
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param name: name of the file or case
+    :param source: example with outputs
+    :param seed: seed of the random numbers
+    """
 
     from test_plots import showAllPlots
 
@@ -555,6 +747,8 @@ TABLES = ['table1', 'table2', 'table3', 'table4', 'table.compound', 'table.compo
 
 
 def installationCases() -> list:
+    """Returns the cases of the tests with damaged installations"""
+
     cases = [pytest.param(None, 'garbage tables', i, id=f'stand-in-{i}') for i in range(max(MUTATIONS // 5, 2))]
     if (SDTRIMSP_707 / 'tables').is_dir():
         cases += [pytest.param(SDTRIMSP_707, table, i, id=f'7.07-{table}-{i}') for table in TABLES + ['param.F90']
@@ -564,7 +758,17 @@ def installationCases() -> list:
 
 @pytest.mark.parametrize('installation, table, index', installationCases())
 def test_damaged_installation(main_window, qapp, tmp_path, errors, installation, table, index):
-    """Damaged tables (or src/param.F90) of a SDTrimSP installation: a simulation can still be opened and edited"""
+    """
+    Damaged tables (or src/param.F90) of a SDTrimSP installation: a simulation can still be opened and edited
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param installation: kind of installation
+    :param table: damaged table
+    :param index: index of the mutation or case
+    """
 
     rng = random.Random(f'{SEED}-installation-{table}-{index}')
     folder = tmp_path / 'SDTrimSP_7.07'
@@ -593,7 +797,11 @@ def test_damaged_installation(main_window, qapp, tmp_path, errors, installation,
 
 
 def configuration(tmp_path: Path) -> list:
-    """Configurations of a SDTrimSP and a TRIDYN tab (as saved in autosave.json), with stand-in program folders"""
+    """
+    Configurations of a SDTrimSP and a TRIDYN tab (as saved in autosave.json), with stand-in program folders
+
+    :param tmp_path: temporary folder of the test
+    """
 
     result = []
     for name, binary_name, version, example in (('SDTrimSP', 'SDTrimSP.exe', Versions.V_707, 'example_01_Ar_on_Au'),
@@ -611,7 +819,14 @@ def configuration(tmp_path: Path) -> list:
 
 @pytest.mark.parametrize('index', range(MUTATIONS))
 def test_damaged_configuration(qapp, tmp_path, errors, index):
-    """A damaged autosave.json of the configurations: the GUI starts (the configurations that can not be read are skipped)"""
+    """
+    A damaged autosave.json of the configurations: the GUI starts (the configurations that can not be read are skipped)
+
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param index: index of the mutation or case
+    """
 
     import Pages.MainWindow
     from Utility.GlobalConf import GlobalConf
@@ -635,7 +850,12 @@ def test_damaged_configuration(qapp, tmp_path, errors, index):
 
 @pytest.mark.parametrize('index', range(MUTATIONS))
 def test_damaged_import_files(tmp_path, index):
-    """Damaged crystal files (CIF, POSCAR) only raise CrystalImportError (shown by the GUI), distribution files nothing"""
+    """
+    Damaged crystal files (CIF, POSCAR) only raise CrystalImportError (shown by the GUI), distribution files nothing
+
+    :param tmp_path: temporary folder of the test
+    :param index: index of the mutation or case
+    """
 
     from Utility.CrystalImport import CrystalImportError, importCrystal
     from TableWidgets.DistributionEditor import readDistributionFile, readEnergyAngleFile
@@ -661,7 +881,11 @@ def test_damaged_import_files(tmp_path, index):
 
 
 def test_cif_loop_without_headers(tmp_path):
-    """A loop_ without headers made the CIF import run forever and fill the memory (in a separate process with timeout)"""
+    """
+    A loop_ without headers made the CIF import run forever and fill the memory (in a separate process with timeout)
+
+    :param tmp_path: temporary folder of the test
+    """
 
     import subprocess
     import sys

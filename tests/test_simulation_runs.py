@@ -1,20 +1,18 @@
-"""
-Runs simulations with every simulation program found in "Simulation Programs" and checks that all outputs can be shown
-and plotted in the GUI. The runs cover many input modes and parameters (energies from 10 eV to 1 GeV, angles, sweeps,
-distributions, potentials, integration methods, surface binding models, dynamic mode, output options, crystals, ...).
-
-Only executed with:  python -m pytest --simulations
-The simulations run in parallel (pytest-xdist, see pytest.ini), e.g. with 20 processes:  python -m pytest --simulations -n 20
-
-With --simulation-data DIR the simulation folders are kept in DIR, test_simulation_data.py checks them later in the GUI
-without running the simulations again.
-
-Environment variables for longer runs:
-  BCA_TEST_PROJECTILES  number of projectiles (default 1000)
-  BCA_TEST_SEED         random seed of SDTrimSP (irand) if the variant does not set it
-  BCA_TEST_TIMEOUT      timeout per simulation in seconds (default 900)
-  BCA_TEST_ALL_VARIANTS 1: all variants for all versions (default: all variants only for the newest version)
-"""
+# Runs simulations with every simulation program found in "Simulation Programs" and checks that all outputs can be shown
+# and plotted in the GUI. The runs cover many input modes and parameters (energies from 10 eV to 1 GeV, angles, sweeps,
+# distributions, potentials, integration methods, surface binding models, dynamic mode, output options, crystals, ...).
+#
+# Only executed with:  python -m pytest --simulations
+# The simulations run in parallel (pytest-xdist, see pytest.ini), e.g. with 20 processes:  python -m pytest --simulations -n 20
+#
+# With --simulation-data DIR the simulation folders are kept in DIR, test_simulation_data.py checks them later in the GUI
+# without running the simulations again.
+#
+# Environment variables for longer runs:
+#   BCA_TEST_PROJECTILES  number of projectiles (default 1000)
+#   BCA_TEST_SEED         random seed of SDTrimSP (irand) if the variant does not set it
+#   BCA_TEST_TIMEOUT      timeout per simulation in seconds (default 900)
+#   BCA_TEST_ALL_VARIANTS 1: all variants for all versions (default: all variants only for the newest version)
 
 import copy
 import json
@@ -25,14 +23,18 @@ from pathlib import Path
 from re import findall
 from typing import Optional
 
+
 import pytest
 
 from PyQt6.QtCore import QProcess
 
+
 from conftest import SAVES, TEST_SAVES, SIMULATION_PROGRAMS, addSimulationPage, pump
 
 from Containers.CrystalTableFile import CrystalTableFile, TableCrystal
+
 from Pages.ProgramPage import SimulationPage
+
 from Simulations.SDTrimSP import SimulationInput as SDTrimSPInput, DefaultValues, CrystalTableLimits, maxElements
 from Simulations.TRIDYN2022 import SimulationInput as TridynInput
 
@@ -163,7 +165,13 @@ if sys.platform.startswith('linux'):
 
 
 def knownProblem(folder_name: str, base: str, variant: str) -> Optional[str]:
-    """Returns the reason if a combination is known to fail because of the simulation program"""
+    """
+    Returns the reason if a combination is known to fail because of the simulation program
+
+    :param folder_name: name of the installation folder
+    :param base: name of the base input
+    :param variant: variant of the input file
+    """
 
     for (problem_folder, problem_base, problem_variant), reason in {**KNOWN_PROBLEMS, **KNOWN_HANGS}.items():
         if problem_folder in (None, folder_name) and problem_base in (None, base) and problem_variant in (None, variant):
@@ -172,7 +180,12 @@ def knownProblem(folder_name: str, base: str, variant: str) -> Optional[str]:
 
 
 def bestVersion(version_name: str, versions: list) -> str:
-    """Returns the listed version that suits the detected version best (highest listed version below it)"""
+    """
+    Returns the listed version that suits the detected version best (highest listed version below it)
+
+    :param version_name: detected version name
+    :param versions: selectable versions
+    """
 
     detected = float(findall(r'\d+(?:\.\d+)?', version_name)[0])
     candidates = []
@@ -200,7 +213,12 @@ NEWEST = INSTALLATIONS[-1][0].name if INSTALLATIONS else None
 
 
 def supportsEnergyAngleFile(folder: Path, version: str) -> bool:
-    """Returns True if the installation implements case_e0 = 6"""
+    """
+    Returns True if the installation implements case_e0 = 6
+
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    """
 
     simulation = SDTrimSPInput()
     simulation.simulation_folder = folder
@@ -208,7 +226,11 @@ def supportsEnergyAngleFile(folder: Path, version: str) -> bool:
 
 
 def baseElements(base: str) -> int:
-    """Returns the number of elements of an example input (symbols of the beam and the target)"""
+    """
+    Returns the number of elements of an example input (symbols of the beam and the target)
+
+    :param base: name of the base input
+    """
 
     data = json.loads((BASES[base] / 'input.json').read_text(encoding='utf-8'))
     return len({row['symbol'] for row in data['beam_rows'] + data['target_rows'] if row.get('symbol')})
@@ -251,7 +273,13 @@ def crystalCases():
 
 
 def setValue(data: dict, path: str, value):
-    """Sets a value in input.json data, 'beam.' and 'target.' set the value in all beam or target rows"""
+    """
+    Sets a value in input.json data, 'beam.' and 'target.' set the value in all beam or target rows
+
+    :param data: data of the file
+    :param path: path of the file
+    :param value: value to set
+    """
 
     keys = path.split('.')
     if keys[0] in ('beam', 'target'):
@@ -266,7 +294,13 @@ def setValue(data: dict, path: str, value):
 
 
 def prepareInput(source: Path, save_folder: Path, variant: Optional[dict] = None):
-    """Copies only input.json of an example (the GUI creates all other input files), applies the variant and reduces the number of projectiles"""
+    """
+    Copies only input.json of an example (the GUI creates all other input files), applies the variant and reduces the number of projectiles
+
+    :param source: source file or folder
+    :param save_folder: folder of the simulation
+    :param variant: variant of the input file
+    """
 
     variant = dict(variant or {})
     projectiles = variant.pop('_projectiles', PROJECTILES)
@@ -292,7 +326,12 @@ def prepareInput(source: Path, save_folder: Path, variant: Optional[dict] = None
 
 @pytest.fixture
 def run_folder(request, tmp_path):
-    """Folder of the simulation run: in --simulation-data DIR (kept) or temporary"""
+    """
+    Folder of the simulation run: in --simulation-data DIR (kept) or temporary
+
+    :param request: pytest request
+    :param tmp_path: temporary folder of the test
+    """
 
     data_dir = request.config.getoption('--simulation-data')
     if not data_dir:
@@ -305,7 +344,14 @@ def run_folder(request, tmp_path):
 
 
 def writeMeta(folder: Path, program: str, simulation_folder: Path, version: str):
-    """Stores which simulation created the data (used by test_simulation_data.py)"""
+    """
+    Stores which simulation created the data (used by test_simulation_data.py)
+
+    :param folder: folder of the run
+    :param program: name of simulation program
+    :param simulation_folder: folder of the installation of the simulation
+    :param version: version of simulation
+    """
 
     (folder / 'bca_test.json').write_text(json.dumps({
         'program': program,
@@ -319,6 +365,10 @@ def runAndCheckOutputs(qapp, page, sc, errors, after_start=None):
     Runs the simulation of the page and shows all outputs
 
     :param after_start: (optional) function that is called after the simulation started (files in the folder can be written then)
+    :param qapp: QApplication of the tests
+    :param page: page of the simulation
+    :param sc: configuration of the simulation
+    :param errors: list of logged errors
     """
 
     page.runSimulation()
@@ -336,7 +386,13 @@ def runAndCheckOutputs(qapp, page, sc, errors, after_start=None):
 
 
 def checkOutputs(qapp, page, errors) -> int:
-    """Shows all output files and draws all plots, returns the number of plots"""
+    """
+    Shows all output files and draws all plots, returns the number of plots
+
+    :param qapp: QApplication of the tests
+    :param page: page of the simulation
+    :param errors: list of logged errors
+    """
 
     page.tab_widget.setCurrentIndex(3)
     page.updateOutputFilesList()
@@ -364,6 +420,21 @@ def checkOutputs(qapp, page, errors) -> int:
 @pytest.mark.simulation
 @pytest.mark.parametrize('folder, version, base, variant', sdtrimspCases())
 def test_sdtrimsp(main_window, qapp, run_folder, tmp_path, monkeypatch, errors, folder, version, base, variant):
+    """
+    Sdtrimsp
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param run_folder: temporary folder of the run
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    :param base: name of the base input
+    :param variant: variant of the input file
+    """
+
     monkeypatch.chdir(tmp_path)
     binary = SDTrimSPInput.findBinary(folder)
 
@@ -381,6 +452,20 @@ def test_sdtrimsp(main_window, qapp, run_folder, tmp_path, monkeypatch, errors, 
 @pytest.mark.simulation
 @pytest.mark.parametrize('folder, version, case', crystalCases())
 def test_sdtrimsp_crystal(main_window, qapp, run_folder, tmp_path, monkeypatch, errors, folder, version, case):
+    """
+    Sdtrimsp crystal
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param run_folder: temporary folder of the run
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    :param folder: folder of the installation of the simulation
+    :param version: version of simulation
+    :param case: name of the test case
+    """
+
     monkeypatch.chdir(tmp_path)
     binary = SDTrimSPInput.findBinary(folder)
     defaults = DefaultValues(version)
@@ -430,6 +515,17 @@ def test_sdtrimsp_crystal(main_window, qapp, run_folder, tmp_path, monkeypatch, 
 @pytest.mark.simulation
 @pytest.mark.skipif(not (SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022').is_dir(), reason='TRIDYN 2022 not available')
 def test_tridyn(main_window, qapp, run_folder, tmp_path, monkeypatch, errors):
+    """
+    Tridyn
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param run_folder: temporary folder of the run
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    """
+
     monkeypatch.chdir(tmp_path)
     folder = SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022'
     binary = TridynInput.findBinary(folder)

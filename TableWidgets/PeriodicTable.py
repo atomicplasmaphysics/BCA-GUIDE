@@ -1,17 +1,17 @@
 from typing import List, Optional, cast
 from string import ascii_lowercase
 
-from PyQt6.QtCore import pyqtSignal, Qt, QSize, QEvent
-from PyQt6.QtWidgets import (
-    QDialog, QGridLayout, QLabel, QTableWidget, QListWidget, QAbstractItemView,
-    QHBoxLayout, QVBoxLayout, QListWidgetItem
-)
+
+from PyQt6.QtCore import pyqtSignal, Qt, QSize, QEvent, QObject
+from PyQt6.QtGui import QEnterEvent, QMouseEvent, QKeyEvent
+from PyQt6.QtWidgets import QDialog, QGridLayout, QLabel, QTableWidget, QListWidget, QAbstractItemView, QHBoxLayout, QVBoxLayout, QListWidgetItem
+
 
 from Utility.GlobalConf import GlobalConf
 from Utility.Styles import Styles
+from Utility.Typing import notNone
 
 from Containers.Element import Element, Elements
-from Utility.Typing import notNone
 
 
 class HoverLabel(QLabel):
@@ -28,7 +28,7 @@ class HoverLabel(QLabel):
         super().__init__(parent)
         self.element: Optional[Element] = None
 
-    def enterEvent(self, event=None):
+    def enterEvent(self, event: Optional[QEnterEvent] = None):
         """
         Mouse over
 
@@ -37,7 +37,7 @@ class HoverLabel(QLabel):
 
         self.mouseEnter.emit(self.element)
 
-    def leaveEvent(self, event):
+    def leaveEvent(self, event: Optional[QEvent]):
         """
         Mouse out
 
@@ -105,7 +105,7 @@ class ElementWidget(HoverLabel):
 
         return f'rgba({color[0]}, {color[1]}, {color[2]}, {color[3]})'
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, event: Optional[QMouseEvent]):
         """
         Mouse click release
 
@@ -160,7 +160,7 @@ class IsotopeWidget(HoverLabel):
         self.setMaximumWidth(parent.width())
         self.setText(f'{self.element.symbol} ({format(self.element, GlobalConf.language)})')
 
-    def mouseDoubleClickEvent(self, event):
+    def mouseDoubleClickEvent(self, event: Optional[QMouseEvent]):
         """
         On double click
 
@@ -438,7 +438,7 @@ class PeriodicTableDialog(QDialog):
         if self.previous_chosen_element is not None:
             self.previous_chosen_element.borderForSelectedElement('#006699')
 
-    def keyPress(self, event):
+    def keyPress(self, event: QKeyEvent):
         """
         Detect keypress to start search of element
 
@@ -509,7 +509,11 @@ class PeriodicTableDialog(QDialog):
         self.updateAllowedElements()
 
     def isotopeWidget(self, item: QListWidgetItem) -> 'IsotopeWidget':
-        """Returns the widget of an item of the list of isotopes"""
+        """
+        Returns widget of an item of the list of isotopes
+
+        :param item: item of list of isotopes
+        """
 
         return cast(IsotopeWidget, self.isotope_list.itemWidget(item))
 
@@ -575,17 +579,17 @@ class PeriodicTableDialog(QDialog):
         for element_widget in self.disallowed_element_widgets:
             element_widget.setDisabled(True)
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, obj: Optional[QObject], event: Optional[QEvent]) -> bool:
         """
         Filters events to obtain key presses
 
-        :param obj: ?
+        :param obj: watched object
         :param event: event
         """
 
         res = super().eventFilter(obj, event)
 
-        if event.type() == QEvent.Type.KeyPress:
+        if isinstance(event, QKeyEvent) and event.type() == QEvent.Type.KeyPress:
             self.keyPress(event)
         
         return res

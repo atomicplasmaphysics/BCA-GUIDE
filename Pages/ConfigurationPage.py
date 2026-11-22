@@ -7,6 +7,7 @@ from json import dump, load
 from json.decoder import JSONDecodeError
 import logging
 
+
 from PyQt6.QtCore import Qt, QTimer, QDir
 from PyQt6.QtGui import QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
@@ -14,9 +15,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QGroupBox, QHBoxLayout, QMessageBox, QFileDialog, QSizePolicy, QAbstractItemView, QApplication
 )
 
+
 from Utility.GlobalConf import GlobalConf
 from Utility.Styles import Styles
-
 from Utility.Layouts import TabWithToolbar, VBoxTitleLayout, InputHBoxLayout, LineEdit, FilePath, ComboBox
 from Utility.Dialogs import showMessageBox, selectFileDialog
 from Utility.Functions import pathToStr, bestVersion
@@ -30,20 +31,16 @@ from Containers.SimulationConfiguration import SimulationConfiguration
 
 from Simulations.SimulationsList import SimulationsList
 
+
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
     from Pages.MainWindow import MainWindow
 
 
-# folders that are not searched for installed simulations
-SEARCH_SKIP_FOLDERS = {'__pycache__', 'node_modules', 'site-packages', '$recycle.bin', 'system volume information', 'windows', 'appdata'}
-
-
 def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dict], List[str]]:
     """
-    Searches base_folder and its subfolders for installed simulation programs.
-    A folder is an installation if a simulation program detects its version there and finds a binary for this
-    operating system. Subfolders of an installation are not searched.
+    Searches base_folder and its subfolders for installed simulation programs (a simulation program detects its version
+    there and finds a binary for this operating system). Subfolders of an installation are not searched.
 
     :param base_folder: folder to search in
     :param max_depth: (optional) maximum depth of subfolders
@@ -55,9 +52,14 @@ def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dic
     simulation_list = SimulationsList()
     found = []
     skipped = []
+    skip_folders = {'__pycache__', 'node_modules', 'site-packages', '$recycle.bin', 'system volume information', 'windows', 'appdata'}
 
     def detect(folder: Path) -> bool:
-        """Returns True if folder is (a not usable) installation"""
+        """
+        Returns if folder is a (not usable) installation
+
+        :param folder: folder to check
+        """
 
         for index, program in enumerate(simulation_list.simulation_program_list):
             version_name = program.getVersionName(folder, None)
@@ -66,9 +68,11 @@ def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dic
             versions = simulation_list.simulation_program_versions.get(program.Name) or []
             version_index, exact = bestVersion(versions, version_name)
             numbers = findall(r'\d+(?:\.\d+)?', version_name)
-            supported = version_index >= 0 and (exact or not numbers or float(numbers[0]) >= min(
-                float(version.strip()) for entry in versions for version in entry.split(',')
-            ))
+            supported = version_index >= 0
+            if supported and not exact and numbers:
+                # versions older than the oldest selectable version are not supported
+                oldest = min(float(version.strip()) for entry in versions for version in entry.split(','))
+                supported = float(numbers[0]) >= oldest
             if not supported:
                 skipped.append(f'{version_name} in "{pathToStr(folder)}": version is not supported')
                 return True
@@ -88,6 +92,13 @@ def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dic
         return False
 
     def search(folder: Path, depth: int):
+        """
+        Searches folder and its subfolders
+
+        :param folder: folder to search in
+        :param depth: depth of folder
+        """
+
         if detect(folder) or depth >= max_depth:
             return
         try:
@@ -95,7 +106,7 @@ def searchInstallations(base_folder: Path, max_depth: int = 6) -> Tuple[List[dic
         except OSError:
             return
         for subfolder in subfolders:
-            if subfolder.name.startswith('.') or subfolder.name.lower() in SEARCH_SKIP_FOLDERS:
+            if subfolder.name.startswith('.') or subfolder.name.lower() in skip_folders:
                 continue
             search(subfolder, depth + 1)
 
@@ -662,6 +673,7 @@ class ConfigurationPage(TabWithToolbar):
 
     def listConfigView(self):
         """List configuration from self.mainWindow.simConfigs dictionary"""
+
         self.simulation_configuration_list.clear()
         new_item = QListWidgetItem(self.new_configuration_text)
         new_item.setFlags(new_item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled & ~Qt.ItemFlag.ItemIsDropEnabled)
@@ -686,7 +698,8 @@ class ConfigurationPage(TabWithToolbar):
                     self.simulation_configuration_list.insertItem(0, self.simulation_configuration_list.takeItem(i))
                 break
 
-        titles = [notNone(self.simulation_configuration_list.item(i)).text() for i in range(1, self.simulation_configuration_list.count())]
+        list_widget = self.simulation_configuration_list
+        titles = [notNone(list_widget.item(i)).text() for i in range(1, list_widget.count())]
         configs_by_title = {sc.title: sc for sc in self.main_window.simulation_configs}
         if sorted(titles) != sorted(configs_by_title.keys()):
             return
@@ -1078,6 +1091,8 @@ class ConfigurationPage(TabWithToolbar):
     def selectSaveFolder(self, simulation: str = 'Simulation') -> Optional[Path]:
         """
         Opens select dialog for save folder path and returns selected path
+
+        :param simulation: (optional) name of simulation
         """
 
         # Starting directory
@@ -1218,6 +1233,7 @@ class ConfigurationPage(TabWithToolbar):
 
         configurations = []
         for i in range(self.simulation_configuration_list.count()):
-            if notNone(self.simulation_configuration_list.item(i)).checkState() == Qt.CheckState.Checked and (i - 1) in range(len(self.main_window.simulation_configs)):
+            checked = notNone(self.simulation_configuration_list.item(i)).checkState() == Qt.CheckState.Checked
+            if checked and (i - 1) in range(len(self.main_window.simulation_configs)):
                 configurations.append(self.main_window.simulation_configs[i - 1])
         self.main_window.runSimulations(configurations, detached=detached)

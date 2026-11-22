@@ -24,10 +24,9 @@ from PyQt6.QtWidgets import (
 
 from Utility.GlobalConf import GlobalConf
 from Utility.Styles import Styles
-
 from Utility.Layouts import (
-    TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview, contentButton, StayOpenMenu,
-    CrystalPreview, TimeProgressBar, PlotToolbar
+    TabWithToolbar, InputHBoxLayout, SpinBox, VBoxTitleLayout, MplCanvas, ListWidget, FileEditor, TargetPreview,
+    contentButton, StayOpenMenu, CrystalPreview, TimeProgressBar, PlotToolbar
 )
 from Utility.Indexing import Counter
 from Utility.Dialogs import showMessageBox, selectFileDialog
@@ -44,11 +43,13 @@ from TableWidgets.CrystalEditor import CrystalEditorDialog
 
 from Simulations.Simulations import writeInputFiles, SimulationsInput, SimulationsOutput
 
-from Pages.ParameterScan import ParameterScan, SCAN_FILE, LOG_FILE, STATUS_ICONS
+from Pages.ParameterScan import ParameterScan
+from Pages.CompareDialog import formatParameter
 
 from Containers.SimulationConfiguration import SimulationConfiguration
 from Containers.Arguments import SimulationArguments, loadSimulationArguments
 from Containers.GlobalDensity import GlobalDensity
+
 
 # avoiding circular import, but still get type hinting functionality
 if TYPE_CHECKING:
@@ -187,17 +188,11 @@ class SimulationPage(TabWithToolbar):
         # Separator
         self.toolbar.addSeparator()
 
-        # Parameter scan: several values in the input fields, the menu selects other versions
+        # Parameter scan button
         self.scan = ParameterScan(self)
         self.action_scan = notNone(self.toolbar.addAction(getIcon('scan'), 'Parameter scan'))
         self.action_scan.setCheckable(True)
-        self.action_scan.setToolTip(
-            '<b>Parameter scan</b>: simulations in which any number of parameters are varied (all combinations of their values).<br>'
-            'The input fields that can be scanned get a mark in their upper left corner: click on it to enter several values '
-            '(also as linear or logarithmic range). The simulations are written into subfolders of the folder of this '
-            'simulation and described in scan.json.<br>The menu of the button adds other versions of the simulation program, '
-            'lists the scanned parameters and resets the scan.'
-        )
+        self.action_scan.setToolTip('<b>Parameter scan</b>: simulations in which any number of parameters are varied (all combinations of their values).<br>The input fields that can be scanned get a mark in their upper left corner: click on it to enter several values (also as linear or logarithmic range). The simulations are written into subfolders of the folder of this simulation and described in scan.json.<br>The menu of the button adds other versions of the simulation program, lists the scanned parameters and resets the scan.')
         self.action_scan.toggled.connect(lambda checked: self.setScanEnabled(checked))
         self.scan_menu = StayOpenMenu(self)
         self.scan_menu.setToolTipsVisible(True)
@@ -274,7 +269,7 @@ class SimulationPage(TabWithToolbar):
         # Open working directory button
         self.open_working_dir = notNone(self.toolbar.addAction(getIcon('open_workdir'), 'Open working directory'))
         self.open_working_dir.setToolTip('Open the working directory in the file explorer')
-        self.open_working_dir.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.simulation_configuration.save_folder))))
+        self.open_working_dir.triggered.connect(self.openWorkingDirectory)
 
         # Open docs button
         self.action_open_documentation = notNone(self.toolbar.addAction(getIcon('book'), 'Simulation documentation'))
@@ -478,11 +473,12 @@ class SimulationPage(TabWithToolbar):
         self.settings_scroll_area.setWidgetResizable(True)
         self.settings_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.settings_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.settings_scroll_area.setMinimumWidth(self.settings_group_settings.sizeHint().width() + notNone(self.settings_scroll_area.verticalScrollBar()).sizeHint().width())
+        scroll_bar_width = notNone(self.settings_scroll_area.verticalScrollBar()).sizeHint().width()
+        self.settings_scroll_area.setMinimumWidth(self.settings_group_settings.sizeHint().width() + scroll_bar_width)
         self.settings_scroll_area.setStyleSheet('QScrollArea { border: none; }')
         self.settings_scroll_area.setWidget(self.settings_group_settings)
 
-        # transparent background of scroll area; do not set a palette here, since it would not follow theme changes
+        # transparent background of scroll area (a palette would not follow theme changes)
         notNone(self.settings_scroll_area.viewport()).setAutoFillBackground(False)
         self.settings_group_settings.setAutoFillBackground(False)
         self.simulation_settings_vbox.addWidget(self.settings_scroll_area)
@@ -509,7 +505,6 @@ class SimulationPage(TabWithToolbar):
         self.preview_selector.currentIndexChanged.connect(lambda _: self.makePreview())
         preview_selector_layout.addWidget(self.preview_selector)
         preview_selector_layout.addStretch(1)
-        # only one line high, the file previews get the remaining space
         self.preview_selector_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.preview_selector_widget.setHidden(True)
         self.file_preview_tab_layout.addWidget(self.preview_selector_widget)
@@ -543,14 +538,14 @@ class SimulationPage(TabWithToolbar):
         self.file_preview_tab_splitter.addWidget(self.parent_widget_file_crystal)
 
         #
-        # TAB: 'Run status': output of the simulation, for a parameter scan the state of its simulations
+        # TAB: 'Run status'
         #
 
         self.run_status_splitter = QSplitter(Qt.Orientation.Vertical, self)
         self.run_status_splitter.setChildrenCollapsible(False)
         self.tab_widget.addTab(self.run_status_splitter, 'Run status')
 
-        # simulations of the parameter scan with their state, the output of the selected one is shown below
+        # simulations of the parameter scan with their state
         self.scan_runs = QTableWidget(0, 1, self)
         self.scan_runs.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.scan_runs.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -595,7 +590,6 @@ class SimulationPage(TabWithToolbar):
         self.open_output_file_button.setToolTip('Open the selected file with the standard text editor')
         self.open_output_file_button.setEnabled(False)
         self.output_list_vbox.hl.addWidget(self.open_output_file_button)
-        # folder of the files: the simulation or a simulation of its parameter scan
         self.output_folder_selector = QComboBox(self)
         self.output_folder_selector.setToolTip('The files of this folder are shown: the folder of the simulation or of a simulation of the parameter scan')
         self.output_folder_selector.currentIndexChanged.connect(lambda _: self.updateOutputFilesList())
@@ -638,7 +632,7 @@ class SimulationPage(TabWithToolbar):
         # TAB: 'Simulation results'
         #
 
-        # results of the simulation or of the parameter scan (comparison of its simulations)
+        # results of the simulation or of the parameter scan
         self.results_stack = QStackedWidget(self)
         self.tab_widget.addTab(self.results_stack, 'Simulation results')
         self.simulation_result_splitter = QSplitter()
@@ -647,7 +641,6 @@ class SimulationPage(TabWithToolbar):
         # Available data for plotting
         self.parent_widget_plot_list = QWidget(self)
         self.plot_list_vbox = VBoxTitleLayout(self, 'Available data for plotting', add_stretch=False)
-        # buttons as wide as their content
         self.refresh_output_parameters_button = contentButton(getIcon('refresh'), '', self)
         self.refresh_output_parameters_button.setToolTip('Refresh the list')
         self.plot_list_vbox.hl.addWidget(self.refresh_output_parameters_button)
@@ -732,6 +725,12 @@ class SimulationPage(TabWithToolbar):
         ]
 
         def updateConnections(dictionary):
+            """
+            Passes received settings to all connected settings
+
+            :param dictionary: dictionary of settings
+            """
+
             for c in connections:
                 c.receive(dictionary)
 
@@ -761,7 +760,7 @@ class SimulationPage(TabWithToolbar):
         for connection in connections:
             connection.contentChanged.connect(lambda: self.setEdited(True))
 
-        # marks of the input fields of the parameter scan (new elements, layers, ...)
+        # marks of the input fields of the parameter scan
         for connection in connections:
             connection.contentChanged.connect(self.scan.scheduleRefresh)
         for table in (self.table_beam, self.table_target):
@@ -818,7 +817,7 @@ class SimulationPage(TabWithToolbar):
         if starting_save_folder:
             self.loadSettings(starting_save_folder)
 
-        # parameter scan of the last session (the settings of the configuration can differ from scan.json, if not saved)
+        # parameter scan of the last session
         if self.simulation_configuration.scan_state:
             self.scan.setState(self.simulation_configuration.scan_state)
         if self.simulation_configuration.scan_enabled:
@@ -890,12 +889,13 @@ class SimulationPage(TabWithToolbar):
             action = notNone(self.scan_menu.addAction('(no other configuration of this program)'))
             action.setEnabled(False)
 
-        # scanned parameters (also of fields that are currently hidden), a click removes the values of a parameter
+        # scanned parameters (also of hidden fields)
         self.scan_menu.addSection('Scanned parameters (click to remove)')
         running = self.scan.isRunning()
         labels = {key: parameter.label for key, parameter in self.scan.safeParameters().items()}
         for key in self.scan.values:
-            action = notNone(self.scan_menu.addAction(getIcon('close'), f'{labels.get(key, key)}: {self.scan.valuesText(key)}'))
+            text = f'{labels.get(key, key)}: {self.scan.valuesText(key)}'
+            action = notNone(self.scan_menu.addAction(getIcon('close'), text))
             action.setToolTip('Removes the values of this parameter (its field has a single value again)')
             action.setEnabled(not running)
             action.triggered.connect(lambda _, key=key: self.scan.setValues(key, None))
@@ -918,13 +918,14 @@ class SimulationPage(TabWithToolbar):
         self.simulation_output.setHidden(enabled)
         self.output_folder_selector.setHidden(not enabled)
 
-        # output files: folder of the simulation and the folders of the simulations of the scan
+        # output files of the simulation and of the simulations of the scan
         selected = self.output_folder_selector.currentData()
         self.output_folder_selector.blockSignals(True)
         self.output_folder_selector.clear()
         self.output_folder_selector.addItem('Folder of the simulation', None)
         for job in self.scan.jobs:
-            self.output_folder_selector.addItem(getIcon(STATUS_ICONS.get(job['status'], 'error')), self.scan.jobText(job), pathToStr(job['folder']))
+            icon = getIcon(ParameterScan.statusIcons.get(job['status'], 'error'))
+            self.output_folder_selector.addItem(icon, self.scan.jobText(job), pathToStr(job['folder']))
         index = self.output_folder_selector.findData(selected)
         self.output_folder_selector.setCurrentIndex(max(index, 0))
         self.output_folder_selector.blockSignals(False)
@@ -949,8 +950,8 @@ class SimulationPage(TabWithToolbar):
                 self.scan_log.appendPlainText(text.rstrip())
             return
         log = selected['log']
-        if not log and (selected['folder'] / LOG_FILE).is_file():
-            log = (selected['folder'] / LOG_FILE).read_text(encoding='utf-8', errors='replace')
+        if not log and (selected['folder'] / GlobalConf.scan_log_file).is_file():
+            log = (selected['folder'] / GlobalConf.scan_log_file).read_text(encoding='utf-8', errors='replace')
         self.scan_log.setPlainText(log or f'({self.scan.jobText(selected)}: {selected["status"]})')
 
     def resultsShown(self) -> bool:
@@ -973,7 +974,11 @@ class SimulationPage(TabWithToolbar):
             self.process.kill()
 
     def tabChange(self, tab: int):
-        """Executed when tabs ara changed"""
+        """
+        Executed when tabs ara changed
+
+        :param tab: index of new tab
+        """
 
         if tab == 1:
             self.makePreview()
@@ -986,7 +991,11 @@ class SimulationPage(TabWithToolbar):
                 self.updateOutputParametersList()
 
     def showPopup(self, value_dict: dict):
-        """Shows a popup"""
+        """
+        Shows a popup
+
+        :param value_dict: dictionary with the popup message
+        """
 
         if value_dict.get('popup') is None:
             return
@@ -1035,7 +1044,7 @@ class SimulationPage(TabWithToolbar):
         """Connects all process signals"""
 
         self.process.started.connect(self.processStarted)
-        # lower priority, so that the GUI stays responsive while many simulations run
+        # lower priority, so that the GUI stays responsive
         self.process.started.connect(lambda: lowerProcessPriority(self.process.processId()))
         self.process.readyRead.connect(self.processReadyRead)
         self.process.errorOccurred.connect(self.processError)
@@ -1132,6 +1141,11 @@ class SimulationPage(TabWithToolbar):
         if isinstance(group_elements, bool):
             self.group_elements = group_elements
 
+    def openWorkingDirectory(self):
+        """Opens the working directory in the file explorer"""
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(self.simulation_configuration.save_folder)))
+
     def openDocs(self):
         """Opens documentation pdf-file for simulation"""
 
@@ -1155,7 +1169,9 @@ class SimulationPage(TabWithToolbar):
             )
 
         # try to open documentation
-        elif not isinstance(docs_path, Path) or not docs_path.is_file() or not QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(docs_path))):
+        elif not isinstance(docs_path, Path) or not docs_path.is_file():
+            self.updateDocs(disable=True)
+        elif not QDesktopServices.openUrl(QUrl.fromLocalFile(pathToStr(docs_path))):
             self.updateDocs(disable=True)
 
     def updateDocs(self, disable: bool = False):
@@ -1196,8 +1212,7 @@ class SimulationPage(TabWithToolbar):
         :param ask_delete: (optional) ask before the files of a previous run are deleted
         """
 
-        # warnings: the simulation might fail, give wrong results or create large files, the user decides
-        # (the warnings of a parameter scan are checked for all of its simulations)
+        # warnings (of a parameter scan they are checked for all of its simulations)
         if check_warnings and not (self.scan.enabled and self.scan.hasParameters()):
             warnings = self.runWarnings()
             if warnings:
@@ -1214,7 +1229,7 @@ class SimulationPage(TabWithToolbar):
                 if result == QMessageBox.StandardButton.Cancel:
                     return False
 
-        # save files (asks for the save folder if the simulation has not been saved yet)
+        # save files
         input_files = self.saveSettings()
         if not input_files or not self.simulation_configuration.save_folder:
             return False
@@ -1224,11 +1239,10 @@ class SimulationPage(TabWithToolbar):
         if self.scan.enabled and self.scan.hasParameters() and not detached:
             return self.scan.run(check_warnings=check_warnings)
 
-        # delete all files except input files (also the ones that are not written by the GUI, e.g. a0_tdiff.inp) and the
-        # description of the parameter scan (its simulations are in subfolders, which are kept)
+        # delete all files except input files (also the ones not written by the GUI, e.g. a0_tdiff.inp) and scan.json
         files = [
             file for file in self.simulation_configuration.save_folder.iterdir()
-            if file.is_file() and file.name not in input_files and file.name != SCAN_FILE
+            if file.is_file() and file.name not in input_files and file.name != GlobalConf.scan_file
             and not inFileList(file.name, self.simulation_class.KeepFiles)
         ]
 
@@ -1285,8 +1299,8 @@ class SimulationPage(TabWithToolbar):
 
         else:
             if system() == 'Windows':
-                # pass a single command string, since a list would escape the quotes in cmd with backslashes, which cmd.exe does not understand
-                # cmd.exe removes the first and last quote of the command after /k
+                # a single command string, since cmd.exe does not understand quotes escaped by subprocess (it removes the
+                # first and last quote of the command after /k)
                 title = sub(r'[&|<>^"%]', '', self.simulation_configuration.title)
                 Popen(
                     f'cmd /k "title {title} & {cmd}"',
@@ -1345,14 +1359,19 @@ EOF
         return True
 
     def setEdited(self, state: bool = True):
-        """Sets edited status"""
+        """
+        Sets edited status
+
+        :param state: (optional) if there are unsaved changes
+        """
 
         self.action_save.setEnabled(state)
         self.simulation_configuration.unsaved_changes = state
         self.main_window.simChanged(self.simulation_configuration)
 
-        # changed inputs: the status of the last run no longer applies
-        if state and self.run_status in (SimulationPage.RunStatus.DONE, SimulationPage.RunStatus.ABORTED, SimulationPage.RunStatus.ERROR):
+        # the status of the last run no longer applies
+        finished_states = (SimulationPage.RunStatus.DONE, SimulationPage.RunStatus.ABORTED, SimulationPage.RunStatus.ERROR)
+        if state and self.run_status in finished_states:
             self.setRunStatus(SimulationPage.RunStatus.READY)
 
     def resetSettings(self):
@@ -1385,7 +1404,6 @@ EOF
         self.simulation_configuration.save_folder = None
         self.working_dir.setText('unknown')
 
-        # no parameter scan
         self.scan.loadFolder(None)
 
         # reset parameter lists
@@ -1422,7 +1440,13 @@ EOF
         self.makePreview()
 
     def loadSettings(self, path: Union[Path, None] = None, from_json: bool = True, unsaved_warning: bool = True) -> bool:
-        """Loads settings and returns if it was successful"""
+        """
+        Loads settings and returns if it was successful
+
+        :param path: (optional) path of file or folder, by default selected in a dialog
+        :param from_json: (optional) load from input.json instead of the input file of the simulation
+        :param unsaved_warning: (optional) warn if there are unsaved changes
+        """
 
         # check for unsaved changes
         if self.simulation_configuration.unsaved_changes and unsaved_warning:
@@ -1464,17 +1488,16 @@ EOF
             file = selectFileDialog(
                 self,
                 False,
-                f'Load input file "{self.simulation_class.InputFilename}" or parameter scan "{SCAN_FILE}"',
+                f'Load input file "{self.simulation_class.InputFilename}" or parameter scan "{GlobalConf.scan_file}"',
                 path,
-                file_filter=f'Input files or parameter scans ({self.simulation_class.InputFilename} {SCAN_FILE})'
+                file_filter=f'Input files or parameter scans ({self.simulation_class.InputFilename} {GlobalConf.scan_file})'
             )
             if file is None:
                 self.main_window.writeStatusBar('Loading aborted')
                 return False
 
             self.simulation_configuration.save_folder = file.resolve().parent
-            # a parameter scan is opened with its description
-            open_scan = file.name == SCAN_FILE
+            open_scan = file.name == GlobalConf.scan_file
 
         # name of save folder
         if self.simulation_configuration.save_folder is not None:
@@ -1577,11 +1600,11 @@ EOF
         if self.simulation_class.default_values.enable_crystal:
             load_error += self.crystal_editor_dialog.loadArguments(arguments)
 
-        # parameter scan of the folder (scan.json), a folder without scan is a single simulation
+        # parameter scan of the folder
         self.scan.loadFolder(self.simulation_configuration.save_folder)
         if open_scan:
             self.action_scan.setChecked(True)
-        elif not (self.simulation_configuration.save_folder / SCAN_FILE).is_file():
+        elif not (self.simulation_configuration.save_folder / GlobalConf.scan_file).is_file():
             self.action_scan.setChecked(False)
 
         self.makePreview()
@@ -1675,7 +1698,7 @@ EOF
             )
             return None
 
-        # check combinations of parameters that the simulation does not accept
+        # check combinations of parameters
         problems = self.simulation_class.checkArguments(arguments, self.simulation_configuration.version)
         if problems:
             showMessageBox(
@@ -1745,7 +1768,7 @@ EOF
                 if file.is_file():
                     copy2(file, self.simulation_configuration.save_folder / file.name)
 
-        # save all input files (input.json, input file, layer file, distributions, crystal file)
+        # save all input files
         filelist = writeInputFiles(
             self.simulation_class,
             arguments,
@@ -1758,7 +1781,7 @@ EOF
         if self.scan.enabled:
             self.scan.writeDescription()
 
-        # open file (the settings of the parameter scan are kept)
+        # open file and keep the settings of the parameter scan
         if new_folder:
             scan_state = self.scan.state()
             self.loadSettings(self.simulation_configuration.save_folder, unsaved_warning=False)
@@ -1827,9 +1850,8 @@ EOF
         self.preview_selector.blockSignals(True)
         self.preview_selector.clear()
         for simulation in simulations:
-            self.preview_selector.addItem(', '.join(
-                f'{name} = {value if isinstance(value, str) else f"{value:g}"}' for name, value in zip(names, simulation['values'])
-            ), simulation['label'])
+            text = ', '.join(f'{name} = {formatParameter(value)}' for name, value in zip(names, simulation['values']))
+            self.preview_selector.addItem(text, simulation['label'])
         if not simulations:
             self.preview_selector.addItem('(no values entered: the current parameters)')
         self.preview_selector.setCurrentIndex(min(max(index, 0), self.preview_selector.count() - 1))
@@ -1874,14 +1896,18 @@ EOF
         return arguments
 
     def checkAdditionalSettings(self, silent: bool = False):
-        """Checks additional settings from the user"""
+        """
+        Checks additional settings from the user
+
+        :param silent: (optional) do not show messages
+        """
 
         additional = self.additional_settings.toPlainText()
         errors = self.simulation_class.checkAdditional(additional, self.simulation_configuration.version)
 
         setWidgetHighlight(self.additional_settings, bool(errors))
 
-        # mark the lines with problems (the message is shown as tooltip of the line)
+        # mark the lines with problems
         marked_lines: Dict[int, str] = {}
         for error in errors:
             match = findall(r'^Line (\d+): (.*)$', error)
@@ -1997,7 +2023,11 @@ EOF
         self.simulation_output.appendPlainText(process_log.rstrip())
 
     def processError(self, error):
-        """Called when process runs into an error"""
+        """
+        Called when process runs into an error
+
+        :param error: error of the process
+        """
 
         if isinstance(error, int):
             errors = {
@@ -2018,13 +2048,19 @@ EOF
         self.stopSimulationTimer()
 
     def processFinished(self, exit_code: int, exit_status: int):
-        """Called when process has finished"""
+        """
+        Called when process has finished
+
+        :param exit_code: exit code of the process
+        :param exit_status: exit status of the process
+        """
 
         # check if there were errors (in log, exit code or results)
         log = self.simulation_output.toPlainText()
         problem = None
         if exit_status == QProcess.ExitStatus.NormalExit:
-            problem = self.simulation_class.runFailed(self.simulation_configuration.save_folder, log, exit_code, self.simulation_configuration.version)
+            save_folder = self.simulation_configuration.save_folder
+            problem = self.simulation_class.runFailed(save_folder, log, exit_code, self.simulation_configuration.version)
         if problem is not None:
             exit_status = -1
             self.simulation_output.appendPlainText(f'\n\nThe simulation failed: {problem}')
@@ -2050,7 +2086,11 @@ EOF
         self.main_window.simulationFinished(self)
 
     def setProcessWidgetsEnabled(self, enabled):
-        """Enable or disable actions which depend on the state of the process"""
+        """
+        Enable or disable actions which depend on the state of the process
+
+        :param enabled: if the actions are enabled
+        """
 
         self.action_new.setEnabled(enabled)
         self.action_open.setEnabled(enabled)
@@ -2275,8 +2315,8 @@ EOF
             self.main_window.writeStatusBar('No file selected - aborted')
             return
 
-        # CSV files are comma separated, other files tab separated
-        plot_data = self.evaluation_class.getReturnData(separator=',' if file_path.suffix.lower() == '.csv' else '\t')
+        separator = ',' if file_path.suffix.lower() == '.csv' else '\t'
+        plot_data = self.evaluation_class.getReturnData(separator=separator)
         if plot_data is None:
             return
         with open(file_path, 'w', encoding='utf-8', newline='') as file:

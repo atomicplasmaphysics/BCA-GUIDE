@@ -1,8 +1,9 @@
-"""Tests of the plots of the simulation results: every plot of the examples can be drawn and exported"""
-
+# Tests of the plots of the simulation results: every plot of the examples can be drawn and exported
 
 import numpy as np
+
 import pytest
+
 
 from conftest import ROOT, SIMULATION_PROGRAMS, addSimulationPage, copySave, pump
 
@@ -21,7 +22,13 @@ TRIDYN_FOLDER = SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022'
 
 
 def waitForPlot(qapp, page, timeout: float = 30):
-    """Waits until the analysis of the plot is finished"""
+    """
+    Waits until the analysis of the plot is finished
+
+    :param qapp: QApplication of the tests
+    :param page: page of the simulation
+    :param timeout: maximum waiting time in seconds
+    """
 
     evaluation = page.evaluation_class
     pump(qapp, timeout, until=lambda: evaluation.waiting is None and not evaluation.analyse_queue)
@@ -29,14 +36,23 @@ def waitForPlot(qapp, page, timeout: float = 30):
 
 
 def plotItems(page):
-    """Returns the items of the list of plots that show a plot"""
+    """
+    Returns the items of the list of plots that show a plot
+
+    :param page: page of the simulation
+    """
 
     items = page.output_parameters_list
     return [items.item(i) for i in range(items.count()) if getattr(items.item(i), 'function', None) is not None]
 
 
 def showAllPlots(qapp, page) -> dict:
-    """Shows all plots of the list and returns {text of item: exported data or None}"""
+    """
+    Shows all plots of the list and returns {text of item: exported data or None}
+
+    :param qapp: QApplication of the tests
+    :param page: page of the simulation
+    """
 
     page.tab_widget.setCurrentIndex(4)
     page.updateOutputParametersList(forced=True)
@@ -56,6 +72,17 @@ CASES += [('TRIDYN', path.name) for path in sorted(TRIDYN_EXAMPLES.glob('example
 
 @pytest.mark.parametrize('program, example', CASES)
 def test_all_plots_of_examples(main_window, qapp, tmp_path, errors, program, example):
+    """
+    All plots of examples
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    :param program: name of simulation program
+    :param example: name of the example
+    """
+
     if program == 'SDTrimSP':
         folder = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
         save = copySave(EXAMPLES / example, tmp_path / example)
@@ -83,6 +110,15 @@ def test_all_plots_of_examples(main_window, qapp, tmp_path, errors, program, exa
 
 @pytest.mark.skipif(not (EXAMPLES / 'example_01_Ar_on_Au' / 'E_distr_all.dat').is_file(), reason='example without energy distribution')
 def test_energy_distribution(main_window, qapp, tmp_path, errors):
+    """
+    Energy distribution
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
+
     folder = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
     save = copySave(EXAMPLES / 'example_01_Ar_on_Au', tmp_path / 'example')
 
@@ -171,6 +207,12 @@ title
 
 def test_matrix_readers(tmp_path):
     # numbers without blank in between (negative values in E_distr_*.dat)
+    """
+    Matrix readers
+
+    :param tmp_path: temporary folder of the test
+    """
+
     assert numbersOfLine(' 0.24525E-04-0.10110E-04  1.0D+01') == pytest.approx([0.24525e-4, -0.10110e-4, 10.])
     assert numbersOfLine(' intervals x (dimension: ni+1)') == []
 
@@ -196,21 +238,30 @@ def test_matrix_readers(tmp_path):
 
 
 def test_depth_intervals_and_colors():
+    """Depth intervals and colors"""
+
     from Simulations.SDTrimSP import SimulationAnalysis
-    from Utility.Styles import PALETTE, paletteHex, paletteRgb, Palette
+    from Utility.Styles import Styles, paletteHex, paletteRgb, Palette
 
     # one depth interval (nqx = 1) starts at the surface
     assert list(SimulationAnalysis.depthIntervals(np.array([[0.5], [5.]]))) == [1., 10.]
     assert list(SimulationAnalysis.depthIntervals(np.array([[5., 15., 25.]]))) == [10.]
 
     # the 12 colors of the palette, then lightened versions
-    assert sorted(paletteHex(i).upper() for i in range(12)) == sorted(PALETTE)
+    assert sorted(paletteHex(i).upper() for i in range(12)) == sorted(Styles.palette)
     assert all(c >= d for c, d in zip(paletteRgb(12), paletteRgb(0)))
     assert Palette()[100] == paletteRgb(100)
 
 
 def test_failing_plot_does_not_crash(main_window, qapp, tmp_path, errors):
-    """An exception in a plot shows the error in the plot and is logged (PyQt6 would terminate the application)"""
+    """
+    An exception in a plot shows the error in the plot and is logged (PyQt6 would terminate the application)
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
 
     folder = SIMULATION_PROGRAMS / 'SDTrimSP' / 'SDTrimSP_7.07'
     save = copySave(EXAMPLES / 'example_01_Ar_on_Au', tmp_path / 'example')
@@ -230,6 +281,11 @@ def test_tridyn_energy_too_large_for_output_columns(main_window, qapp, tmp_path,
     """
     TRIDYN writes energies above 10^7 eV as "**********" into *_indat.dat (issue #2, "Corrupted input files"): the
     results of a run with 2 GeV Ar are listed and plotted (works without TRIDYN, stand-in program folder)
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
     """
 
     from Simulations.TRIDYN2022 import irradiationFields

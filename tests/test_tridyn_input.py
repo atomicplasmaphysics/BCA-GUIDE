@@ -1,8 +1,10 @@
-"""Loading and writing of TRIDYN input files: the GUI must write the same simulation as the loaded input"""
+# Loading and writing of TRIDYN input files: the GUI must write the same simulation as the loaded input
 
 from zipfile import ZipFile
 
+
 import pytest
+
 
 from conftest import SIMULATION_PROGRAMS, addSimulationPage, pump
 
@@ -15,6 +17,15 @@ pytestmark = pytest.mark.skipif(not SAMPLES.is_file(), reason='samples of TRIDYN
 
 
 def loadSample(main_window, qapp, tmp_path, sample: str):
+    """
+    Loads a TRIDYN sample in a simulation tab
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param sample: name of the TRIDYN sample
+    """
+
     with ZipFile(SAMPLES) as archive:
         for name in archive.namelist():
             if name.startswith(sample) and name.endswith(('.in', '.lay')):
@@ -27,7 +38,14 @@ def loadSample(main_window, qapp, tmp_path, sample: str):
 
 
 def test_element_in_beam_and_target(main_window, qapp, tmp_path, errors):
-    """Si is a projectile (thermal Si) and in the target: one species, the indices of the other options are kept"""
+    """
+    Si is a projectile (thermal Si) and in the target: one species, the indices of the other options are kept
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
 
     page = loadSample(main_window, qapp, tmp_path, 'SiO_NeSi22')
     _, text, layer, _ = page.makePreview()
@@ -44,7 +62,14 @@ def test_element_in_beam_and_target(main_window, qapp, tmp_path, errors):
 
 
 def test_defaults_of_tridyn_are_kept(main_window, qapp, tmp_path, errors):
-    """Without "thrd" and "pspr" TRIDYN uses all threads and the default precision, the output lists are kept"""
+    """
+    Without "thrd" and "pspr" TRIDYN uses all threads and the default precision, the output lists are kept
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
 
     page = loadSample(main_window, qapp, tmp_path, 'SiO_NeSi23')
     _, text, _, _ = page.makePreview()

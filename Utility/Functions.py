@@ -3,14 +3,17 @@ from datetime import datetime
 from platform import system
 from pathlib import Path
 from re import sub, findall
+from math import isfinite
+from sys import float_info
 import logging
 import os
 import stat
 
+
 import numpy as np
 
-from Utility.Styles import paletteQColor
 
+from Utility.Styles import paletteQColor
 
 
 def limitSum(objects: list, maximum: float):
@@ -26,7 +29,6 @@ def limitSum(objects: list, maximum: float):
     if not len_objects:
         return
 
-    # int for integer spin boxes
     total: float = 0
     for obj in objects[:-1]:
         obj.setEnabled(True)
@@ -109,11 +111,9 @@ def roundToStr(number: float) -> str:
 
 def fileName(file: Union[str, Path]) -> str:
     """
-    Returns the name of a file. Path objects are reduced to their final component, strings are returned unchanged
+    Returns name of file
 
-    :param file: filename or Path object
-
-    :return: name of file
+    :param file: filename or Path
     """
 
     if isinstance(file, Path):
@@ -208,6 +208,7 @@ def inFileDict(file: Union[str, Path], files_dict: dict) -> Union[Tuple[Union[st
     :return: (key, value) of corresponding entry in files_dict
              or False
     """
+
     for key, value in files_dict.items():
         if fileMatches(file, key):
             return key, value
@@ -259,7 +260,13 @@ def getFilesNameFromFileList(file: Union[str, Path], files_list: Iterable[Union[
     return matches
 
 
-def fileToNpArray(filename: Path, skip_header: int = 0, skip_footer: int = 0, usecols: Optional[Tuple[int, ...]] = None, colum_required: Optional[int] = None) -> np.ndarray:
+def fileToNpArray(
+    filename: Path,
+    skip_header: int = 0,
+    skip_footer: int = 0,
+    usecols: Optional[Tuple[int, ...]] = None,
+    colum_required: Optional[int] = None
+) -> np.ndarray:
     """
     Use this function instead of numpy genfromtxt, since it is very slow. Reads file as numpy array.
 
@@ -447,10 +454,47 @@ def readlines(file, *args, comments: Union[str, List[str], None] = None, strip_l
 
     return lines
 
+
+def isNumber(value) -> bool:
+    """
+    Returns if value is a finite number (booleans are no numbers)
+
+    :param value: value to check
+    """
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    if isinstance(value, int):
+        return True
+    return isfinite(value)
+
+
+def toNumber(value, default: Optional[float] = None, from_text: bool = False) -> Optional[float]:
+    """
+    Returns value as finite float or default (e.g. for texts, lists or NaN of damaged input files).
+    Integers too large for floats become the largest float.
+
+    :param value: value to convert
+    :param default: returned if value is no finite number
+    :param from_text: if texts of numbers are converted (also Fortran notation, e.g. '1.5d3')
+    """
+
+    if from_text and isinstance(value, str):
+        try:
+            value = float(value.strip().replace('d', 'e').replace('D', 'E'))
+        except ValueError:
+            return default
+    if isinstance(value, int) and not isinstance(value, bool) and abs(value) > float_info.max:
+        return float_info.max if value > 0 else -float_info.max
+    if not isNumber(value):
+        return default
+    return float(value)
+
+
 def isNativeExecutable(file: Path) -> bool:
     """
-    Returns True if file is an executable binary for the current operating system.
-    The check is based on the file header, since the file extension is not reliable (e.g. linux binaries named *.exe)
+    Returns if file is an executable binary for the current operating system (checked by its header, since the file
+    extension is not reliable, e.g. linux binaries named *.exe)
 
     :param file: path to file
     """
@@ -476,15 +520,11 @@ def isNativeExecutable(file: Path) -> bool:
     return any(header.startswith(magic) for magic in magic_numbers)
 
 
-def ensureExecutable(file: Path | None) -> bool:
+def ensureExecutable(file: Optional[Path]) -> bool:
     """
-    Makes file executable (for everybody who may read it) if it is not, e.g. after unpacking an archive or copying from
-    a drive without permissions, where binaries lose their executable flag ("execve: Permission denied").
-    Not needed on Windows.
+    Makes file executable for everybody who may read it and returns if it is executable afterwards
 
     :param file: path to binary
-
-    :return: True if file is executable afterwards
     """
 
     if file is None or not file.is_file():
@@ -492,8 +532,8 @@ def ensureExecutable(file: Path | None) -> bool:
     if system() == 'Windows' or os.access(file, os.X_OK):
         return True
     try:
+        # binaries lose their executable flag when unpacked from archives or copied from drives without permissions
         mode = file.stat().st_mode
-        # executable for user, group and others where they have read permission
         file.chmod(mode | ((mode & (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)) >> 2))
     except OSError as error:
         logging.warning(f'Could not make "{file}" executable: {error}')
@@ -514,6 +554,13 @@ def findExecutables(folder: Path, max_depth: int = 3, skip_folders: Iterable[str
     executables = []
 
     def search(current: Path, depth: int):
+        """
+        Adds executables in folder and its subfolders
+
+        :param current: folder to search in
+        :param depth: depth of current folder
+        """
+
         try:
             entries = sorted(current.iterdir())
         except OSError:
@@ -545,8 +592,8 @@ def pathToStr(path: Path | None) -> str:
 
 def bestVersion(versions: List[str], version_name: str) -> Tuple[int, bool]:
     """
-    Returns the index of the selectable version that suits the detected version best and if it matches exactly.
-    If the detected version is not listed, the highest listed version below it is used (or the lowest listed version)
+    Returns index of the selectable version that suits the detected version best (exact match, highest lower version or
+    lowest version) and if it matches exactly
 
     :param versions: selectable versions, e.g. ['6.01', '7.00, 7.01', '7.07']
     :param version_name: detected version name, e.g. 'SDTrimSP v7.05'
@@ -582,9 +629,9 @@ def bestVersion(versions: List[str], version_name: str) -> Tuple[int, bool]:
 
 def lowerProcessPriority(pid: int):
     """
-    Lowers the priority of a process (below normal), so that the GUI stays responsive while many simulations run
+    Lowers priority of a process to below normal, so that the GUI stays responsive
 
-    :param pid: id of the process
+    :param pid: id of process
     """
 
     if pid <= 0:
@@ -592,15 +639,15 @@ def lowerProcessPriority(pid: int):
     try:
         if system() == 'Windows':
             import ctypes
+            process_set_information = 0x0200
+            process_query_information = 0x0400
+            below_normal_priority_class = 0x4000
             kernel32 = getattr(ctypes, 'windll').kernel32
-            # PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION
-            handle = kernel32.OpenProcess(0x0200 | 0x0400, False, pid)
+            handle = kernel32.OpenProcess(process_set_information | process_query_information, False, pid)
             if handle:
-                # BELOW_NORMAL_PRIORITY_CLASS
-                kernel32.SetPriorityClass(handle, 0x4000)
+                kernel32.SetPriorityClass(handle, below_normal_priority_class)
                 kernel32.CloseHandle(handle)
         else:
-            import os
             getattr(os, 'setpriority')(getattr(os, 'PRIO_PROCESS'), pid, 10)
     except (OSError, AttributeError) as error:
         logging.debug(f'Could not lower the priority of process {pid}: {error}')

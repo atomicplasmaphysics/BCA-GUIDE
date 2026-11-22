@@ -1,13 +1,15 @@
 from __future__ import annotations
 from typing import Union, Optional, Tuple, List, Callable, Dict, Sequence, Any, cast
 from pathlib import Path
-from math import isfinite
 import warnings
 
-from Utility.Styles import Styles
 
 from PyQt6.QtCore import Qt, QSize, QRect, QRectF, QElapsedTimer, QEvent, QTimer
-from PyQt6.QtGui import QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap, QTextCharFormat, QWheelEvent, QStandardItemModel, QShowEvent
+from PyQt6.QtGui import (
+    QPen, QFont, QFontMetrics, QColor, QTextFormat, QPainter, QPainterPath, QTextCursor, QIcon, QPalette, QPixmap,
+    QTextCharFormat, QWheelEvent, QStandardItemModel, QShowEvent, QPaintEvent, QMouseEvent, QResizeEvent, QKeyEvent,
+    QHelpEvent
+)
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QWidget, QVBoxLayout, QToolBar, QBoxLayout, QPlainTextEdit, QProgressBar,
     QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QLineEdit, QPushButton,
@@ -21,21 +23,24 @@ from matplotlib import rc_context
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.colors import same_color
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle, FancyBboxPatch
 from matplotlib.spines import Spine
 from matplotlib.text import Text
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 
+
+from Utility.Styles import Styles
 from Utility.ModifyWidget import setWidgetBackground
-from Utility.Icons import ICON_COLORS, getIcon
-from Utility.Functions import getUniqueColor, setDictIfNotExists
+from Utility.Icons import getIcon
+from Utility.Functions import getUniqueColor, setDictIfNotExists, toNumber
 from Utility.Typing import notNone
 
 from Containers.Element import Element
 
-# plots that are too small for their labels (e.g. while hidden or during resizing) keep their layout, without a warning
+
+# plots too small for their labels (e.g. while hidden) keep their layout without warning
 warnings.filterwarnings('ignore', message='Tight layout not applied', category=UserWarning)
 
 
@@ -91,9 +96,17 @@ def contentButton(icon: QIcon, text: str = '', parent: Optional[QWidget] = None)
 
 
 class StayOpenMenu(QMenu):
-    """Menu that stays open when a checkable entry is clicked (several entries can be selected at once)"""
+    """
+    Menu that stays open when a checkable entry is clicked (several entries can be selected at once)
+    """
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, event: Optional[QMouseEvent]):
+        """
+        Triggers checkable entries without closing the menu
+
+        :param event: mouse event
+        """
+
         action = self.activeAction()
         if action is not None and action.isEnabled() and action.isCheckable() and action.menu() is None:
             action.trigger()
@@ -149,7 +162,7 @@ class InputHBoxLayouts(QHBoxLayout):
                 self.label.hide()
             if tooltip is not None:
                 self.label.setToolTip(tooltip)
-            self.label.mouseReleaseEvent = lambda _: self.mark(False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+            self.label.mouseReleaseEvent = lambda _: self.mark(False)  # type: ignore[method-assign, assignment]
 
             self.addWidget(self.label, stretch=split)
             if widgets is None or not len(widgets):
@@ -215,14 +228,14 @@ class InputHBoxLayouts(QHBoxLayout):
 
         if self.widgets is not None:
             for widget in self.widgets:
-                widget.mouseReleaseEvent = lambda _: self.mark(False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+                widget.mouseReleaseEvent = lambda _: self.mark(False)  # type: ignore[method-assign, assignment]
 
                 if isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
                     widget.valueChanged.connect(lambda _: self.mark(False))
 
     @property
     def check(self) -> QCheckBox:
-        """Returns the checkbox of a layout that was created with a checkbox"""
+        """Returns checkbox of a layout that was created with a checkbox"""
 
         return notNone(self.checkbox)
 
@@ -271,6 +284,7 @@ class InputHBoxLayouts(QHBoxLayout):
 
     def reset(self):
         """Resets the widgets and clears mark"""
+
         self.mark(False)
 
         if len(self.widgets_list):
@@ -319,28 +333,6 @@ class InputHBoxLayout(InputHBoxLayouts):
             checkbox_connected=checkbox_connected,
             **kwargs
         )
-
-
-def spinBoxNumber(value) -> Optional[float]:
-    """
-    Returns the value for a spin box as finite number (also numeric texts like "1.5d3" of Fortran), None for other values
-    (e.g. None, texts, lists or NaN of a damaged input file)
-    """
-
-    if isinstance(value, str):
-        try:
-            value = float(value.strip().replace('d', 'e').replace('D', 'E'))
-        except ValueError:
-            return None
-    if not isinstance(value, (int, float)):
-        return None
-    try:
-        number = float(value)
-    except OverflowError:
-        # integers larger than the floats: limited by the range of the spin box
-        number = float('inf') if value > 0 else float('-inf')
-        return number
-    return number if isfinite(number) else None
 
 
 class SpinBoxRange:
@@ -398,28 +390,39 @@ class SpinBox(QSpinBox):
         self.setValue(default)
 
     def wheelEvent(self, event: Optional[QWheelEvent]):
-        """Ignores the mouse wheel if scrolling is disabled (e.g. to scroll the page instead of changing the value)"""
+        """
+        Ignores the mouse wheel if scrolling is disabled (to scroll the page instead)
+
+        :param event: wheel event
+        """
 
         if self.scroll_enabled:
             super().wheelEvent(event)
 
     def setValue(self, val):
         """
-        Sets the value, limited to the range of the spin box; values that are no numbers (e.g. of a damaged input file) are
-        ignored, the spin box keeps its value
+        Sets value limited to the range, values that are no numbers (e.g. of damaged input files) are ignored
+
+        :param val: new value
         """
 
-        number = spinBoxNumber(val)
+        number = toNumber(val, from_text=True)
         if number is None:
             return
         super().setValue(int(round(min(max(number, self.minimum()), self.maximum()))))
 
     def reset(self):
         """Resets itself to its default value"""
+
         self.setValue(self.default)
 
     def setAndDefault(self, default: int):
-        """Sets default and value"""
+        """
+        Sets default and value
+
+        :param default: new default value
+        """
+
         self.default = default
         self.setValue(default)
 
@@ -469,33 +472,49 @@ class DoubleSpinBox(QDoubleSpinBox):
         self.setValue(default)
 
     def wheelEvent(self, event: Optional[QWheelEvent]):
-        """Ignores the mouse wheel if scrolling is disabled (e.g. to scroll the page instead of changing the value)"""
+        """
+        Ignores the mouse wheel if scrolling is disabled (to scroll the page instead)
+
+        :param event: wheel event
+        """
 
         if self.scroll_enabled:
             super().wheelEvent(event)
 
     def setValue(self, val):
         """
-        Sets the value, limited to the range of the spin box; values that are no numbers (e.g. of a damaged input file) are
-        ignored, the spin box keeps its value
+        Sets value limited to the range, values that are no numbers (e.g. of damaged input files) are ignored
+
+        :param val: new value
         """
 
-        number = spinBoxNumber(val)
+        number = toNumber(val, from_text=True)
         if number is None:
             return
         super().setValue(min(max(number, self.minimum()), self.maximum()))
 
     def reset(self):
         """Resets itself to its default value"""
+
         self.setValue(self.default)
 
     def setAndDefault(self, default: float):
-        """Sets default and value"""
+        """
+        Sets default and value
+
+        :param default: new default value
+        """
+
         self.default = default
         self.setValue(default)
 
     def textFromValue(self, value: float) -> str:
-        """Removes unnecessary long tailing zeros in input field"""
+        """
+        Removes unnecessary long tailing zeros in input field
+
+        :param value: value of input field
+        """
+
         decimals_total = decimals = self.decimals()
         value_str = f'{value:.{decimals_total}f}'
         for char in value_str[::-1]:
@@ -539,6 +558,7 @@ class LineEdit(QLineEdit):
 
     def reset(self):
         """Resets itself to its default value"""
+
         self.setText(self.default)
 
 
@@ -558,6 +578,7 @@ class PasswordLineEdit(QLineEdit):
 
     def reset(self):
         """Resets itself to empty password"""
+
         self.setText('')
 
 
@@ -617,13 +638,18 @@ class ComboBox(QComboBox):
         self.scroll_enabled = scroll
 
     def wheelEvent(self, event: Optional[QWheelEvent]):
-        """Ignores the mouse wheel if scrolling is disabled (e.g. to scroll the page instead of changing the value)"""
+        """
+        Ignores the mouse wheel if scrolling is disabled (to scroll the page instead)
+
+        :param event: wheel event
+        """
 
         if self.scroll_enabled:
             super().wheelEvent(event)
 
     def reset(self):
         """Resets itself to its default value"""
+
         self.setCurrentIndex(self.default)
 
     def getValue(self, text: bool = False, save: bool = False):
@@ -666,6 +692,7 @@ class ComboBox(QComboBox):
 
     def getDefaultSave(self):
         """Returns default from entry_save"""
+
         if self.entries_save is not None and self.default in range(len(self.entries_save)):
             return self.entries_save[self.default]
         return None
@@ -764,13 +791,20 @@ class FilePath(QWidget):
             self.button_clear.clicked.connect(lambda: self.setPath(None))
 
     def setPath(self, path: Optional[Path], ssh: bool = False):
-        """Sets a path and whether it is ssh"""
+        """
+        Sets a path and whether it is ssh
+
+        :param path: new path
+        :param ssh: if path is on ssh server
+        """
+
         self.path = path
         self.ssh = ssh
         self.displayPath()
 
     def displayPath(self):
         """Displays the path in QLineEdit"""
+
         if self.path is None or not self.path:
             self.path_display.setText('')
             return
@@ -782,7 +816,12 @@ class FilePath(QWidget):
             self.path_display.setText(f'{prefix}: {self.path}')
 
     def setToolTip(self, tooltip: Optional[str]):
-        """Sets a tooltip"""
+        """
+        Sets a tooltip
+
+        :param tooltip: tooltip text
+        """
+
         tooltip = tooltip or ''
         super().setToolTip(tooltip)
         if self.function_ssh is not None:
@@ -791,6 +830,7 @@ class FilePath(QWidget):
 
     def select_path_loc(self):
         """Sets a new local path"""
+
         path = self.function_loc() if self.function_loc is not None else None
         if path is not None:
             self.path = path
@@ -799,6 +839,7 @@ class FilePath(QWidget):
 
     def select_path_ssh(self):
         """Sets a new ssh path"""
+
         path = self.function_ssh() if self.function_ssh is not None else None
         if path is not None:
             self.path = path
@@ -939,8 +980,12 @@ class ProgressTabBar(QTabBar):
         self.progress[index] = max(0, min(100, value)) / 100
         self.update()
 
-    def paintEvent(self, event):
-        """Custom paint event to draw a progress bar"""
+    def paintEvent(self, event: Optional[QPaintEvent]):
+        """
+        Custom paint event to draw a progress bar
+
+        :param event: paint event
+        """
 
         painter = QStylePainter(self)
         option = QStyleOptionTab()
@@ -1004,6 +1049,7 @@ class TimeProgressBar(QProgressBar):
 
     def stopTiming(self):
         """Stops timer"""
+
         if self.elapsed_timer_ended:
             return
         self.elapsed_timer_ended = True
@@ -1026,8 +1072,9 @@ class TimeProgressBar(QProgressBar):
             return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
         return f'{minutes:02d}:{seconds:02d}'
 
-    def value(self) -> float:  # type: ignore[override]  # the value is a float (the progress bar shows an int)
+    def value(self) -> float:  # type: ignore[override]
         """Returns value of progress bar as float"""
+
         return self.val
 
     def setValue(self, value: float):
@@ -1040,8 +1087,12 @@ class TimeProgressBar(QProgressBar):
         self.val = value
         super().setValue(int(value))
 
-    def paintEvent(self, event):
-        """Custom paint event to draw a rounded progress bar with elapsed time, percentage and remaining time"""
+    def paintEvent(self, event: Optional[QPaintEvent]):
+        """
+        Custom paint event to draw a rounded progress bar with elapsed time, percentage and remaining time
+
+        :param event: paint event
+        """
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -1063,9 +1114,12 @@ class TimeProgressBar(QProgressBar):
         fill_width = rect.width() * max(0., min(100., self.val)) / 100
         fill_rect = QRectF(rect.x(), rect.y(), fill_width, rect.height())
         if fill_width > 0:
+            fill_color = self.color
+            if not self.isEnabled():
+                fill_color = palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText)
             painter.save()
             painter.setClipRect(fill_rect)
-            painter.fillPath(track_path, self.color if self.isEnabled() else palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText))
+            painter.fillPath(track_path, fill_color)
             painter.restore()
 
         # texts
@@ -1086,11 +1140,12 @@ class TimeProgressBar(QProgressBar):
         font_bold = QFont(font)
         font_bold.setBold(True)
 
-        # text on top of the filled part: dark on light fill colors, white on dark fill colors (relative luminance)
-        luminance = 0.2126 * self.color.redF() ** 2.2 + 0.7152 * self.color.greenF() ** 2.2 + 0.0722 * self.color.blueF() ** 2.2
+        # text on the filled part: dark on light colors, white on dark colors (relative luminance)
+        red, green, blue = self.color.redF(), self.color.greenF(), self.color.blueF()
+        luminance = 0.2126 * red ** 2.2 + 0.7152 * green ** 2.2 + 0.0722 * blue ** 2.2
         fill_text_color = QColor('#10240f') if luminance > 0.25 else QColor(Styles.white_hex)
 
-        # draw texts twice: in text color outside and in fill text color on top of the filled part
+        # draw texts twice: in text color and in fill text color on the filled part
         empty_rect = QRectF(rect.x() + fill_width, rect.y(), rect.width() - fill_width, rect.height())
         for clip_rect, color in ((empty_rect, text_color), (fill_rect, fill_text_color)):
             if clip_rect.width() <= 0:
@@ -1166,12 +1221,18 @@ class ListWidgetItem(QListWidgetItem):
 
     def execute(self):
         """Executes the provided function with provided function arguments"""
+
         if self.function is not None:
             self.function(**self.function_args, text=self.text().strip())
 
     @staticmethod
     def convert(item: Union[QListWidgetItem, ListWidgetItem]) -> ListWidgetItem:
-        """Convert into a ListWidgetItem"""
+        """
+        Convert into a ListWidgetItem
+
+        :param item: item to convert
+        """
+
         if isinstance(item, ListWidgetItem):
             return item
         return ListWidgetItem(item.text())
@@ -1188,6 +1249,7 @@ class ListWidget(QListWidget):
 
     def executeFunction(self):
         """Executes function from ListWidgetItem if set"""
+
         selected_items = super().selectedItems()
         if not selected_items:
             return
@@ -1195,10 +1257,16 @@ class ListWidget(QListWidget):
 
     def addItemEmpty(self):
         """Adds an empty item"""
+
         super().addItem(ListWidgetItem('', selectable=False))
 
     def addItem(self, item: Union[QListWidgetItem, str, None]):
-        """Adds an item, the text color of non-grey items follows the palette"""
+        """
+        Adds an item
+
+        :param item: item to add
+        """
+
         super().addItem(item)
 
 
@@ -1215,10 +1283,16 @@ class LineNumberArea(QWidget):
 
     def sizeHint(self):
         """Returns size of line number area"""
+
         return QSize(self.editor.lineNumberAreaWidth(), 0)
 
-    def paintEvent(self, event):
-        """Called when a paint event happens"""
+    def paintEvent(self, event: Optional[QPaintEvent]):
+        """
+        Called when a paint event happens
+
+        :param event: paint event
+        """
+
         self.editor.lineNumberAreaPaintEvent(event)
 
 
@@ -1232,8 +1306,6 @@ class FileEditor(QPlainTextEdit):
     :param mono: (optional) if textbox should have mono font
     :param offset: (optional) offset for line numbers
     :param highlighting: (optional) enables highlighting of current selected line
-    :param color_line_number: (optional) color of line number area
-    The colors of the line number area and the line highlighting are derived from the current palette
     """
 
     def __init__(
@@ -1292,10 +1364,14 @@ class FileEditor(QPlainTextEdit):
             selections.append(selection)
         self.setExtraSelections(selections)
 
-    def event(self, event):
-        """Shows the message of a marked line as tooltip"""
+    def event(self, event: Optional[QEvent]) -> bool:
+        """
+        Shows the message of a marked line as tooltip
 
-        if event.type() == QEvent.Type.ToolTip and self.marked_lines:
+        :param event: event of widget
+        """
+
+        if isinstance(event, QHelpEvent) and event.type() == QEvent.Type.ToolTip and self.marked_lines:
             block = self.cursorForPosition(notNone(self.viewport()).mapFromGlobal(event.globalPos())).block()
             message = self.marked_lines.get(block.blockNumber())
             if message:
@@ -1306,24 +1382,37 @@ class FileEditor(QPlainTextEdit):
         return super().event(event)
 
     def updateOffset(self, offset: int):
-        """Updates the offset of the line numbers"""
+        """
+        Updates the offset of the line numbers
+
+        :param offset: offset of line numbers
+        """
+
         self.offset = offset
 
     def lineNumberAreaWidth(self):
         """Returns the width of the line number area"""
+
         digits = len(str(self.blockCount() + self.offset))
         space = 5 + self.fontMetrics().horizontalAdvance('9') * digits
         return space
 
     def updateLineNumberAreaWidth(self):
         """Updates width of line number area"""
+
         if not self.line_numbering:
             return
 
         self.setViewportMargins(self.lineNumberAreaWidth() + 5, 0, 0, 0)
 
     def updateLineNumberArea(self, rect, dy):
-        """Updates line number area"""
+        """
+        Updates line number area
+
+        :param rect: rectangle to update
+        :param dy: scrolled pixels in y-direction
+        """
+
         if dy:
             self.line_number_area.scroll(0, dy)
         else:
@@ -1332,16 +1421,26 @@ class FileEditor(QPlainTextEdit):
         if rect.contains(notNone(self.viewport()).rect()):
             self.updateLineNumberAreaWidth()
 
-    def resizeEvent(self, event):
-        """On resize"""
+    def resizeEvent(self, event: Optional[QResizeEvent]):
+        """
+        On resize
+
+        :param event: resize event
+        """
+
         super().resizeEvent(event)
 
         cr = self.contentsRect()
         self.line_number_area.setGeometry(QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
 
-    def lineNumberAreaPaintEvent(self, event):
-        """Called when a paint event happens"""
-        if not self.line_numbering:
+    def lineNumberAreaPaintEvent(self, event: Optional[QPaintEvent]):
+        """
+        Called when a paint event happens
+
+        :param event: paint event
+        """
+
+        if not self.line_numbering or event is None:
             return
 
         palette = self.palette()
@@ -1373,16 +1472,22 @@ class FileEditor(QPlainTextEdit):
             bottom = top + self.blockBoundingRect(block).height()
             block_number += 1
 
-    def changeEvent(self, event):
-        """Updates the colors that depend on the palette, if the theme changes"""
+    def changeEvent(self, event: Optional[QEvent]):
+        """
+        Updates the colors of the theme
+
+        :param event: change event
+        """
+
         super().changeEvent(event)
-        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+        if event is not None and event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
             if self.highlighting and self.extraSelections():
                 self.highlightCurrentLine()
             self.line_number_area.update()
 
     def highlightCurrentLine(self):
         """Highlight current line"""
+
         selections = []
 
         text_cursor = self.textCursor()
@@ -1432,7 +1537,7 @@ class MplCanvas(FigureCanvasQTAgg):
         disable_interaction: bool = False
     ):
         self.disable_interaction = disable_interaction
-        # matplotlib sets an own (white) palette for the canvas, so the application palette is used
+        # matplotlib sets an own (white) palette for the canvas
         self.pal = QApplication.palette()
 
         # get QT colors
@@ -1476,21 +1581,21 @@ class MplCanvas(FigureCanvasQTAgg):
             'legend.frameon': False,
         }
 
-    def event(self, event):
-        """Updates the colors of the figure, if the theme changes (after the application palette is updated)"""
-        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+    def event(self, event: Optional[QEvent]) -> bool:
+        """
+        Updates the colors of the figure after the theme changed
+
+        :param event: event of widget
+        """
+
+        if event is not None and event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
             QTimer.singleShot(0, self.updateThemeColors)
         return super().event(event)
 
     def updateThemeColors(self) -> bool:
-        """
-        Updates the colors of the figure to the current palette.
-        Elements that use the old background or foreground color get the new colors
+        """Updates elements with the old background or foreground color to the current theme and returns if colors changed"""
 
-        :return: True if colors changed
-        """
-
-        # matplotlib sets an own (white) palette for the canvas, so the application palette is used
+        # matplotlib sets an own (white) palette for the canvas
         palette = QApplication.palette()
         bg_color = palette.color(QPalette.ColorRole.Window).name()
         fg_color = palette.color(QPalette.ColorRole.WindowText).name()
@@ -1502,7 +1607,14 @@ class MplCanvas(FigureCanvasQTAgg):
         if 'facecolor' in self.palette_kwargs:
             self.palette_kwargs['facecolor'] = bg_color
 
-        def replace(color, setter):
+        def replace(color, setter: Callable):
+            """
+            Replaces old background and foreground color
+
+            :param color: current color
+            :param setter: function to set new color
+            """
+
             if same_color(color, old_fg):
                 setter(fg_color)
             elif same_color(color, old_bg):
@@ -1532,45 +1644,81 @@ class MplCanvas(FigureCanvasQTAgg):
 
     def clear(self):
         """Clears fig and resets axes"""
+
         with rc_context(self.get_rc_context()):
             self.fig.clf()
             self.axes = self.fig.add_subplot(**self.palette_kwargs, **self.axes_kwargs)
 
-    def mousePressEvent(self, e):
-        if not self.disable_interaction:
-            super().mousePressEvent(e)
+    def mousePressEvent(self, event: Optional[QMouseEvent]):
+        """
+        Mouse press event, ignored if interaction is disabled
 
-    def mouseMoveEvent(self, e):
-        if not self.disable_interaction:
-            super().mouseMoveEvent(e)
+        :param event: mouse event
+        """
 
-    def mouseReleaseEvent(self, e):
         if not self.disable_interaction:
-            super().mouseReleaseEvent(e)
+            super().mousePressEvent(event)
 
-    def wheelEvent(self, e):
-        if not self.disable_interaction:
-            super().wheelEvent(e)
+    def mouseMoveEvent(self, event: Optional[QMouseEvent]):
+        """
+        Mouse move event, ignored if interaction is disabled
 
-    def keyPressEvent(self, e):
+        :param event: mouse event
+        """
+
         if not self.disable_interaction:
-            super().keyPressEvent(e)
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: Optional[QMouseEvent]):
+        """
+        Mouse release event, ignored if interaction is disabled
+
+        :param event: mouse event
+        """
+
+        if not self.disable_interaction:
+            super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event: Optional[QWheelEvent]):
+        """
+        Wheel event, ignored if interaction is disabled
+
+        :param event: wheel event
+        """
+
+        if not self.disable_interaction:
+            super().wheelEvent(event)
+
+    def keyPressEvent(self, event: Optional[QKeyEvent]):
+        """
+        Key press event, ignored if interaction is disabled
+
+        :param event: key event
+        """
+
+        if not self.disable_interaction:
+            super().keyPressEvent(event)
 
 
 class PlotToolbar(NavigationToolbar2QT):
     """
-    NavigationToolbar2QT that updates the colors of its icons if the theme changes
-    (matplotlib colors the icons only once when the toolbar is created)
+    NavigationToolbar2QT that updates the colors of its icons if the theme changes (matplotlib colors them only once)
     """
 
-    def event(self, event):
-        """Updates the icons after the palette changed"""
-        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
+    def event(self, event: Optional[QEvent]) -> bool:
+        """
+        Updates the icons after the theme changed
+
+        :param event: event of widget
+        """
+
+        if event is not None and event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange):
             QTimer.singleShot(0, self.updateIcons)
         return super().event(event)
 
     def updateIcons(self):
         """Creates the icons again in the colors of the current palette"""
+
         try:
             for text, _, image_file, callback in self.toolitems:
                 if text is not None and image_file is not None and callback in self._actions:
@@ -1590,7 +1738,12 @@ class NoMessageToolbar(PlotToolbar):
         self.canvas = canvas
 
     def set_message(self, s):
-        """Message is set"""
+        """
+        Message is set
+
+        :param s: message
+        """
+
         pass
 
     def home(self, *args):
@@ -1617,7 +1770,6 @@ class TargetPreview(QWidget):
         self.setBackgroundRole(QPalette.ColorRole.Base)
         self.setAutoFillBackground(True)
 
-        # (not self.font, which would hide QWidget.font())
         self.preview_font = QFont()
         self.font_metrics = QFontMetrics(self.preview_font)
 
@@ -1660,7 +1812,7 @@ class TargetPreview(QWidget):
             self.total_segments += row.segment_count
         self.update()
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: Optional[QResizeEvent]):
         """
         When widget is resized
 
@@ -1671,7 +1823,7 @@ class TargetPreview(QWidget):
         self.x_margin = (self.width() - self.target_width) / 2
         self.y_margin = (self.height() * 0.05) / 2
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: Optional[QPaintEvent]):
         """
         When widget is painted
 
@@ -1756,7 +1908,7 @@ class CrystalPreview(MplCanvas):
     :param show_legend: (optional) show legend
     :param atom_size: (optional) size of atoms
     :param line_width: (optional) line width
-    :param zoom: (optional) zoom of the 3D view, 1 fits all plotted objects into the canvas
+    :param zoom: (optional) zoom of the 3D view (1 fits all plotted objects into the canvas)
     :param elev: (optional) camera elevation
     :param azim: (optional) camera azimuthal
     :param roll: (optional) camera roll
@@ -1823,8 +1975,7 @@ class CrystalPreview(MplCanvas):
         self.roll = roll
 
         self.size_hint = size_hint
-        # the plot is only drawn while the preview is visible, changes of a hidden preview are drawn when it is shown
-        # (drawing the previews of all simulation tabs took most of the start time of the GUI)
+        # hidden previews are drawn when shown (drawing all previews took most of the start time)
         self.plot_outdated = False
 
         self.surf_xx, self.surf_yy = np.meshgrid(range(-2, 2), range(-1, 3))
@@ -1847,10 +1998,10 @@ class CrystalPreview(MplCanvas):
         """Sets the theme aware colors of vectors, beam and surface"""
 
         dark_theme = QColor(self.bg_color).lightness() < 128
-        self.color_basis_vecs = ICON_COLORS['blue'][dark_theme]
-        self.color_beam = ICON_COLORS['red'][dark_theme]
-        self.color_coord_system = ICON_COLORS['orange'][dark_theme]
-        self.color_surface = ICON_COLORS['blue'][dark_theme]
+        self.color_basis_vecs = Styles.accent_colors['blue'][dark_theme]
+        self.color_beam = Styles.accent_colors['red'][dark_theme]
+        self.color_coord_system = Styles.accent_colors['orange'][dark_theme]
+        self.color_surface = Styles.accent_colors['blue'][dark_theme]
 
     def updateThemeColors(self) -> bool:
         """Redraws the preview in the colors of the current palette"""
@@ -1862,10 +2013,7 @@ class CrystalPreview(MplCanvas):
         return True
 
     def _setAxesEqual(self):
-        """
-        Make axes of 3D plot have equal scale so that spheres appear as spheres, cubes as cubes, etc.
-        The limits are a cube around all plotted points, which fills the whole canvas
-        """
+        """Make axes of 3D plot have equal scale (a cube around all plotted points that fills the canvas)"""
 
         if self.plotted_points:
             points = np.vstack(self.plotted_points)
@@ -1883,12 +2031,23 @@ class CrystalPreview(MplCanvas):
         self.axes.set_position((0, 0, 1, 1))
 
     def _addPlottedPoints(self, *points: np.ndarray):
-        """Remembers plotted points for the calculation of the axes limits"""
+        """
+        Remembers plotted points for the calculation of the axes limits
+
+        :param points: plotted points
+        """
 
         for point in points:
             self.plotted_points.append(np.atleast_2d(point))
 
-    def _plotVec3(self, vector: np.ndarray, startpoint: np.ndarray = np.zeros(3), label: Optional[str] = None, label_pos: Optional[np.ndarray] = None, **plot_kwargs):
+    def _plotVec3(
+        self,
+        vector: np.ndarray,
+        startpoint: np.ndarray = np.zeros(3),
+        label: Optional[str] = None,
+        label_pos: Optional[np.ndarray] = None,
+        **plot_kwargs
+    ):
         """
         Plots vector on axis
 
@@ -1988,10 +2147,18 @@ class CrystalPreview(MplCanvas):
 
     def _plotBeam(self):
         """Plots the beam"""
-        self._plotVec3(np.array([0, 0, 1]), startpoint=np.array([0, 0, -1]), color=self.color_beam, label='${beam}$', label_pos=np.array([0., 0.1, -0.5]))
+
+        self._plotVec3(
+            np.array([0, 0, 1]),
+            startpoint=np.array([0, 0, -1]),
+            color=self.color_beam,
+            label='${beam}$',
+            label_pos=np.array([0., 0.1, -0.5])
+        )
 
     def _plotSurface(self):
         """Plot surface"""
+
         self.axes.plot_surface(self.surf_xx, self.surf_yy, self.surf_z, color=self.color_surface, alpha=0.15, shade=False)
 
     def _calcMillerRotMat(self):
@@ -2017,7 +2184,7 @@ class CrystalPreview(MplCanvas):
         ])
 
     def _updatePlot(self):
-        """Updates the plot, if the preview is hidden it is updated when it is shown"""
+        """Updates the plot (hidden previews when they are shown)"""
 
         if not self.isVisible():
             self.plot_outdated = True
@@ -2025,6 +2192,12 @@ class CrystalPreview(MplCanvas):
         self._drawPlot()
 
     def showEvent(self, event: Optional[QShowEvent]):
+        """
+        Draws an outdated plot when shown
+
+        :param event: show event
+        """
+
         if self.plot_outdated:
             self._drawPlot()
         super().showEvent(event)
@@ -2071,8 +2244,7 @@ class CrystalPreview(MplCanvas):
         if self.show_surface:
             self._plotSurface()
 
-        # matplotlib keeps 3D axes square in the middle of the canvas and clips lines, atoms and surfaces to this
-        # square (texts are not clipped), so after rotating, panning or zooming only the labels would be visible outside
+        # matplotlib clips 3D axes to a square in the middle of the canvas (not the texts)
         for artist in self.axes.get_children():
             artist.set_clip_on(False)
 
@@ -2125,6 +2297,7 @@ class CrystalPreview(MplCanvas):
 
     def sizeHint(self):
         """Returns size"""
+
         if self.size_hint is None:
             super().sizeHint()
         else:
@@ -2132,4 +2305,5 @@ class CrystalPreview(MplCanvas):
 
     def minimumSizeHint(self):
         """Returns minimum size"""
+
         return QSize(50, 50)

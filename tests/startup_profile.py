@@ -1,14 +1,12 @@
-"""
-Profile of the start of the GUI: imports, main window with a simulation tab for every example (saves/*/example_*) and
-showing the window. Writes the times of the phases and the slowest functions (cProfile) to a report.
-
-    python tests/startup_profile.py                         report in tests/startup_profile.txt
-    python tests/startup_profile.py --output FILE --top 50
-
-The GUI starts as for a user with these configurations (autosave.json, the save folders of the examples are loaded),
-the simulation programs are not needed (empty stand-in program folders). The settings and saves of the user are not
-used. Also run by tests/test_startup.py (the report of the last test run is tests/startup_profile.txt).
-"""
+# Profile of the start of the GUI: imports, main window with a simulation tab for every example (saves/*/example_*) and
+# showing the window. Writes the times of the phases and the slowest functions (cProfile) to a report.
+#
+#     python tests/startup_profile.py                         report in tests/startup_profile.txt
+#     python tests/startup_profile.py --output FILE --top 50
+#
+# The GUI starts as for a user with these configurations (autosave.json, the save folders of the examples are loaded),
+# the simulation programs are not needed (empty stand-in program folders). The settings and saves of the user are not
+# used. Also run by tests/test_startup.py (the report of the last test run is tests/startup_profile.txt).
 
 import cProfile
 import io
@@ -22,6 +20,7 @@ import time
 from argparse import ArgumentParser
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -34,7 +33,11 @@ PROGRAMS = [
 
 
 def prepareConfigurations(temp: Path) -> int:
-    """Copies the examples, creates stand-in program folders and writes the configurations, returns the number of tabs"""
+    """
+    Copies the examples, creates stand-in program folders and writes the configurations, returns the number of tabs
+
+    :param temp: temporary folder
+    """
 
     configurations = []
     for program, examples, version, binary_name in PROGRAMS:
@@ -56,7 +59,14 @@ def prepareConfigurations(temp: Path) -> int:
 
 
 def report(profile: cProfile.Profile, phases: list, tabs: int, top: int) -> str:
-    """Text of the report: times of the phases, slowest functions of the GUI (cumulative) and of all code (own time)"""
+    """
+    Text of the report: times of the phases, slowest functions of the GUI (cumulative) and of all code (own time)
+
+    :param profile: profile of the start
+    :param phases: durations of the phases of the start
+    :param tabs: number of simulation tabs
+    :param top: number of functions shown
+    """
 
     lines = [f'Start of the GUI with {tabs} simulation tabs (python {sys.version.split()[0]}, {sys.platform})', '']
     for name, seconds in phases:
@@ -77,7 +87,9 @@ def report(profile: cProfile.Profile, phases: list, tabs: int, top: int) -> str:
 
 
 def main() -> int:
-    parser = ArgumentParser(description=__doc__.strip().splitlines()[0])
+    """Writes the profile of the start of the GUI and returns the exit code"""
+
+    parser = ArgumentParser(description='Profile of the start of the GUI')
     parser.add_argument('--output', default=str(Path(__file__).resolve().parent / 'startup_profile.txt'), help='file of the report')
     parser.add_argument('--top', type=int, default=40, help='number of functions in the lists')
     args = parser.parse_args()
@@ -109,8 +121,11 @@ def main() -> int:
         import Pages.ConfigurationPage
         from PyQt6.QtWidgets import QCheckBox, QMessageBox
         for module in (Utility.Dialogs, Pages.MainWindow, Pages.ProgramPage, Pages.ConfigurationPage):
-            setattr(module, 'showMessageBox', lambda *a, **k: (type('Box', (), {'checkBox': lambda self: QCheckBox()})(),
-                                                               QMessageBox.StandardButton.Ok))
+            setattr(
+                module,
+                'showMessageBox',
+                lambda *a, **k: (type('Box', (), {'checkBox': lambda self: QCheckBox()})(), QMessageBox.StandardButton.Ok)
+            )
 
         start = time.perf_counter()
         profile.enable()

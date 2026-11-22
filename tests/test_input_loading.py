@@ -1,12 +1,15 @@
-"""Loading of tri.inp and layer.inp of SDTrimSP: the input written by the GUI must describe the same simulation"""
+# Loading of tri.inp and layer.inp of SDTrimSP: the input written by the GUI must describe the same simulation
 
 from re import search
 
+
 import pytest
+
 
 from conftest import SIMULATION_PROGRAMS
 
 from Containers.Arguments import ArgumentValues
+
 from Simulations.SDTrimSP import DefaultValues, SimulationInput, Versions, speciesList
 
 
@@ -15,7 +18,14 @@ pytestmark = pytest.mark.skipif(not (FOLDER / 'tables').is_dir(), reason='SDTrim
 
 
 def load(tmp_path, tri: str, layer: str = '', version: str = Versions.V_707):
-    """Loads the input files with SDTrimSP 7.07 and returns (arguments, errors)"""
+    """
+    Loads the input files with SDTrimSP 7.07 and returns (arguments, errors)
+
+    :param tmp_path: temporary folder of the test
+    :param tri: content of tri.inp
+    :param layer: content of layer.inp
+    :param version: version of simulation
+    """
 
     (tmp_path / 'tri.inp').write_text(tri)
     if layer:
@@ -29,6 +39,15 @@ def load(tmp_path, tri: str, layer: str = '', version: str = Versions.V_707):
 
 
 def tri(symbols: str, qubeam: str, qu: str, extra: str = '') -> str:
+    """
+    Returns tri.inp with the given species
+
+    :param symbols: symbols of the elements
+    :param qubeam: fractions of the beam
+    :param qu: atomic fractions of the target
+    :param extra: further lines of the input file
+    """
+
     return f"""test
 &TRI_INP
      ncp = {symbols.count(',') + 1}
@@ -47,12 +66,24 @@ def tri(symbols: str, qubeam: str, qu: str, extra: str = '') -> str:
 
 
 def symbols(arguments) -> list:
+    """
+    Returns the symbols of the species in the order of the input file
+
+    :param arguments: arguments of simulation
+    """
+
     group = arguments.settings.get('group_elements')
     return [symbol for symbol, _ in speciesList(arguments, group)]
 
 
 def test_species_order_is_kept(tmp_path):
     # projectile first (as in most cases of SDTrimSP): not grouped
+    """
+    Species order is kept
+
+    :param tmp_path: temporary folder of the test
+    """
+
     arguments, errors = load(tmp_path, tri('"He", "Ni"', '1.0, 0.0', '0.0, 1.0'))
     assert symbols(arguments) == ['He', 'Ni']
     assert arguments.settings.get('group_elements') is False
@@ -72,6 +103,8 @@ def test_default_inelastic_loss_model(tmp_path):
     """
     Since 6.09 SDTrimSP chooses the model of each element if inel0 is not given or -1 (4 for H, D, T, 5 for He, 7 otherwise):
     the automatic model of the GUI, inel0 is only written if a model is selected. Before, inel0 is the default of the version
+
+    :param tmp_path: temporary folder of the test
     """
 
     model = ArgumentValues.InelasticLossModel
@@ -95,13 +128,23 @@ def test_default_inelastic_loss_model(tmp_path):
 
 
 def test_number_of_sweeps(tmp_path):
+    """
+    Number of sweeps
+
+    :param tmp_path: temporary folder of the test
+    """
+
     arguments, _ = load(tmp_path, tri('"Ar", "Si"', '1.0, 0.0', '0.0, 1.0', '     case_alpha = 5\n     number_calc = 9'))
     assert arguments.beam_args.get('sweep') == 9
     assert isinstance(arguments.beam_args.get('sweep'), int)
 
 
 def test_target_species_from_layer_file(tmp_path):
-    """With a layer file (iq0 = -1) qu is not needed"""
+    """
+    With a layer file (iq0 = -1) qu is not needed
+
+    :param tmp_path: temporary folder of the test
+    """
 
     text = tri('"Ar", "Si", "O"', '1.0, 0.0, 0.0', '', '     iq0 = -1').replace('     qu = \n', '')
     layer = """! layers  thickness  qu_2  qu_3
@@ -117,7 +160,11 @@ def test_target_species_from_layer_file(tmp_path):
 
 
 def test_layers_longer_than_target(tmp_path):
-    """SDTrimSP uses the first nqx segments of layer.inp with their thickness (ttarget is not used)"""
+    """
+    SDTrimSP uses the first nqx segments of layer.inp with their thickness (ttarget is not used)
+
+    :param tmp_path: temporary folder of the test
+    """
 
     text = tri('"Si", "W"', '1.0, 0.0', '0.0, 1.0', '     iq0 = -1')
     layer = """! layers  thickness  qu_2
@@ -134,7 +181,11 @@ def test_layers_longer_than_target(tmp_path):
 
 
 def test_layers_shorter_than_target(tmp_path):
-    """SDTrimSP repeats the segments of layer.inp (starting with the first layer) until nqx segments are reached"""
+    """
+    SDTrimSP repeats the segments of layer.inp (starting with the first layer) until nqx segments are reached
+
+    :param tmp_path: temporary folder of the test
+    """
 
     text = tri('"Si", "W"', '1.0, 0.0', '0.0, 1.0', '     iq0 = -1')
     layer = """! layers  thickness  qu_2
@@ -156,6 +207,12 @@ def test_layers_shorter_than_target(tmp_path):
 def test_same_element_in_beam_and_target(tmp_path):
     # the same element as separate projectile and target species (case Cu_Cu_crystal of SDTrimSP, its crystal.inp has
     # two species): kept separate
+    """
+    Same element in beam and target
+
+    :param tmp_path: temporary folder of the test
+    """
+
     arguments, errors = load(tmp_path, tri('"Cu", "Cu"', '1.0, 0.0', '0.0, 1.0', '     qumax = 0.0, 1.0'))
     assert arguments.settings.get('group_elements') is False
     assert [row.max_atomic_fraction for row in arguments.beam_rows + arguments.target_rows] == [0.0, 1.0]
@@ -174,6 +231,12 @@ def test_same_element_in_beam_and_target(tmp_path):
 
 def test_crystal_file_of_older_versions_is_kept(tmp_path):
     # SDTrimSP 6.09 reads crystal.inp with l_crystal = .true. (additional setting), the GUI has crystals only since 7.00
+    """
+    Crystal file of older versions is kept
+
+    :param tmp_path: temporary folder of the test
+    """
+
     from Simulations.Simulations import writeInputFiles
 
     arguments, errors = load(tmp_path, tri('"Cu", "Cu"', '1.0, 0.0', '0.0, 1.0', '     l_crystal = .true.'))

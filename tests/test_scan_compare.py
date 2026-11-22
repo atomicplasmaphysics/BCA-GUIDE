@@ -1,10 +1,12 @@
-"""Parameter scans of a simulation tab and the comparison of several simulations"""
+# Parameter scans of a simulation tab and the comparison of several simulations
 
 import csv
+
 
 import numpy as np
 
 import pytest
+
 
 from conftest import SAVES, SIMULATION_PROGRAMS, TEST_SAVES, addSimulationPage, copySave, pump
 
@@ -20,6 +22,15 @@ pytestmark = pytest.mark.skipif(not (FOLDER / 'tables').is_dir() or not (EXAMPLE
 
 
 def examplePage(main_window, qapp, tmp_path, example: str = 'example_01_Ar_on_Au'):
+    """
+    Opens an example in a simulation tab
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param example: name of the example
+    """
+
     save = copySave(EXAMPLES / example, tmp_path / example)
     sc, page = addSimulationPage(main_window, example, 0, FOLDER, SimulationInput.findBinary(FOLDER) or FOLDER / 'SDTrimSP.exe', Versions.V_707, save)
     pump(qapp)
@@ -27,6 +38,12 @@ def examplePage(main_window, qapp, tmp_path, example: str = 'example_01_Ar_on_Au
 
 
 def test_summary_of_examples(qapp):
+    """
+    Summary of examples
+
+    :param qapp: QApplication of the tests
+    """
+
     simulation = SimulationInput()
     simulation.updateElements(FOLDER, Versions.V_707)
     analysis = SimulationAnalysis(simulation.element_data)
@@ -46,6 +63,16 @@ def test_summary_of_examples(qapp):
 
 
 def test_compare_dialog(main_window, qapp, tmp_path, monkeypatch, errors):
+    """
+    Compare dialog
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    """
+
     from Pages.CompareDialog import CompareDialog
     import Pages.CompareDialog as compare_module
 
@@ -99,6 +126,8 @@ def test_compare_dialog(main_window, qapp, tmp_path, monkeypatch, errors):
 
 
 def test_range_values():
+    """Range values"""
+
     from Pages.ParameterScan import rangeValues, formatRangeValue, parseValues
 
     assert rangeValues(0, 80, 5) == pytest.approx([0, 20, 40, 60, 80])
@@ -114,7 +143,14 @@ def test_range_values():
 
 
 def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
-    """Several values in the input fields of the tab: marks, popup, preview and the simulations of the scan"""
+    """
+    Several values in the input fields of the tab: marks, popup, preview and the simulations of the scan
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
 
     from Pages.ParameterScan import ScanFieldOverlay
     from Pages.CompareDialog import readScanFile
@@ -130,7 +166,7 @@ def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
     pump(qapp)
     assert page.tab_widget.tabText(4) == 'Parameter scan results'
     overlay = energy.findChild(ScanFieldOverlay)
-    assert overlay is not None and overlay.key == 'energy_Ar' and not overlay.isHidden() and overlay.width() == ScanFieldOverlay.SIZE
+    assert overlay is not None and overlay.key == 'energy_Ar' and not overlay.isHidden() and overlay.width() == ScanFieldOverlay.markSize
     settings = page.settings_group_layout_settings
     assert notNone(settings.fluence.findChild(ScanFieldOverlay)).key == 'fluence'
     assert notNone(settings.histories_total.findChild(ScanFieldOverlay)).key == 'histories'
@@ -264,14 +300,22 @@ def test_parameter_scan_fields(main_window, qapp, tmp_path, errors):
 
     # without the scan the fields are shown as usual
     page.scan.setValues('energy_Ar', None)
-    assert page.scan.valuesText('energy_Ar') == '' and overlay.width() == ScanFieldOverlay.SIZE
+    assert page.scan.valuesText('energy_Ar') == '' and overlay.width() == ScanFieldOverlay.markSize
     page.action_scan.setChecked(False)
     assert overlay.isHidden() and page.preview_selector_widget.isHidden() and page.tab_widget.tabText(4) == 'Simulation results'
     assert not errors, '\n'.join(errors)
 
 
 def test_parameter_scan_state(main_window, qapp, tmp_path, monkeypatch, errors):
-    """The scan is stored in the configuration (restart of the GUI) and in scan.json, which opens the scan again"""
+    """
+    The scan is stored in the configuration (restart of the GUI) and in scan.json, which opens the scan again
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    """
 
     import Pages.ProgramPage as program_page
     from Containers.SimulationConfiguration import SimulationConfiguration
@@ -350,9 +394,16 @@ def test_parameter_scan_state(main_window, qapp, tmp_path, monkeypatch, errors):
 
 
 def test_compare_parameters(main_window, qapp, tmp_path, errors):
-    """Lines over a parameter and 2D maps over two parameters of a scan"""
+    """
+    Lines over a parameter and 2D maps over two parameters of a scan
 
-    from Pages.CompareDialog import CompareDialog, ALL_VALUES
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
+
+    from Pages.CompareDialog import CompareDialog
 
     sc, page = examplePage(main_window, qapp, tmp_path)
     folders = [EXAMPLES / 'example_06_Ar_on_W_crystal', EXAMPLES / 'example_07_Ar_on_W_amorphous', EXAMPLES / 'example_01_Ar_on_Au']
@@ -361,7 +412,7 @@ def test_compare_parameters(main_window, qapp, tmp_path, errors):
     pump(qapp)
     dialog.select('summary', 'Reflection coefficient')
     assert dialog.x_parameter.currentText() == 'a'
-    assert dialog.filters['b'].currentText() == ALL_VALUES
+    assert dialog.filters['b'].currentText() == CompareDialog.allValues
     labels, columns = dialog.data
     # one line per value of b
     assert len(labels) == 4
@@ -377,6 +428,16 @@ def test_compare_parameters(main_window, qapp, tmp_path, errors):
 
 @pytest.mark.simulation
 def test_parameter_scan_run(main_window, qapp, tmp_path, monkeypatch, errors):
+    """
+    Parameter scan run
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param monkeypatch: pytest monkeypatch
+    :param errors: list of logged errors
+    """
+
     from Utility.GlobalConf import GlobalConf
     from Pages.ProgramPage import SimulationPage
 
@@ -415,7 +476,14 @@ TRIDYN_FOLDER = SIMULATION_PROGRAMS / 'TRIDYN' / 'Tridyn2022'
 
 @pytest.mark.skipif(not (TEST_SAVES / 'TRIDYN' / 'H_Ar_on_Fe_W_60deg').is_dir(), reason='TRIDYN test simulation not available')
 def test_parameter_scan_tridyn(main_window, qapp, tmp_path, errors):
-    """TRIDYN: the beam and target properties and the electronic stopping mode are scanned, the values are in the input file"""
+    """
+    TRIDYN: the beam and target properties and the electronic stopping mode are scanned, the values are in the input file
+
+    :param main_window: main window of the GUI
+    :param qapp: QApplication of the tests
+    :param tmp_path: temporary folder of the test
+    :param errors: list of logged errors
+    """
 
     from Pages.ParameterScan import ScanFieldOverlay
     from Simulations.TRIDYN2022 import SimulationInput as TridynInput

@@ -22,7 +22,9 @@ from pathlib import Path
 from shutil import move, rmtree, make_archive
 from platform import system
 
+
 import PyInstaller.__main__
+
 
 current_dir = Path(__file__).resolve().parent
 parent_dir = current_dir.parent
@@ -32,9 +34,6 @@ from Utility.GlobalConf import GlobalConf  # noqa: E402 (needs the path of the p
 
 dist_path = current_dir / 'dist'
 build_path = current_dir / 'build'
-
-SYSTEM_NAMES = {'Windows': 'windows', 'Linux': 'linux', 'Darwin': 'mac'}
-
 
 def clearFiles():
     """Removes the build and dist folders and the *.spec files"""
@@ -47,7 +46,11 @@ def clearFiles():
 
 
 def selfTest(executable: Path) -> bool:
-    """Starts the program with --self-test, returns if the test passed"""
+    """
+    Starts the program with --self-test, returns if the test passed
+
+    :param executable: path of the program
+    """
 
     try:
         result = run([str(executable), '--self-test'], env=dict(environ, QT_QPA_PLATFORM='offscreen'), timeout=300)
@@ -62,7 +65,12 @@ def selfTest(executable: Path) -> bool:
 
 
 def archive(folder: Path, system_name: str) -> Path:
-    """Packs the folder of the program for the download (macOS: ditto keeps the links of the app bundle)"""
+    """
+    Packs the folder of the program for the download (macOS: ditto keeps the links of the app bundle)
+
+    :param folder: folder of the program
+    :param system_name: name of the operating system
+    """
 
     base = parent_dir / folder.name
     if system_name == 'Darwin':
@@ -74,13 +82,16 @@ def archive(folder: Path, system_name: str) -> Path:
 
 
 def main() -> int:
+    """Builds the program and returns the exit code"""
+
     parser = ArgumentParser(description='Builds the GUI as program that runs without Python')
     parser.add_argument('--onefile', action='store_true', help='single file instead of a folder (slower start)')
     parser.add_argument('--archive', action='store_true', help='pack the folder for the download (zip or tar.gz)')
     args = parser.parse_args()
 
     system_name = system()
-    suffix = SYSTEM_NAMES.get(system_name, system_name.lower())
+    system_names = {'Windows': 'windows', 'Linux': 'linux', 'Darwin': 'mac'}
+    suffix = system_names.get(system_name, system_name.lower())
     # icon of the executable: .icns for macOS, otherwise converted from the png (PyInstaller converts it with Pillow)
     icon = parent_dir / 'assets' / ('tu_logo.icns' if system_name == 'Darwin' else 'tu_logo.png')
     divider = ';' if system_name == 'Windows' else ':'
@@ -116,16 +127,24 @@ def main() -> int:
         executable = result
     else:
         # macOS: the app bundle, otherwise the folder with the executable and the folder _internal of the libraries
-        built = dist_path / f'{name}.app' if system_name == 'Darwin' else dist_path / name
         result = parent_dir / f'{GlobalConf.title}_{suffix}'
-        executable = (result / built.name / 'Contents' / 'MacOS' / name if system_name == 'Darwin'
-                      else result / (f'{name}.exe' if system_name == 'Windows' else name))
+        if system_name == 'Darwin':
+            built = dist_path / f'{name}.app'
+            executable = result / built.name / 'Contents' / 'MacOS' / name
+        elif system_name == 'Windows':
+            built = dist_path / name
+            executable = result / f'{name}.exe'
+        else:
+            built = dist_path / name
+            executable = result / name
 
     if not built.exists():
         print('\n\nERROR creating executable')
         return 1
-    if result.exists():
-        rmtree(result) if result.is_dir() else result.unlink()
+    if result.is_dir():
+        rmtree(result)
+    elif result.exists():
+        result.unlink()
     if args.onefile or system_name != 'Darwin':
         move(str(built), str(result))
     else:

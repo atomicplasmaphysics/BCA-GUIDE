@@ -3,11 +3,12 @@ from pathlib import Path
 from re import findall
 import logging
 
-import numpy as np
 
+import numpy as np
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QGridLayout, QSlider
+
 
 from Utility.Styles import paletteColormap
 from Utility.Layouts import (
@@ -117,7 +118,13 @@ def tridynSpecies(arguments: SimulationArguments) -> List[dict]:
 
 
 def speciesAbundances(arguments: SimulationArguments, species: List[dict], structure) -> List[float]:
-    """Returns the atomic fractions of all species in a layer of the target structure (0 for projectiles that are not in the target)"""
+    """
+    Returns atomic fractions of all species in a layer of the target structure (0 for projectiles that are not in the target)
+
+    :param arguments: arguments of simulation
+    :param species: species of the simulation (see simulationSpecies)
+    :param structure: <StructureArguments> of the layer
+    """
 
     target_count = sum(entry['target'] is not None for entry in species)
     abundances = []
@@ -131,38 +138,45 @@ def speciesAbundances(arguments: SimulationArguments, species: List[dict], struc
     return abundances
 
 
-# columns of an irradiation condition in *_indat.dat (Fortran format of TRIDYN: ircp, ie0, e0, ef0, alpha0, qubeam,
-# iadis and the parameters of the angular distribution)
-IRRADIATION_COLUMNS = [3, 3, 10, 10, 10, 7, 4]
-IRRADIATION_PARAMETER_COLUMN = 8
-
-
 def fortranFloat(text: str) -> float:
-    """Returns the value of a Fortran number, NaN for a value that did not fit into its column ("*****")"""
+    """
+    Returns value of a Fortran number, NaN for a value that did not fit into its column ("*****")
+
+    :param text: Fortran number
+    """
 
     text = text.strip()
-    return float('nan') if '*' in text else float(text)
+    if '*' in text:
+        return float('nan')
+    return float(text)
 
 
 def irradiationFields(line: str) -> List[str]:
     """
-    Returns the fields of an irradiation condition of *_indat.dat. TRIDYN writes values that do not fit into their
-    column as "*****" (e.g. energies above 10^7 eV), which are then joined with the neighboring value: such lines are
-    divided by the columns of the format
+    Returns fields of an irradiation condition of *_indat.dat. TRIDYN writes values that do not fit into their column as
+    "*****" (e.g. energies above 10^7 eV), which are then joined with the neighboring value, so such lines are divided by
+    the columns of the format
+
+    :param line: line of *_indat.dat
     """
+
+    # widths of the columns in the Fortran format of TRIDYN: ircp, ie0, e0, ef0, alpha0, qubeam, iadis and the parameters
+    # of the angular distribution
+    column_widths = [3, 3, 10, 10, 10, 7, 4]
+    parameter_width = 8
 
     line = line.rstrip('\r\n')
     fields = line.split()
-    if '*' not in line and len(fields) >= len(IRRADIATION_COLUMNS):
+    if '*' not in line and len(fields) >= len(column_widths):
         return fields
     fields = []
     start = 0
-    for width in IRRADIATION_COLUMNS:
+    for width in column_widths:
         fields.append(line[start:start + width])
         start += width
     while start < len(line.rstrip()):
-        fields.append(line[start:start + IRRADIATION_PARAMETER_COLUMN])
-        start += IRRADIATION_PARAMETER_COLUMN
+        fields.append(line[start:start + parameter_width])
+        start += parameter_width
     return fields
 
 
@@ -342,7 +356,11 @@ class HlTargetSettings(HlGeneralTargetSettings):
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
-        """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
+        """
+        Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)
+
+        :param arguments: arguments of simulation
+        """
 
         self.reset()
         target_args = arguments.target_args
@@ -395,7 +413,11 @@ class HlTargetSettings(HlGeneralTargetSettings):
         return not_loadable
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         layer_table_rows = value_dict.get('layer_table_rows')
         if layer_table_rows is not None:
@@ -864,7 +886,11 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
             self.layout_reflected_projectiles.check.setEnabled(True)
 
     def updatePrecisionOrProjectiles(self, precision: bool = True):
-        """Either precision or projectiles can be set"""
+        """
+        Either precision or projectiles can be set
+
+        :param precision: (optional) if precision is set (otherwise the number of projectiles)
+        """
 
         if precision is True:
             precision = self.layout_precision.check.isChecked()
@@ -1039,7 +1065,11 @@ class VlSimulationSettings(VlGeneralSimulationSettings):
         )
 
     def loadArguments(self, arguments: SimulationArguments) -> list:
-        """Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)"""
+        """
+        Loads <SimulationArguments> container. Returns list of not loadable parameters (default used)
+
+        :param arguments: arguments of simulation
+        """
 
         self.reset()
         settings = arguments.settings
@@ -1500,7 +1530,7 @@ class CompRowBeamSettings(CompRow):
 
         self.action_switch.setDisabled(True)
         self.action_switch.currentIndexChanged.connect(self.contentChanged.emit)
-        self.action_switch.mouseReleaseEvent = lambda _: setWidgetBackground(self.action_switch, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+        self.action_switch.mouseReleaseEvent = lambda _: setWidgetBackground(self.action_switch, False)  # type: ignore[method-assign, assignment]
 
         # kinetic energy mode
         """
@@ -1529,7 +1559,7 @@ class CompRowBeamSettings(CompRow):
         for i in range(self.modeKineticEnergy.count()):
             self.modeKineticEnergy.setItemData(i, self.modeKineticEnergyTooltips[i], Qt.ToolTipRole)
         self.modeKineticEnergy.setCurrentIndex(DefaultValues.ie0 + 1)
-        self.modeKineticEnergy.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeKineticEnergy, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+        self.modeKineticEnergy.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeKineticEnergy, False)  # type: ignore[method-assign, assignment]
         """
 
         # kinetic energy ramp end
@@ -1570,7 +1600,7 @@ class CompRowBeamSettings(CompRow):
         for i in range(self.modeAngle.count()):
             self.modeAngle.setItemData(i, self.modeAngleTooltips[i], Qt.ToolTipRole)
         self.modeAngle.setCurrentIndex(DefaultValues.alpha)
-        self.modeAngle.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeAngle, False)  # type: ignore[method-assign, assignment]  # replaces the event handler of this widget
+        self.modeAngle.mouseReleaseEvent = lambda _: setWidgetBackground(self.modeAngle, False)  # type: ignore[method-assign, assignment]
         """
 
         # incident angle parameter 1
@@ -1617,12 +1647,20 @@ class CompRowBeamSettings(CompRow):
         self.cutoff_energy_input.setEnabled(self.cutoff_energy_checkbox.isChecked())
 
     def updateMaxConcentration(self, max_concentration):
-        """Enable/Disable max.concentration action depending if max_concentration = 1"""
+        """
+        Enable/Disable max.concentration action depending if max_concentration = 1
+
+        :param max_concentration: maximum atomic fraction
+        """
 
         self.action_switch.setDisabled(max_concentration == 1)
 
     def setElement(self, element: Element):
-        """Sets rows element to element"""
+        """
+        Sets rows element to element
+
+        :param element: new element
+        """
 
         self.element = element
 
@@ -1654,7 +1692,11 @@ class CompRowBeamSettings(CompRow):
         super().setElement(element)
 
     def adaptElement(self, element: Element):
-        """Adapts element specific parameters"""
+        """
+        Adapts element specific parameters
+
+        :param element: element with parameters
+        """
 
         self.atomic_mass.setValue(round(element.atomic_mass, self.element_precision))
 
@@ -1739,7 +1781,12 @@ class CompRowBeamSettings(CompRow):
         )
 
     def setArguments(self, arguments: RowArguments, general_arguments: Union[SimulationArguments, GeneralArguments]):
-        """Sets <RowArguments> container of parameters for row"""
+        """
+        Sets <RowArguments> container of parameters for row
+
+        :param arguments: arguments of row
+        :param general_arguments: arguments of simulation
+        """
 
         assumed = arguments.get('assumed')
         if not isinstance(assumed, list):
@@ -1850,7 +1897,11 @@ class CompRowTargetSettings(CompRowBeamSettings):
         return super().getArguments()
 
     def receive(self, value_dict: dict):
-        """Receives other settingsChanged pyqtSignal -> dict"""
+        """
+        Receives other settingsChanged pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         super().receive(value_dict)
         density = value_dict.get('atomic_global_density')
@@ -3200,7 +3251,11 @@ class HlPlot(HlGeneralPlot):
         self.history_step.valueChanged.connect(lambda val: self.emit({'history': val}))
 
     def receive(self, value_dict: dict):
-        """Receives pyqtSignal -> dict"""
+        """
+        Receives pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         # hide buttons
         hide = value_dict.get('hide')
@@ -3948,7 +4003,12 @@ fout {idfout} {iddout} {idqout}{output}
         error_list = []
 
         def getListIndex(values: list, idx: int):
-            """Returns idx-th element of list values, or None if index is out of range"""
+            """
+            Returns idx-th element of list values, or None if index is out of range
+
+            :param values: list of values
+            :param idx: index of element
+            """
 
             try:
                 return values[idx]
@@ -3956,7 +4016,15 @@ fout {idfout} {iddout} {idqout}{output}
                 return None
 
         def getValue(value: str, value_type: type, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
-            """Returns value if value has type value_type, otherwise return default_value"""
+            """
+            Returns value if value has type value_type, otherwise return default_value
+
+            :param value: value to check
+            :param value_type: required type
+            :param default_value: returned if value has wrong type
+            :param item: (optional) name of value, noted as assumed if default_value is returned
+            :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+            """
 
             if assumed_cls is None:
                 assumed_cls = DefaultAssumed()
@@ -3969,7 +4037,15 @@ fout {idfout} {iddout} {idqout}{output}
                 return default_value
 
         def getValueDict(value: str, lookup_dict: dict, default_value, item=None, assumed_cls: Optional[DefaultAssumed] = None):
-            """Returns class member with name value if is class member, otherwise return default_value"""
+            """
+            Returns class member with name value if is class member, otherwise return default_value
+
+            :param value: value to look up
+            :param lookup_dict: dictionary of values
+            :param default_value: returned if value is not in lookup_dict
+            :param item: (optional) name of value, noted as assumed if default_value is returned
+            :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+            """
 
             if assumed_cls is None:
                 assumed_cls = DefaultAssumed()
@@ -3983,8 +4059,24 @@ fout {idfout} {iddout} {idqout}{output}
                     return default_value
                 return next((k for k, v in lookup_dict.items() if v == default_value), next(iter(lookup_dict)))
 
-        def getValueList(values: list, value_type, default_value, item=None, lookup_dict=None, assumed_cls: Optional[DefaultAssumed] = None) -> list:
-            """Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value"""
+        def getValueList(
+            values: list,
+            value_type,
+            default_value,
+            item=None,
+            lookup_dict=None,
+            assumed_cls: Optional[DefaultAssumed] = None
+        ) -> list:
+            """
+            Returns list of values converted to value_type. If conversion of list element is not successful, it is replaced by default_value
+
+            :param values: values to convert
+            :param value_type: required type
+            :param default_value: replaces values that can not be converted
+            :param item: (optional) name of values, noted as assumed if default_value is used
+            :param lookup_dict: (optional) dictionary to look up the values
+            :param assumed_cls: (optional) <DefaultAssumed> to note assumed values
+            """
 
             if assumed_cls is None:
                 assumed_cls = DefaultAssumed()
@@ -4316,7 +4408,13 @@ fout {idfout} {iddout} {idqout}{output}
         index = RunningIndex()
 
         def rowList(qu_list: list, typ: str) -> List[RowArguments]:
-            """Converts the qu_list into a list of <RowArguments>"""
+            """
+            Converts the qu_list into a list of <RowArguments>
+
+            :param qu_list: list of atomic fractions
+            :param typ: 'beam' or 'target'
+            """
+
             rows: List[RowArguments] = []
             for ii, (qu_i, symbol_i) in enumerate(zip(qu_list, atda)):
                 if not qu_i:
@@ -4641,7 +4739,11 @@ class SimulationOutput(SimulationsOutput):
         super().__init__(plot, element_data, title_label)
 
     def receive(self, value_dict: dict):
-        """Receives pyqtSignal -> dict"""
+        """
+        Receives pyqtSignal -> dict
+
+        :param value_dict: dictionary of received values
+        """
 
         histories = value_dict.get('history')
         if histories is not None:
@@ -4911,7 +5013,11 @@ class SimulationAnalysis(SimulationsAnalysis):
     }
 
     def loadFolder(self, save_folder: Path) -> bool:
-        """Reads the general information of the output in a folder"""
+        """
+        Reads the general information of the output in a folder
+
+        :param save_folder: folder of the simulation
+        """
 
         self.reset()
         return bool(self.updateData(save_folder))
@@ -4925,6 +5031,15 @@ class SimulationAnalysis(SimulationsAnalysis):
         result: Dict[str, Dict[str, float]] = {}
 
         def add(quantity: str, values, total: Optional[float] = None, skip_zero: bool = True):
+            """
+            Adds a quantity to the results
+
+            :param quantity: name of quantity
+            :param values: values of the elements
+            :param total: (optional) total value
+            :param skip_zero: (optional) skip elements with value 0
+            """
+
             entries = {}
             for element, value in zip(self.elements, values):
                 if not skip_zero or value:
@@ -5708,7 +5823,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return electronic_data[:, 0], electronic_data[:, 1:], nuclear_data[:, 1:]
         
     def plotImplantationDepth(self, n_bins: int = 40) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return projectile stops over depth"""
+        """
+        Plot and return projectile stops over depth
+
+        :param n_bins: (optional) number of bins
+        """
 
         deposited_data = self.getDepositedData()
 
@@ -5848,9 +5967,8 @@ class SimulationAnalysis(SimulationsAnalysis):
          vacancies,
          atomic_fractions) = depth_data
 
-        # the vacancies of a static simulation are given in dpa per fluence (dpa Å²): vacancies per ion and depth are
-        # vacancies * atomic density, the total per ion is their sum over the segments (thickness of the segments),
-        # which equals "total nr. of vacancies per unit area" of *_out.dat at the fluence 1 Å⁻²
+        # vacancies of static simulations are given in dpa per fluence (dpa Å²): vacancies per ion and depth are
+        # vacancies * atomic density, their sum over the segments equals "total nr. of vacancies per unit area" of *_out.dat
         depth = layer_depth[0, :]
         depth_delta = np.gradient(depth) if depth.size > 1 else 2 * depth
         vacancies_depth = vacancies[0, :] * atomic_density[0, :]
@@ -5931,6 +6049,7 @@ class SimulationAnalysis(SimulationsAnalysis):
 
     def plotSputterYieldsTotalAmu(self) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
         """Plot and return total sputter yields amu"""
+
         # net_mass_removal = sum_{elements} (element.mass * [element.sputtered + element.reemitted - element.deposited / element.incoming])
 
         yield_data = self.getSputterYieldData()
@@ -6164,7 +6283,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return ([fluence, surface], ['Fluence[10^20 ions/m^2]', 'Surface Erosion [Angs]']), mpl_settings
 
     def updateDepthConcentration(self, set_to_max: bool = False) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Updates the plot and data of the depth concentration"""
+        """
+        Updates the plot and data of the depth concentration
+
+        :param set_to_max: (optional) show the last history step
+        """
 
         depth_data = self.getDepthProfile()
 
@@ -6207,7 +6330,11 @@ class SimulationAnalysis(SimulationsAnalysis):
         return result
 
     def plotDepthConcentration(self, history_step: int = 0) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return the depth concentration"""
+        """
+        Plot and return the depth concentration
+
+        :param history_step: (optional) history step
+        """
 
         if self.depth_array is None or self.conc_array is None or self.fluence_array is None:
             mpl_settings = MplCanvasSettings()
@@ -6238,8 +6365,18 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     @staticmethod
-    def plotPolar(cosines: np.ndarray, mpl_settings: MplCanvasSettings, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return backscattered/backsputtered particles of element"""
+    def plotPolar(
+        cosines: np.ndarray,
+        mpl_settings: MplCanvasSettings,
+        n_bins: int = 30
+    ) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """
+        Plot and return backscattered/backsputtered particles of element
+
+        :param cosines: direction cosines of the particles
+        :param mpl_settings: settings of the plot
+        :param n_bins: (optional) number of bins
+        """
 
         data = []
         plot_labels = []
@@ -6292,7 +6429,12 @@ class SimulationAnalysis(SimulationsAnalysis):
         return (data, plot_labels), mpl_settings
 
     def plotPolarScatter(self, element: int, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return backscattered particles of element"""
+        """
+        Plot and return backscattered particles of element
+
+        :param element: index of element
+        :param n_bins: (optional) number of bins
+        """
 
         mpl_settings = MplCanvasSettings()
         mpl_settings.fig.add_subplot(projection='polar')
@@ -6331,7 +6473,12 @@ class SimulationAnalysis(SimulationsAnalysis):
         return data, mpl_settings
 
     def plotPolarSputter(self, element: int, n_bins: int = 30) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return backsputtered recoils of element"""
+        """
+        Plot and return backsputtered recoils of element
+
+        :param element: index of element
+        :param n_bins: (optional) number of bins
+        """
 
         mpl_settings = MplCanvasSettings()
         mpl_settings.fig.add_subplot(projection='polar')
@@ -6487,8 +6634,17 @@ class SimulationAnalysis(SimulationsAnalysis):
 
         return (data, plot_labels), mpl_settings
 
-    def plotParticlesPolar(self, cosines_array: List[Optional[np.ndarray]], mpl_settings: MplCanvasSettings) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
-        """Plot and return data of backscattered/backsputtered particles"""
+    def plotParticlesPolar(
+        self,
+        cosines_array: List[Optional[np.ndarray]],
+        mpl_settings: MplCanvasSettings
+    ) -> Optional[Tuple[Optional[Tuple[list, list]], MplCanvasSettings]]:
+        """
+        Plot and return data of backscattered/backsputtered particles
+
+        :param cosines_array: direction cosines of the particles of each element
+        :param mpl_settings: settings of the plot
+        """
 
         data = []
         plot_labels = []
